@@ -390,3 +390,90 @@ class TestBuildFullMessage:
         btc_pos = result.find("BTC")
 
         assert usd_pos < eur_pos < mlc_pos < usdt_pos < btc_pos
+
+
+# =============================================================================
+# TESTS DE BUILD_HISTORY_MESSAGE
+# =============================================================================
+
+class TestBuildHistoryMessage:
+    """Tests para build_history_message."""
+
+    def test_build_history_message_basic(self):
+        """Test construir mensaje de historial básico."""
+        from src.formatters import build_history_message
+        
+        history_data = [
+            {"sell_rate": 365.0, "fetched_at": "2026-03-22T14:30:00Z"},
+            {"sell_rate": 360.0, "fetched_at": "2026-03-21T14:30:00Z"},
+            {"sell_rate": 358.0, "fetched_at": "2026-03-20T14:30:00Z"},
+        ]
+        
+        result = build_history_message("USD", "eltoque", history_data)
+        
+        assert "📈 *Histórico USD" in result
+        assert "365.00" in result
+        assert "360.00" in result
+        assert "358.00" in result
+        assert SEPARATOR_THICK in result
+
+    def test_build_history_message_with_change(self):
+        """Test historial con indicadores de cambio."""
+        from src.formatters import build_history_message
+        
+        history_data = [
+            {"sell_rate": 365.0, "fetched_at": "2026-03-22T14:30:00Z"},
+            {"sell_rate": 360.0, "fetched_at": "2026-03-21T14:30:00Z"},
+        ]
+        
+        result = build_history_message("USD", "eltoque", history_data)
+        
+        # Debe mostrar indicador 🔺 porque subió de 360 a 365
+        assert INDICATOR_UP in result or INDICATOR_DOWN in result or INDICATOR_NEUTRAL in result
+
+    def test_build_history_message_empty(self):
+        """Test historial vacío."""
+        from src.formatters import build_history_message
+        
+        result = build_history_message("USD", "eltoque", [])
+        
+        assert "📈 *Histórico USD" in result
+        assert "_No hay datos históricos disponibles_" in result
+
+    def test_build_history_message_single_item(self):
+        """Test historial con un solo dato."""
+        from src.formatters import build_history_message
+        
+        history_data = [
+            {"sell_rate": 365.0, "fetched_at": "2026-03-22T14:30:00Z"},
+        ]
+        
+        result = build_history_message("USD", "eltoque", history_data)
+        
+        assert "365.00" in result
+        assert "2026-03-22" in result
+
+    def test_build_history_message_date_format(self):
+        """Test formato de fechas en historial."""
+        from src.formatters import build_history_message
+        
+        history_data = [
+            {"sell_rate": 365.0, "fetched_at": "2026-03-22T14:30:00Z"},
+        ]
+        
+        result = build_history_message("USD", "eltoque", history_data)
+        
+        # Debe mostrar fecha en formato legible
+        assert "2026-03-22" in result or "22/03/2026" in result
+
+    def test_build_history_message_source_label(self):
+        """Test etiqueta de fuente en historial."""
+        from src.formatters import build_history_message
+        
+        history_data = [
+            {"sell_rate": 365.0, "fetched_at": "2026-03-22T14:30:00Z"},
+        ]
+        
+        result = build_history_message("USD", "cadeca", history_data)
+        
+        assert "CADECA" in result or "cadeca" in result

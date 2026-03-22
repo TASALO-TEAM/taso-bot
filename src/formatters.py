@@ -452,3 +452,75 @@ def build_full_message(data: Dict[str, Any]) -> str:
     blocks.append(footer)
 
     return "\n".join(blocks)
+
+
+def build_history_message(
+    currency: str,
+    source: str,
+    history_data: list,
+) -> str:
+    """Construye el mensaje de histórico de tasas.
+
+    Formato:
+        📈 *Histórico USD — ELTOQUE*
+        ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        365.00 CUP  📅 2026-03-22 14:30
+        360.00 CUP  📅 2026-03-21 14:30  🔺 +5.00
+        358.00 CUP  📅 2026-03-20 14:30  🔺 +2.00
+
+    Args:
+        currency: Código de moneda (USD, EUR, etc.)
+        source: Fuente (eltoque, cadeca, bcc, binance)
+        history_data: Lista de dicts con sell_rate y fetched_at
+
+    Returns:
+        String formateado con el histórico
+    """
+    lines = []
+
+    # Header
+    source_label = source.upper() if source else "ELTOQUE"
+    lines.append(f"📈 *Histórico {currency.upper()} — {source_label}*")
+    lines.append(SEPARATOR_THICK)
+
+    if not history_data:
+        lines.append("_No hay datos históricos disponibles_")
+        lines.append("")
+        lines.append("Intenta con otro rango de días o fuente.")
+        lines.append("")
+        return "\n".join(lines)
+
+    # Procesar datos (más reciente primero)
+    prev_rate = None
+    for i, snapshot in enumerate(history_data[:15]):  # Máximo 15 entradas
+        rate = snapshot.get("sell_rate") or snapshot.get("rate", 0)
+        fetched_at = snapshot.get("fetched_at", "")
+
+        # Formatear fecha
+        date_str = parse_iso_datetime(fetched_at)
+
+        # Calcular cambio vs anterior (si existe)
+        change_indicator = ""
+        if prev_rate is not None:
+            diff = rate - prev_rate
+            if diff > 0.001:
+                change_indicator = f"  {INDICATOR_UP} +{diff:,.2f}"
+            elif diff < -0.001:
+                change_indicator = f"  {INDICATOR_DOWN} {diff:,.2f}"
+            else:
+                change_indicator = f"  {INDICATOR_NEUTRAL}"
+
+        # Formatear línea
+        rate_str = format_rate_value(rate)
+        lines.append(f"{rate_str} CUP  📅 {date_str}{change_indicator}")
+
+        prev_rate = rate
+
+    lines.append("")
+
+    # Footer con cantidad de datos
+    if len(history_data) > 15:
+        lines.append(f"_Mostrando 15 de {len(history_data)} registros_")
+        lines.append("")
+
+    return "\n".join(lines)
