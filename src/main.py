@@ -12,6 +12,7 @@ from telegram.ext import (
 
 from src.config import settings
 from src.api_client import TasaloApiClient
+from src.handlers.tasalo import tasalo_command
 
 # Configurar logging
 logging.basicConfig(
@@ -38,43 +39,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"Soy <b>TASALO</b>, tu bot para consultar las tasas de cambio de Cuba.\n\n"
         f"Usa /tasalo para ver las tasas actuales."
     )
-
-
-async def tasalo_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handler para el comando /tasalo.
-    
-    Este es el comando principal que muestra las tasas de cambio.
-    Por ahora solo verifica conexión con el backend.
-    """
-    logger.info(f"📊 /tasalo command invoked by user {update.effective_user.id}")
-    
-    # Mensaje de estado
-    status_msg = await update.message.reply_text("⏳ Consultando tasas...")
-    
-    # Llamar a la API
-    data = await api_client.get_latest()
-    
-    if data is None:
-        await status_msg.edit_text(
-            "⚠️ *Error de Conexión*\n\n"
-            "No se pudieron obtener datos del backend.\n"
-            "Inténtalo de nuevo en unos momentos.",
-            parse_mode="Markdown",
-        )
-        logger.warning("⚠️ /tasalo: API returned None")
-        return
-    
-    # Por ahora, mostrar datos crudos para debugging
-    response_text = (
-        "✅ *Conexión Exitosa!*\n\n"
-        f"*API URL:* `{settings.tasalo_api_url}`\n"
-        f"*Updated at:* `{data.get('updated_at', 'N/A')}`\n\n"
-        f"*Datos recibidos:*\n"
-        f"```\n{data}\n```"
-    )
-    
-    await status_msg.edit_text(response_text, parse_mode="Markdown")
-    logger.info("✅ /tasalo: Response sent successfully")
 
 
 async def health_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -112,21 +76,24 @@ async def health_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def create_application() -> Application:
     """Crear y configurar la aplicación de python-telegram-bot."""
-    
+
     # Crear aplicación
     application = (
         Application.builder()
         .token(settings.telegram_bot_token)
         .build()
     )
-    
+
     # Registrar handlers
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("tasalo", tasalo_command))
     application.add_handler(CommandHandler("health", health_check))
-    
+
+    # Guardar api_client en bot_data para acceso desde handlers
+    application.bot_data["api_client"] = api_client
+
     logger.info("✅ Handlers registrados: start, tasalo, health")
-    
+
     return application
 
 
