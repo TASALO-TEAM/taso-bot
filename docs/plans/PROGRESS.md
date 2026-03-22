@@ -1,7 +1,7 @@
 # TASALO — Progreso de Implementación del Ecosistema
 
-> **Última actualización:** 2026-03-22 (Fase 3 completada ✅)
-> **Estado General:** taso-api 100% ✅ | taso-bot 50% 🚧 | taso-miniapp 0% ⏳ | taso-extension 0% ⏳
+> **Última actualización:** 2026-03-22 (Fase 4 completada ✅)
+> **Estado General:** taso-api 100% ✅ | taso-bot 67% 🚧 | taso-miniapp 0% ⏳ | taso-extension 0% ⏳
 
 ---
 
@@ -29,7 +29,7 @@ Binance ──────┘
 | Repositorio | Estado | Progreso | Última Actualización |
 |-------------|--------|----------|---------------------|
 | **taso-api** | ✅ Completado | 6/6 fases (100%) | 2026-03-22 |
-| **taso-bot** | 🚧 En Progreso | 3/6 fases (50%) | 2026-03-22 (Fase 3 ✅) |
+| **taso-bot** | 🚧 En Progreso | 4/6 fases (67%) | 2026-03-22 (Fase 4 ✅) |
 | **taso-miniapp** | ⏳ Pendiente | 0/6 fases (0%) | — |
 | **taso-extension** | ⏳ Pendiente | 0/5 fases (0%) | — |
 
@@ -487,15 +487,27 @@ Binance ──────┘
 
 ---
 
-### ⏳ Fase 4 — Callbacks Inline (Mejoras)
-**Estado:** ⏳ Pendiente
+### ✅ Fase 4 — Callbacks Inline (Mejoras)
+**Estado:** ✅ COMPLETADA
+**Iniciado:** 2026-03-22
+**Completado:** 2026-03-22
+**Tag:** `v0.4.0-fase4`
 
-- [ ] Mejorar `tasalo_provincias_callback()` con datos reales
-- [ ] Agregar historial de tasas con gráfico/lista
-- [ ] Mejorar `tasalo_refresh_callback()` con indicador visual
-- [ ] Implementar navegación entre vistas
+**Objetivo:** Los botones del teclado funcionan correctamente.
 
-**Criterio de éxito:** Botones 🔄 y 🗺 muestran datos útiles y navegación funcional.
+**Resultados:**
+- ✅ `api_client.get_history()` implementado (4 tests)
+- ✅ `build_history_message()` formatter (6 tests)
+- ✅ `history_callback()` handler (3 tests)
+- ✅ `tasalo_refresh_callback()` con indicador visual (2 tests)
+- ✅ `tasalo_back_callback()` navegación funcional (2 tests)
+- ✅ Handlers registrados en `main.py`
+- ✅ 88 tests passing en total
+- ✅ Tag `v0.4.0-fase4` creado
+
+**Criterio de éxito:** Botones 🔄 y 🗺 funcionan correctamente desde el mensaje enviado.
+
+**Próximos pasos:** Comenzar Fase 5 — Comandos Admin
 
 ---
 

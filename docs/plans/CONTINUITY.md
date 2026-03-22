@@ -1,8 +1,8 @@
 # TASALO — Prompt de Continuidad para Agente
 
 > **Generado:** 2026-03-21
-> **Última actualización:** 2026-03-22 (Fase 3 completada)
-> **Estado del Ecosistema:** taso-api 100% ✅ | taso-bot 50% 🚧 | taso-miniapp 0% ⏳ | taso-extension 0% ⏳
+> **Última actualización:** 2026-03-22 (Fase 4 completada)
+> **Estado del Ecosistema:** taso-api 100% ✅ | taso-bot 67% 🚧 | taso-miniapp 0% ⏳ | taso-extension 0% ⏳
 
 ---
 
@@ -48,13 +48,13 @@ Binance ──────┘
 
 ---
 
-### taso-bot 🚧 EN DESARROLLO (Fase 3 Completada)
+### taso-bot 🚧 EN DESARROLLO (Fase 4 Completada)
 
 **Directorio:** `/home/ersus/tasalo/taso-bot`
 
-**Estado:** Fase 3 ✅ COMPLETADA | Implementación: 3/6 fases (50%)
+**Estado:** Fase 4 ✅ COMPLETADA | Implementación: 4/6 fases (67%)
 
-**Tags:** `v0.1.0-fase1` ✅, `v0.2.0-fase2` ✅, `v0.3.0-fase3` ✅
+**Tags:** `v0.1.0-fase1` ✅, `v0.2.0-fase2` ✅, `v0.3.0-fase3` ✅, `v0.4.0-fase4` ✅
 
 **Documento de Diseño:** `2026-03-22-tasalo-bot-design.md`
 
@@ -86,7 +86,15 @@ Binance ──────┘
 - ✅ 24 tests nuevos para image_generator.py
 - ✅ 69 tests passing en total
 
-**Próxima Acción:** Comenzar Fase 4 — Callbacks Inline (mejorar provincias)
+**Fase 4 Completada:**
+- ✅ `api_client.get_history()` implementado (4 tests)
+- ✅ `build_history_message()` formatter (6 tests)
+- ✅ `history_callback()` handler (3 tests)
+- ✅ `tasalo_refresh_callback()` con indicador visual
+- ✅ `tasalo_back_callback()` navegación funcional
+- ✅ 88 tests passing en total
+
+**Próxima Acción:** Comenzar Fase 5 — Comandos Admin
 
 ---
 
@@ -116,31 +124,25 @@ Binance ──────┘
 
 ## 🎯 Próxima Acción Requerida
 
-**IMPLEMENTAR TASO-BOT — FASE 4**
+**IMPLEMENTAR TASO-BOT — FASE 5**
 
-La Fase 3 del bot está completada (tag `v0.3.0-fase3`). Continuar con Fase 4:
+La Fase 4 del bot está completada (tag `v0.4.0-fase4`). Continuar con Fase 5:
 
-1. **Fase 4:** Callbacks Inline (Mejoras)
-   - Mejorar `tasalo_provincias_callback()` con datos reales (cuando API tenga provincias)
-   - Agregar historial de tasas con gráfico o lista
-   - Mejorar `tasalo_refresh_callback()` con indicador de "actualizando..."
-   - Implementar navegación entre vistas (back button funcional)
-
-2. **Fase 5:** Comandos Admin
+1. **Fase 5:** Comandos Admin
    - Implementar `/refresh` y `/status` para administradores
    - Integrar con endpoints admin de taso-api
-
-3. **Fase 6:** Hardening y README
-   - Error handling global
+   - Agregar error handling global
    - Logging estructurado
+
+2. **Fase 6:** Hardening y README
    - `.env.example` documentado
-   - README completo
+   - README completo con guía de producción
 
-4. **Seguir TDD:** Tests primero (cuando aplique), implementación mínima, verificar, commit
+3. **Seguir TDD:** Tests primero (cuando aplique), implementación mínima, verificar, commit
 
-5. **Actualizar PROGRESS.md** después de cada tarea completada
+4. **Actualizar PROGRESS.md** después de cada tarea completada
 
-6. **Commits frecuentes** con mensajes descriptivos
+5. **Commits frecuentes** con mensajes descriptivos
 
 ---
 
@@ -193,11 +195,11 @@ python src/main.py
 | Repo | Fase 1 | Fase 2 | Fase 3 | Fase 4 | Fase 5 | Fase 6 | Total |
 |------|--------|--------|--------|--------|--------|--------|-------|
 | **taso-api** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 6/6 (100%) |
-| **taso-bot** | ✅ | ✅ | ✅ | ⏳ | ⏳ | ⏳ | 3/6 (50%) |
+| **taso-bot** | ✅ | ✅ | ✅ | ✅ | ⏳ | ⏳ | 4/6 (67%) |
 | **taso-miniapp** | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | 0/6 (0%) |
 | **taso-extension** | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | — | 0/5 (0%) |
 
-**Progreso Total del Ecosistema:** 9/23 fases (39%) 🚧
+**Progreso Total del Ecosistema:** 10/23 fases (43%) 🚧
 
 ---
 
