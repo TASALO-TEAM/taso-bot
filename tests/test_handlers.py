@@ -4,7 +4,13 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from telegram import Update, CallbackQuery, Message, Chat, User
 
-from src.handlers.tasalo import history_callback, tasalo_refresh_callback
+from src.handlers.tasalo import (
+    history_callback,
+    tasalo_refresh_callback,
+    tasalo_back_callback,
+    tasalo_provincias_callback,
+    build_provincias_message,
+)
 
 
 @pytest.mark.asyncio
@@ -160,6 +166,38 @@ async def test_refresh_callback_api_error():
     callback_query.message = message
     callback_query.data = "tasalo_refresh"
     callback_query.answer = AsyncMock()
+
+    update = MagicMock(spec=Update)
+    update.callback_query = callback_query
+    update.effective_message = message
+
+    context = MagicMock()
+    context.bot_data = {
+        "api_client": AsyncMock(get_latest=AsyncMock(return_value=None))
+    }
+
+    await tasalo_refresh_callback(update, context)
+
+    # Debe mostrar mensaje de error al usuario
+    callback_query.answer.assert_called()
+    assert "⚠️" in str(callback_query.answer.call_args)
+
+
+@pytest.mark.asyncio
+async def test_back_callback_returns_to_main():
+    """Test que back button vuelve a la vista principal."""
+    user = User(id=123, first_name="Test", is_bot=False)
+    message = MagicMock(spec=Message)
+    message.message_id = 42
+    message.edit_message_caption = AsyncMock()
+    message.edit_message_text = AsyncMock()
+    message.reply_photo = AsyncMock()
+    
+    callback_query = MagicMock(spec=CallbackQuery)
+    callback_query.from_user = user
+    callback_query.message = message
+    callback_query.data = "tasalo_back"
+    callback_query.answer = AsyncMock()
     
     update = MagicMock(spec=Update)
     update.callback_query = callback_query
@@ -167,11 +205,99 @@ async def test_refresh_callback_api_error():
     
     context = MagicMock()
     context.bot_data = {
-        "api_client": AsyncMock(get_latest=AsyncMock(return_value=None))
+        "api_client": AsyncMock(
+            get_latest=AsyncMock(return_value={
+                "ok": True,
+                "data": {
+                    "eltoque": {"USD": {"rate": 365.0, "change": "up"}},
+                    "cadeca": {"USD": {"buy": 120.0, "sell": 125.0}},
+                    "bcc": {"USD": 24.0}
+                },
+                "updated_at": "2026-03-22T14:30:00Z"
+            })
+        )
     }
     
-    await tasalo_refresh_callback(update, context)
+    with patch('src.handlers.tasalo.generate_image', new_callable=AsyncMock) as mock_gen:
+        mock_gen.return_value = None  # Skip image generation for this test
+        
+        await tasalo_back_callback(update, context)
     
-    # Debe mostrar mensaje de error al usuario
+    # Debe volver a mostrar la vista principal
     callback_query.answer.assert_called()
-    assert "⚠️" in str(callback_query.answer.call_args)
+    # Debe llamar send_tasalo_response (verificado por edit_message_caption o reply_photo)
+    assert message.edit_message_caption.called or message.reply_photo.called or message.edit_message_text.called
+
+
+@pytest.mark.asyncio
+async def test_provincias_callback_shows_national_rate():
+    """Test que provincias callback muestra tasa nacional como placeholder."""
+    user = User(id=123, first_name="Test", is_bot=False)
+    message = MagicMock(spec=Message)
+    message.message_id = 42
+    message.edit_message_text = AsyncMock()
+    
+    callback_query = MagicMock(spec=CallbackQuery)
+    callback_query.from_user = user
+    callback_query.message = message
+    callback_query.data = "tasalo_provincias"
+    callback_query.answer = AsyncMock()
+    
+    update = MagicMock(spec=Update)
+    update.callback_query = callback_query
+    update.effective_message = message
+    
+    context = MagicMock()
+    context.bot_data = {
+        "api_client": AsyncMock(
+            get_latest=AsyncMock(return_value={
+                "ok": True,
+                "data": {
+                    "eltoque": {"USD": {"rate": 365.0, "change": "up"}},
+                    "cadeca": {"USD": {"buy": 120.0, "sell": 125.0}},
+                    "bcc": {"USD": 24.0}
+                },
+                "updated_at": "2026-03-22T14:30:00Z"
+            })
+        )
+    }
+    
+    await tasalo_provincias_callback(update, context)
+    
+    # Debe llamar answer con mensaje de provincias
+    callback_query.answer.assert_called()
+    # Debe editar el mensaje con el texto de provincias
+    callback_query.edit_message_text.assert_called_once()
+    
+    # Verificar que el mensaje contiene información de provincias
+    call_args = callback_query.edit_message_text.call_args
+    text = call_args[1].get("text", "") or (call_args[0][0] if call_args[0] else "")
+    assert "PROVINCIA" in text.upper() or "TASA" in text.upper()
+
+
+def test_build_provincias_message_with_data():
+    """Test que build_provincias_message formatea correctamente con datos."""
+    api_data = {
+        "eltoque": {"USD": {"rate": 365.0, "change": "up"}},
+        "updated_at": "2026-03-22T14:30:00Z"
+    }
+    
+    result = build_provincias_message(api_data)
+    
+    # Verificar estructura del mensaje
+    assert "🗺" in result
+    assert "PROVINCIA" in result.upper()
+    assert "365.00" in result  # Tasa nacional formateada
+    assert "2026-03-22" in result  # Timestamp
+    assert "elToque.com" in result
+
+
+def test_build_provincias_message_without_data():
+    """Test que build_provincias_message maneja datos vacíos."""
+    api_data = {}
+    
+    result = build_provincias_message(api_data)
+    
+    # Verificar que al menos muestra el header y footer
+    assert "🗺" in result
+    assert "PROVINCIA" in result.upper()

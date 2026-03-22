@@ -12,7 +12,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
 from src.api_client import TasaloApiClient
-from src.formatters import build_full_message, build_history_message
+from src.formatters import build_full_message, build_history_message, SEPARATOR_THICK, parse_iso_datetime
 from src.image_generator import generate_image
 
 logger = logging.getLogger(__name__)
@@ -280,32 +280,41 @@ def build_provincias_message(api_data: dict) -> str:
     lines = []
 
     lines.append("🗺 *TASAS POR PROVINCIA*")
-    lines.append("━" * 30)
+    lines.append(SEPARATOR_THICK)
     lines.append("")
 
     # Verificar si hay datos provinciales en la API
-    # Por ahora, mostrar mensaje de "próximamente"
-    lines.append("_Funcionalidad próximamente..._")
-    lines.append("")
-    lines.append("Las tasas por provincia se mostrarán aquí")
-    lines.append("cuando estén disponibles en el backend.")
-    lines.append("")
-    lines.append("━" * 30)
+    # La API actual no tiene provincias, mostrar mensaje informativo
+    # pero preparado para cuando se implemente
+    
+    # Por ahora, mostrar las tasas nacionales como placeholder
+    eltoque_data = api_data.get("eltoque", {})
+    
+    if eltoque_data:
+        lines.append("_Las tasas se muestran a nivel nacional._")
+        lines.append("")
+        lines.append("📍 *Tasa Nacional USD:*")
+        
+        usd_info = eltoque_data.get("USD", {})
+        if isinstance(usd_info, dict):
+            rate = usd_info.get("rate", 0)
+            lines.append(f"   {rate:,.2f} CUP")
+        else:
+            lines.append(f"   {usd_info:,.2f} CUP")
+        
+        lines.append("")
+        lines.append("🔜 *Próximamente:*")
+        lines.append("Desglose por 15 provincias de Cuba")
+        lines.append("")
+    else:
+        lines.append("_Datos no disponibles_")
+        lines.append("")
+
+    lines.append(SEPARATOR_THICK)
 
     # Footer con timestamp
-    from datetime import datetime
     updated_at = api_data.get("updated_at")
-    if updated_at:
-        try:
-            updated_at = updated_at.replace("Z", "+00:00")
-            if "+" in updated_at:
-                updated_at = updated_at.split("+")[0]
-            dt = datetime.fromisoformat(updated_at)
-            timestamp = dt.strftime("%Y-%m-%d %H:%M")
-        except (ValueError, AttributeError):
-            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
-    else:
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+    timestamp = parse_iso_datetime(updated_at)
 
     lines.append(f"📆 {timestamp}")
     lines.append("🔗 elToque.com")
