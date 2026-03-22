@@ -8,11 +8,17 @@ from telegram.ext import (
     Application,
     CommandHandler,
     ContextTypes,
+    CallbackQueryHandler,
 )
 
 from src.config import settings
 from src.api_client import TasaloApiClient
-from src.handlers.tasalo import tasalo_command
+from src.handlers.tasalo import (
+    tasalo_command,
+    tasalo_refresh_callback,
+    tasalo_provincias_callback,
+    tasalo_back_callback,
+)
 
 # Configurar logging
 logging.basicConfig(
@@ -43,21 +49,21 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def health_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler para el comando /health.
-    
+
     Verifica que el bot puede conectarse al backend.
     Solo para administradores.
     """
     user_id = update.effective_user.id
-    
+
     # Verificar si es admin
     if user_id not in settings.get_admin_chat_ids_list():
         await update.message.reply_text("🔑 Este comando es solo para administradores.")
         return
-    
+
     await update.message.reply_text("⏳ Verificando conexión con el backend...")
-    
+
     data = await api_client.get_latest()
-    
+
     if data:
         await update.message.reply_text(
             f"✅ *Backend Conectado*\n\n"
@@ -89,10 +95,15 @@ def create_application() -> Application:
     application.add_handler(CommandHandler("tasalo", tasalo_command))
     application.add_handler(CommandHandler("health", health_check))
 
+    # Registrar callback handlers para botones inline
+    application.add_handler(CallbackQueryHandler(tasalo_refresh_callback, pattern="^tasalo_refresh$"))
+    application.add_handler(CallbackQueryHandler(tasalo_provincias_callback, pattern="^tasalo_provincias$"))
+    application.add_handler(CallbackQueryHandler(tasalo_back_callback, pattern="^tasalo_back$"))
+
     # Guardar api_client en bot_data para acceso desde handlers
     application.bot_data["api_client"] = api_client
 
-    logger.info("✅ Handlers registrados: start, tasalo, health")
+    logger.info("✅ Handlers registrados: start, tasalo, health, callbacks (refresh, provincias, back)")
 
     return application
 
@@ -100,7 +111,7 @@ def create_application() -> Application:
 async def post_init(application: Application):
     """Callback después de inicializar el bot."""
     logger.info("🤖 Bot initialized. Verifying connection to taso-api...")
-    
+
     # Verificar conexión con el backend
     try:
         data = await api_client.get_latest()
@@ -117,13 +128,13 @@ def main():
     logger.info("🚀 Starting TASALO-Bot...")
     logger.info(f"📡 API URL: {settings.tasalo_api_url}")
     logger.info(f"👥 Admin IDs: {settings.admin_chat_ids or 'None configured'}")
-    
+
     # Crear aplicación
     app = create_application()
-    
+
     # Configurar post_init
     app.post_init = post_init
-    
+
     # Iniciar polling
     logger.info("📡 Starting polling...")
     app.run_polling(
