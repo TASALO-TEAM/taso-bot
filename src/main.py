@@ -3,6 +3,8 @@
 
 import logging
 import sys
+import asyncio
+from typing import Any
 from telegram import Update
 from telegram.ext import (
     Application,
@@ -25,14 +27,57 @@ from src.handlers.admin import (
     status_command,
 )
 
-# Configurar logging
+# Configurar logging estructurado
 logging.basicConfig(
     format='%(asctime)s | %(levelname)-8s | %(name)s | %(message)s',
     level=getattr(logging, settings.log_level),
     stream=sys.stdout,
+    datefmt='%Y-%m-%d %H:%M:%S',
 )
 
 logger = logging.getLogger(__name__)
+
+
+async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Manejador global de errores.
+
+    Loguea errores y notifica al usuario si es posible.
+
+    Args:
+        update: El update que causó el error (puede ser None)
+        context: El contexto del bot con información del error
+    """
+    # Extraer información del error
+    error = context.error
+    error_type = type(error).__name__
+
+    # Loguear error con stack trace
+    logger.error(
+        "❌ Exception caused update %s to fail",
+        getattr(update, 'update_id', 'unknown'),
+        exc_info=error,
+    )
+    logger.error(f"Error type: {error_type}")
+    logger.error(f"Error message: {error}")
+
+    # Context data para debugging
+    if context.chat_id:
+        logger.error(f"Chat ID: {context.chat_id}")
+    if context.user_id:
+        logger.error(f"User ID: {context.user_id}")
+
+    # Notificar al usuario si es posible
+    if isinstance(update, Update) and update.effective_message:
+        try:
+            await update.effective_message.reply_text(
+                "⚠️ *Error Interno*\n\n"
+                "Ha ocurrido un error procesando tu solicitud.\n"
+                "Inténtalo de nuevo en unos momentos.\n\n"
+                f"*Detalle:* `{error_type}`",
+                parse_mode="Markdown",
+            )
+        except Exception as e:
+            logger.error(f"❌ Failed to send error message to user: {e}")
 
 # Instanciar cliente API
 api_client = TasaloApiClient(
@@ -107,6 +152,10 @@ def create_application() -> Application:
     application.add_handler(CallbackQueryHandler(tasalo_provincias_callback, pattern="^tasalo_provincias$"))
     application.add_handler(CallbackQueryHandler(tasalo_back_callback, pattern="^tasalo_back$"))
     application.add_handler(CallbackQueryHandler(history_callback, pattern="^tasalo_history:"))
+
+    # Registrar error handler global
+    application.add_error_handler(error_handler)
+    logger.info("✅ Global error handler registered")
 
     # Guardar api_client en bot_data para acceso desde handlers
     application.bot_data["api_client"] = api_client
