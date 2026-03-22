@@ -193,3 +193,118 @@ async def test_get_history_error_response():
         result = await client.get_history()
 
         assert result is None
+
+
+@pytest.mark.asyncio
+async def test_admin_status_success():
+    """Test admin_status con respuesta exitosa."""
+    from src.api_client import TasaloApiClient
+
+    mock_data = {
+        "ok": True,
+        "data": {
+            "scheduler": {
+                "is_running": True,
+                "last_run_at": "2026-03-22T14:30:00Z",
+                "last_success_at": "2026-03-22T14:30:00Z",
+                "next_run_at": "2026-03-22T14:35:00Z",
+                "error_count": 0,
+                "last_error": None
+            }
+        }
+    }
+
+    with patch('httpx.AsyncClient') as mock_client_class:
+        mock_instance = AsyncMock()
+        mock_response = create_mock_response(mock_data)
+        mock_instance.get.return_value = mock_response
+        mock_instance.__aenter__.return_value = mock_instance
+        mock_client_class.return_value = mock_instance
+
+        client = TasaloApiClient(
+            api_url="http://localhost:8000",
+            admin_key="test_secret_key"
+        )
+        result = await client.admin_status()
+
+        assert result is not None
+        assert result["ok"] is True
+        assert result["data"]["scheduler"]["is_running"] is True
+
+        # Verificar headers con API key
+        call_kwargs = mock_instance.get.call_args[1]
+        assert call_kwargs['headers']['X-API-Key'] == 'test_secret_key'
+
+
+@pytest.mark.asyncio
+async def test_admin_status_no_api_key():
+    """Test admin_status sin API key configurada."""
+    from src.api_client import TasaloApiClient
+
+    client = TasaloApiClient(api_url="http://localhost:8000", admin_key=None)
+    result = await client.admin_status()
+
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_admin_status_401():
+    """Test admin_status con error 401 (API key inválida)."""
+    from src.api_client import TasaloApiClient
+
+    with patch('httpx.AsyncClient') as mock_client_class:
+        mock_instance = AsyncMock()
+        mock_response = MagicMock()
+        mock_response.status_code = 401
+        mock_response.json.return_value = {"detail": "Invalid API key"}
+        mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
+            "Unauthorized", request=MagicMock(), response=mock_response
+        )
+        mock_instance.get.return_value = mock_response
+        mock_instance.__aenter__.return_value = mock_instance
+        mock_client_class.return_value = mock_instance
+
+        client = TasaloApiClient(
+            api_url="http://localhost:8000",
+            admin_key="invalid_key"
+        )
+        result = await client.admin_status()
+
+        assert result is None
+
+
+@pytest.mark.asyncio
+async def test_admin_refresh_no_api_key():
+    """Test admin_refresh sin API key configurada."""
+    from src.api_client import TasaloApiClient
+
+    client = TasaloApiClient(api_url="http://localhost:8000", admin_key=None)
+    result = await client.admin_refresh()
+
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_admin_refresh_error_response():
+    """Test admin_refresh con respuesta de error."""
+    from src.api_client import TasaloApiClient
+
+    with patch('httpx.AsyncClient') as mock_client_class:
+        mock_instance = AsyncMock()
+        mock_response = MagicMock()
+        mock_response.status_code = 500
+        mock_response.json.return_value = {"detail": "Internal error"}
+        mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
+            "Error", request=MagicMock(), response=mock_response
+        )
+        mock_instance.post.return_value = mock_response
+        mock_instance.__aenter__.return_value = mock_instance
+        mock_client_class.return_value = mock_instance
+
+        client = TasaloApiClient(
+            api_url="http://localhost:8000",
+            admin_key="test_key"
+        )
+        result = await client.admin_refresh()
+
+        assert result is None
