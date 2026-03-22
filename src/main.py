@@ -18,6 +18,7 @@ from src.handlers.tasalo import (
     tasalo_refresh_callback,
     tasalo_provincias_callback,
     tasalo_back_callback,
+    history_callback,
 )
 
 # Configurar logging
@@ -99,11 +100,12 @@ def create_application() -> Application:
     application.add_handler(CallbackQueryHandler(tasalo_refresh_callback, pattern="^tasalo_refresh$"))
     application.add_handler(CallbackQueryHandler(tasalo_provincias_callback, pattern="^tasalo_provincias$"))
     application.add_handler(CallbackQueryHandler(tasalo_back_callback, pattern="^tasalo_back$"))
+    application.add_handler(CallbackQueryHandler(history_callback, pattern="^tasalo_history:"))
 
     # Guardar api_client en bot_data para acceso desde handlers
     application.bot_data["api_client"] = api_client
 
-    logger.info("✅ Handlers registrados: start, tasalo, health, callbacks (refresh, provincias, back)")
+    logger.info("✅ Handlers registrados: start, tasalo, health, callbacks (refresh, provincias, back, history)")
 
     return application
 
