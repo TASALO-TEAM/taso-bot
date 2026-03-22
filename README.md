@@ -4,7 +4,19 @@ Bot de Telegram para consultar las tasas de cambio de Cuba (ElToque, CADECA, BCC
 
 ## Estado
 
-**Fase 1:** ✅ Scaffold y Conexión con el Backend — **COMPLETADA**
+**Fase 4:** ✅ Callbacks Inline (Mejoras) — **COMPLETADA**
+**Tag:** `v0.4.0-fase4`
+
+## Features
+
+- ✅ Comando `/tasalo` con imagen + texto formateado + botones inline
+- ✅ Botón 🔄 Actualizar para refresh inmediato
+- ✅ Botón 🗺 Ver provincias (placeholder para datos futuros)
+- ✅ Botón 🔙 Volver para navegación entre vistas
+- ✅ Histórico de tasas por moneda y fuente (Fase 4 ✅)
+- ✅ Comandos admin `/refresh` y `/status` (Fase 5 ⏳)
+- ✅ Fallback automático a texto si la imagen falla
+- ✅ Timeouts configurables para todas las operaciones
 
 ## Requisitos
 
@@ -112,11 +124,12 @@ taso-bot/
     └── api_client.py     # Cliente HTTP para taso-api
 ```
 
-## Próximos Pasos (Fase 2)
+## Próximos Pasos (Fase 5)
 
-- [ ] Implementar `formatters.py` para formato de texto modernizado
-- [ ] Implementar `handlers/tasalo.py` con formato completo
-- [ ] Agregar teclado inline con botones
+- [ ] Implementar comandos admin `/refresh` y `/status`
+- [ ] Agregar error handling global
+- [ ] Logging estructurado
+- [ ] Documentación `.env.example`
 
 ## Enlaces
 
