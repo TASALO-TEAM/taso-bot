@@ -1,7 +1,7 @@
 # TASALO — Prompt de Continuidad para Agente
 
 > **Generado:** 2026-03-21
-> **Última actualización:** 2026-03-22
+> **Última actualización:** 2026-03-22 (Fase 2 completada)
 > **Estado del Ecosistema:** taso-api 100% ✅ | taso-bot 33% 🚧 | taso-miniapp 0% ⏳ | taso-extension 0% ⏳
 
 ---
@@ -106,15 +106,16 @@ Binance ──────┘
 
 ## 🎯 Próxima Acción Requerida
 
-**IMPLEMENTAR TASO-BOT — FASE 2**
+**IMPLEMENTAR TASO-BOT — FASE 3**
 
-La Fase 1 del bot está completada (tag `v0.1.0-fase1`). Continuar con Fase 2:
+La Fase 2 del bot está completada (tag `v0.2.0-fase2`). Continuar con Fase 3:
 
-1. **Fase 2:** Comando /tasalo (solo texto)
-   - Implementar `formatters.py` con bloques modernizados
-   - Implementar `handlers/tasalo.py`
-   - Registrar handler en `main.py`
-   - Probar en Telegram
+1. **Fase 3:** Generador de Imagen Pillow
+   - Descargar fuentes Google Fonts (JetBrains Mono, Space Grotesk) a `fonts/`
+   - Implementar `image_generator.py` con diseño TASALO (accent `#5b8aff`)
+   - Integrar con handler (generación en paralelo con asyncio.gather)
+   - Fallback a texto si imagen falla (timeout 5s)
+   - Agregar teclado inline con botones 🔄 y 🗺
 
 2. **Seguir TDD:** Tests primero (cuando aplique), implementación mínima, verificar, commit
 

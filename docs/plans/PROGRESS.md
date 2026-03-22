@@ -1,7 +1,7 @@
 # TASALO — Progreso de Implementación del Ecosistema
 
 > **Última actualización:** 2026-03-22
-> **Estado General:** taso-api 100% ✅ | taso-bot 17% 🚧 | taso-miniapp 0% ⏳ | taso-extension 0% ⏳
+> **Estado General:** taso-api 100% ✅ | taso-bot 33% 🚧 | taso-miniapp 0% ⏳ | taso-extension 0% ⏳
 
 ---
 
@@ -29,7 +29,7 @@ Binance ──────┘
 | Repositorio | Estado | Progreso | Última Actualización |
 |-------------|--------|----------|---------------------|
 | **taso-api** | ✅ Completado | 6/6 fases (100%) | 2026-03-22 |
-| **taso-bot** | 🚧 En Progreso | 1/6 fases (17%) | 2026-03-22 (Fase 1 ✅) |
+| **taso-bot** | 🚧 En Progreso | 2/6 fases (33%) | 2026-03-22 (Fase 2 ✅) |
 | **taso-miniapp** | ⏳ Pendiente | 0/6 fases (0%) | — |
 | **taso-extension** | ⏳ Pendiente | 0/5 fases (0%) | — |
 
