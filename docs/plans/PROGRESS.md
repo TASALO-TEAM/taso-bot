@@ -1,7 +1,7 @@
 # TASALO — Progreso de Implementación del Ecosistema
 
-> **Última actualización:** 2026-03-22
-> **Estado General:** taso-api 100% ✅ | taso-bot 33% 🚧 | taso-miniapp 0% ⏳ | taso-extension 0% ⏳
+> **Última actualización:** 2026-03-22 (Fase 3 completada ✅)
+> **Estado General:** taso-api 100% ✅ | taso-bot 50% 🚧 | taso-miniapp 0% ⏳ | taso-extension 0% ⏳
 
 ---
 
@@ -29,7 +29,7 @@ Binance ──────┘
 | Repositorio | Estado | Progreso | Última Actualización |
 |-------------|--------|----------|---------------------|
 | **taso-api** | ✅ Completado | 6/6 fases (100%) | 2026-03-22 |
-| **taso-bot** | 🚧 En Progreso | 2/6 fases (33%) | 2026-03-22 (Fase 2 ✅) |
+| **taso-bot** | 🚧 En Progreso | 3/6 fases (50%) | 2026-03-22 (Fase 3 ✅) |
 | **taso-miniapp** | ⏳ Pendiente | 0/6 fases (0%) | — |
 | **taso-extension** | ⏳ Pendiente | 0/5 fases (0%) | — |
 
@@ -453,27 +453,49 @@ Binance ──────┘
 
 ---
 
-### ⏳ Fase 3 — Generador de Imagen Pillow
-**Estado:** ⏳ Pendiente
+### ✅ Fase 3 — Generador de Imagen Pillow
+**Estado:** ✅ COMPLETADA
+**Iniciado:** 2026-03-22
+**Completado:** 2026-03-22
+**Tag:** `v0.3.0-fase3`
 
-- [ ] Descargar fuentes Google Fonts a `fonts/`
-- [ ] Implementar `image_generator.py` con diseño TASALO
-- [ ] Integrar con handler (generación en paralelo)
-- [ ] Fallback a texto si imagen falla
-- [ ] Agregar teclado inline
+**Objetivo:** El comando `/tasalo` envía imagen + texto + botones inline.
 
-**Criterio de éxito:** `/tasalo` envía imagen + texto + botones.
+**Resultados:**
+- ✅ `fonts/`: JetBrains Mono + Space Grotesk descargadas de Google Fonts
+- ✅ `image_generator.py`: Generador de imágenes con diseño TASALO
+  - Fondo gradiente oscuro (`#09091e` → `#050510`)
+  - Línea de acento `#5b8aff` en header y secciones
+  - Bloques visuales: ElToque, CADECA, BCC
+  - Footer con timestamp y fuentes
+  - Timeout 5s con fallback automático a texto
+- ✅ `handlers/tasalo.py`: Integración completa
+  - `build_inline_keyboard()`: Botones 🔄 Actualizar y 🗺 Ver provincias
+  - `send_tasalo_response()`: Envía imagen + texto o fallback texto
+  - `tasalo_refresh_callback()`: Actualiza mensaje con datos frescos
+  - `tasalo_provincias_callback()`: Muestra tasas provinciales (stub)
+  - `tasalo_back_callback()`: Vuelve a vista principal
+- ✅ `main.py`: Registro de `CallbackQueryHandler` para botones inline
+- ✅ `requirements.txt`: pillow>=11.0, aiohttp>=3.9.0 agregados
+- ✅ `tests/test_image_generator.py`: 24 tests nuevos passing
+- ✅ 69 tests passing en total (45 anteriores + 24 nuevos)
+- ✅ Tag `v0.3.0-fase3` creado y pusheado
+
+**Criterio de éxito:** ✅ `/tasalo` envía imagen generada con Pillow + texto formateado + botones 🔄🗺.
+
+**Próximos pasos:** Comenzar Fase 4 — Callbacks Inline (mejorar provincias, agregar historial)
 
 ---
 
-### ⏳ Fase 4 — Callbacks Inline
+### ⏳ Fase 4 — Callbacks Inline (Mejoras)
 **Estado:** ⏳ Pendiente
 
-- [ ] Implementar callback `tasalo_refresh`
-- [ ] Implementar callback `tasalo_provincias`
-- [ ] Registrar `CallbackQueryHandler`
+- [ ] Mejorar `tasalo_provincias_callback()` con datos reales
+- [ ] Agregar historial de tasas con gráfico/lista
+- [ ] Mejorar `tasalo_refresh_callback()` con indicador visual
+- [ ] Implementar navegación entre vistas
 
-**Criterio de éxito:** Botones 🔄 y 🗺 funcionan correctamente.
+**Criterio de éxito:** Botones 🔄 y 🗺 muestran datos útiles y navegación funcional.
 
 ---
 
@@ -502,20 +524,29 @@ Binance ──────┘
 
 ## 📝 Notas de Desarrollo — taso-bot
 
-### 2026-03-22 - TASALO-Bot Fase 2 Completada
+### 2026-03-22 - TASALO-Bot Fase 3 Completada
 
 - [x] Diseño de TASALO-Bot aprobado (2026-03-22)
-- [x] Plan de Fase 2 completado
-- [x] **Task 1:** `formatters.py` implementado con bloques modernizados
-- [x] **Task 2:** `handlers/tasalo.py` implementado
-- [x] **Task 3:** Handler registrado en `main.py`
-- [x] **Task 4:** 37 tests para formatters.py (todos passing)
-- [x] **Task 5:** Commit `faf4a7e` creado y pusheado
-- [x] Tag `v0.2.0-fase2` creado
+- [x] Plan de Fase 3 completado: `2026-03-22-taso-bot-fase3-image-generator.md`
+- [x] **Task 1:** Fuentes Google Fonts descargadas a `fonts/`
+- [x] **Task 2:** `image_generator.py` implementado con diseño TASALO
+- [x] **Task 3:** 24 tests para image_generator.py (todos passing)
+- [x] **Task 4:** `handlers/tasalo.py` integrado con imagen + texto + botones
+- [x] **Task 5:** Teclado inline con botones 🔄 y 🗺
+- [x] **Task 6:** Callbacks registrados en `main.py`
+- [x] **Task 7:** `requirements.txt` actualizado (pillow, aiohttp)
+- [x] **Task 8:** 69 tests passing en total
+- [x] **Task 9:** Commit creado, tag `v0.3.0-fase3` creado y pusheado
 - [x] PROGRESS.md y CONTINUITY.md actualizados
-- [x] 45 tests passing en total
+- [x] **Verificación completada:**
+  - ✅ 69 tests passing (pytest)
+  - ✅ Fuentes cargan correctamente (JetBrains Mono + Space Grotesk)
+  - ✅ Imagen generada: 800px width, altura dinámica (~40KB)
+  - ✅ Inline keyboard con callbacks correctos
+  - ✅ Timeout 5s con fallback a texto
+  - ✅ Push a GitHub: `origin/dev` + tag `v0.3.0-fase3`
 
-**Próximos pasos:** Comenzar Fase 3 — Generador de Imagen Pillow (JetBrains Mono + Space Grotesk, diseño TASALO con accent #5b8aff)
+**Próximos pasos:** Comenzar Fase 4 — Mejorar callbacks inline (provincias con datos reales, historial)
 
 ---
 

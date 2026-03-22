@@ -1,8 +1,8 @@
 # TASALO — Prompt de Continuidad para Agente
 
 > **Generado:** 2026-03-21
-> **Última actualización:** 2026-03-22 (Fase 2 completada)
-> **Estado del Ecosistema:** taso-api 100% ✅ | taso-bot 33% 🚧 | taso-miniapp 0% ⏳ | taso-extension 0% ⏳
+> **Última actualización:** 2026-03-22 (Fase 3 completada)
+> **Estado del Ecosistema:** taso-api 100% ✅ | taso-bot 50% 🚧 | taso-miniapp 0% ⏳ | taso-extension 0% ⏳
 
 ---
 
@@ -48,17 +48,17 @@ Binance ──────┘
 
 ---
 
-### taso-bot 🚧 EN DESARROLLO (Fase 2 Completada)
+### taso-bot 🚧 EN DESARROLLO (Fase 3 Completada)
 
 **Directorio:** `/home/ersus/tasalo/taso-bot`
 
-**Estado:** Fase 2 ✅ COMPLETADA | Implementación: 2/6 fases (33%)
+**Estado:** Fase 3 ✅ COMPLETADA | Implementación: 3/6 fases (50%)
 
-**Tags:** `v0.1.0-fase1` ✅, `v0.2.0-fase2` ✅
+**Tags:** `v0.1.0-fase1` ✅, `v0.2.0-fase2` ✅, `v0.3.0-fase3` ✅
 
 **Documento de Diseño:** `2026-03-22-tasalo-bot-design.md`
 
-**Stack:** Python 3.12 · python-telegram-bot v21 · httpx · Pillow · pydantic-settings
+**Stack:** Python 3.12 · python-telegram-bot v21 · httpx · Pillow · pydantic-settings · aiohttp
 
 **Fase 1 Completada:**
 - ✅ Project scaffold creado con `uv`
@@ -76,7 +76,17 @@ Binance ──────┘
 - ✅ 37 tests nuevos para formatters.py
 - ✅ 45 tests passing en total
 
-**Próxima Acción:** Comenzar Fase 3 — Generador de Imagen Pillow
+**Fase 3 Completada:**
+- ✅ `fonts/`: JetBrains Mono + Space Grotesk descargadas
+- ✅ `image_generator.py`: Generador de imágenes con diseño TASALO (#5b8aff)
+- ✅ Generación con timeout 5s + fallback a texto
+- ✅ `handlers/tasalo.py`: Integración imagen + texto + botones
+- ✅ Teclado inline con botones 🔄 Actualizar, 🗺 Ver provincias
+- ✅ Callbacks: tasalo_refresh, tasalo_provincias, tasalo_back
+- ✅ 24 tests nuevos para image_generator.py
+- ✅ 69 tests passing en total
+
+**Próxima Acción:** Comenzar Fase 4 — Callbacks Inline (mejorar provincias)
 
 ---
 
@@ -106,22 +116,31 @@ Binance ──────┘
 
 ## 🎯 Próxima Acción Requerida
 
-**IMPLEMENTAR TASO-BOT — FASE 3**
+**IMPLEMENTAR TASO-BOT — FASE 4**
 
-La Fase 2 del bot está completada (tag `v0.2.0-fase2`). Continuar con Fase 3:
+La Fase 3 del bot está completada (tag `v0.3.0-fase3`). Continuar con Fase 4:
 
-1. **Fase 3:** Generador de Imagen Pillow
-   - Descargar fuentes Google Fonts (JetBrains Mono, Space Grotesk) a `fonts/`
-   - Implementar `image_generator.py` con diseño TASALO (accent `#5b8aff`)
-   - Integrar con handler (generación en paralelo con asyncio.gather)
-   - Fallback a texto si imagen falla (timeout 5s)
-   - Agregar teclado inline con botones 🔄 y 🗺
+1. **Fase 4:** Callbacks Inline (Mejoras)
+   - Mejorar `tasalo_provincias_callback()` con datos reales (cuando API tenga provincias)
+   - Agregar historial de tasas con gráfico o lista
+   - Mejorar `tasalo_refresh_callback()` con indicador de "actualizando..."
+   - Implementar navegación entre vistas (back button funcional)
 
-2. **Seguir TDD:** Tests primero (cuando aplique), implementación mínima, verificar, commit
+2. **Fase 5:** Comandos Admin
+   - Implementar `/refresh` y `/status` para administradores
+   - Integrar con endpoints admin de taso-api
 
-3. **Actualizar PROGRESS.md** después de cada tarea completada
+3. **Fase 6:** Hardening y README
+   - Error handling global
+   - Logging estructurado
+   - `.env.example` documentado
+   - README completo
 
-4. **Commits frecuentes** con mensajes descriptivos
+4. **Seguir TDD:** Tests primero (cuando aplique), implementación mínima, verificar, commit
+
+5. **Actualizar PROGRESS.md** después de cada tarea completada
+
+6. **Commits frecuentes** con mensajes descriptivos
 
 ---
 
@@ -174,11 +193,11 @@ python src/main.py
 | Repo | Fase 1 | Fase 2 | Fase 3 | Fase 4 | Fase 5 | Fase 6 | Total |
 |------|--------|--------|--------|--------|--------|--------|-------|
 | **taso-api** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 6/6 (100%) |
-| **taso-bot** | ✅ | ✅ | ⏳ | ⏳ | ⏳ | ⏳ | 2/6 (33%) |
+| **taso-bot** | ✅ | ✅ | ✅ | ⏳ | ⏳ | ⏳ | 3/6 (50%) |
 | **taso-miniapp** | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | 0/6 (0%) |
 | **taso-extension** | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | — | 0/5 (0%) |
 
-**Progreso Total del Ecosistema:** 8/23 fases (35%) 🚧
+**Progreso Total del Ecosistema:** 9/23 fases (39%) 🚧
 
 ---
 
