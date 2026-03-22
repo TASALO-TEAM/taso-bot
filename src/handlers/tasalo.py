@@ -12,7 +12,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
 from src.api_client import TasaloApiClient
-from src.formatters import build_full_message
+from src.formatters import build_full_message, build_history_message
 from src.image_generator import generate_image
 
 logger = logging.getLogger(__name__)
@@ -346,3 +346,76 @@ async def tasalo_back_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     await send_tasalo_response(update, data.get("data"), message_id=query.message.message_id)
 
     logger.info("✅ Back callback completado")
+
+
+async def history_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Callback para ver histórico de una moneda.
+
+    Callback data format: tasalo_history:{currency}:{source}:{days}
+    Ejemplo: tasalo_history:USD:eltoque:7
+
+    Args:
+        update: Update de Telegram con el callback query
+        context: Contexto del bot
+    """
+    query = update.callback_query
+    await query.answer("📈 Cargando histórico...")
+
+    user_id = query.from_user.id
+    logger.info(f"📈 History callback invoked by user {user_id}")
+
+    # Parsear callback data
+    callback_data = query.data
+    parts = callback_data.split(":")
+
+    if len(parts) != 4:
+        logger.error(f"❌ Invalid callback data format: {callback_data}")
+        await query.answer("⚠️ Error cargando histórico", show_alert=True)
+        return
+
+    _, currency, source, days_str = parts
+
+    try:
+        days = int(days_str)
+    except ValueError:
+        logger.error(f"❌ Invalid days value: {days_str}")
+        await query.answer("⚠️ Error cargando histórico", show_alert=True)
+        return
+
+    # Obtener cliente API
+    api_client: TasaloApiClient = context.bot_data.get("api_client")
+
+    if not api_client:
+        await query.edit_message_text(
+            "⚠️ *Error de Configuración*\n\n"
+            "El bot no está configurado correctamente.",
+            parse_mode="Markdown",
+        )
+        return
+
+    # Llamar a la API para histórico
+    history_data = await api_client.get_history(
+        source=source,
+        currency=currency,
+        days=days,
+    )
+
+    if history_data is None or not history_data.get("data"):
+        await query.answer("⚠️ No hay datos históricos disponibles", show_alert=True)
+        return
+
+    # Construir mensaje de histórico
+    history_text = build_history_message(currency, source, history_data.get("data", []))
+
+    # Teclado con botón "Volver"
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🔙 Volver", callback_data="tasalo_back")],
+    ])
+
+    await query.edit_message_text(
+        text=history_text,
+        reply_markup=keyboard,
+        parse_mode="Markdown",
+    )
+
+    logger.info(f"✅ Histórico mostrado para {currency}/{source}/{days}d")
