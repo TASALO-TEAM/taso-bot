@@ -224,3 +224,54 @@ class TasaloApiClient:
         except Exception as e:
             logger.error(f"❌ Error en admin_status: {e}")
             return None
+
+    async def get_history(
+        self,
+        source: str = "eltoque",
+        currency: str = "USD",
+        days: int = 7,
+    ) -> Optional[Dict[str, Any]]:
+        """Obtener histórico de tasas para una fuente y moneda.
+
+        Args:
+            source: Fuente de datos (eltoque, cadeca, bcc, binance)
+            currency: Moneda (USD, EUR, etc.)
+            days: Días de histórico (1-365)
+
+        Returns:
+            Dict con histórico o None si hay error.
+
+        Endpoint: GET /api/v1/tasas/history?source={source}&currency={currency}&days={days}
+        """
+        url = f"{self.api_url}/api/v1/tasas/history"
+        params = {
+            "source": source,
+            "currency": currency,
+            "days": days,
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.get(url, headers=self._headers, params=params)
+                response.raise_for_status()
+                data = response.json()
+
+                if data.get('ok'):
+                    logger.info(f"✅ Histórico obtenido: {days} días para {source}/{currency}")
+                    return data
+                else:
+                    logger.warning(f"⚠️ Histórico respondió ok=False: {data}")
+                    return None
+
+        except httpx.TimeoutException as e:
+            logger.error(f"⏱️ Timeout en histórico: {e}")
+            return None
+        except httpx.ConnectError as e:
+            logger.error(f"🔌 Error de conexión en histórico: {e}")
+            return None
+        except httpx.HTTPStatusError as e:
+            logger.error(f"❌ Error HTTP {e.response.status_code}: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"❌ Error inesperado en histórico: {e}", exc_info=True)
+            return None

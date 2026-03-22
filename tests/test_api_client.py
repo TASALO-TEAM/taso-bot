@@ -82,24 +82,114 @@ async def test_get_latest_connection_error():
 async def test_admin_refresh_requires_api_key():
     """admin_refresh usa el header X-API-Key."""
     from src.api_client import TasaloApiClient
-    
+
     mock_response_data = {"ok": True, "data": {"refreshed_at": "2026-03-22T14:30:00Z"}}
-    
+
     with patch('httpx.AsyncClient') as mock_client_class:
         mock_instance = AsyncMock()
         mock_response = create_mock_response(mock_response_data)
         mock_instance.post.return_value = mock_response
         mock_instance.__aenter__.return_value = mock_instance
         mock_client_class.return_value = mock_instance
-        
+
         client = TasaloApiClient(
             api_url="http://localhost:8000",
             admin_key="test_secret_key"
         )
         result = await client.admin_refresh()
-        
+
         # Verificar que se llamó con el header correcto
         mock_instance.post.assert_called_once()
         call_kwargs = mock_instance.post.call_args[1]
         assert call_kwargs['headers']['X-API-Key'] == 'test_secret_key'
         assert result is not None
+
+
+@pytest.mark.asyncio
+async def test_get_history_success():
+    """Test get_history con respuesta exitosa."""
+    from src.api_client import TasaloApiClient
+
+    mock_data = {
+        "ok": True,
+        "data": [
+            {"source": "eltoque", "currency": "USD", "sell_rate": 365.0, "fetched_at": "2026-03-22T14:30:00Z"},
+            {"source": "eltoque", "currency": "USD", "sell_rate": 360.0, "fetched_at": "2026-03-21T14:30:00Z"},
+        ],
+        "count": 2
+    }
+
+    with patch('httpx.AsyncClient') as mock_client_class:
+        mock_instance = AsyncMock()
+        mock_response = create_mock_response(mock_data)
+        mock_instance.get.return_value = mock_response
+        mock_instance.__aenter__.return_value = mock_instance
+        mock_client_class.return_value = mock_instance
+
+        client = TasaloApiClient(api_url="http://test:8000")
+        result = await client.get_history(source="eltoque", currency="USD", days=7)
+
+        assert result is not None
+        assert result["ok"] is True
+        assert len(result["data"]) == 2
+        assert result["data"][0]["sell_rate"] == 365.0
+
+
+@pytest.mark.asyncio
+async def test_get_history_default_params():
+    """Test get_history con parámetros por defecto (source=eltoque, currency=USD, days=7)."""
+    from src.api_client import TasaloApiClient
+
+    mock_data = {"ok": True, "data": [], "count": 0}
+
+    with patch('httpx.AsyncClient') as mock_client_class:
+        mock_instance = AsyncMock()
+        mock_response = create_mock_response(mock_data)
+        mock_instance.get.return_value = mock_response
+        mock_instance.__aenter__.return_value = mock_instance
+        mock_client_class.return_value = mock_instance
+
+        client = TasaloApiClient(api_url="http://test:8000")
+        # Llamar sin parámetros explícitos (usar defaults)
+        result = await client.get_history()
+
+        assert result is not None
+        assert result["data"] == []
+
+
+@pytest.mark.asyncio
+async def test_get_history_timeout():
+    """Test get_history con timeout."""
+    from src.api_client import TasaloApiClient
+
+    with patch('httpx.AsyncClient') as mock_client_class:
+        mock_instance = AsyncMock()
+        mock_instance.get.side_effect = httpx.TimeoutException("Timeout")
+        mock_instance.__aenter__.return_value = mock_instance
+        mock_client_class.return_value = mock_instance
+
+        client = TasaloApiClient(api_url="http://test:8000", timeout=1)
+        result = await client.get_history()
+
+        assert result is None
+
+
+@pytest.mark.asyncio
+async def test_get_history_error_response():
+    """Test get_history con respuesta de error."""
+    from src.api_client import TasaloApiClient
+
+    with patch('httpx.AsyncClient') as mock_client_class:
+        mock_instance = AsyncMock()
+        mock_response = MagicMock()
+        mock_response.status_code = 500
+        mock_response.json.return_value = {"detail": "Internal error"}
+        mock_response.raise_for_status.side_effect = httpx.HTTPStatusError("Error", request=MagicMock(), response=mock_response)
+        mock_instance.get.return_value = mock_response
+        mock_instance.__aenter__.return_value = mock_instance
+        mock_client_class.return_value = mock_instance
+
+        client = TasaloApiClient(api_url="http://test:8000")
+        result = await client.get_history()
+
+        assert result is None
