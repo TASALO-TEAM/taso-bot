@@ -23,6 +23,10 @@ from src.handlers.tasalo import (
     tasalo_provincias_callback,
     tasalo_back_callback,
     history_callback,
+    toque_command,
+    bcc_command,
+    cadeca_command,
+    source_refresh_callback,
 )
 from src.handlers.admin import (
     refresh_command,
@@ -31,10 +35,10 @@ from src.handlers.admin import (
 
 # Configurar logging estructurado
 logging.basicConfig(
-    format='%(asctime)s | %(levelname)-8s | %(name)s | %(message)s',
+    format="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
     level=getattr(logging, settings.log_level),
     stream=sys.stdout,
-    datefmt='%Y-%m-%d %H:%M:%S',
+    datefmt="%Y-%m-%d %H:%M:%S",
 )
 
 logger = logging.getLogger(__name__)
@@ -56,7 +60,7 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
     # Loguear error con stack trace
     logger.error(
         "❌ Exception caused update %s to fail",
-        getattr(update, 'update_id', 'unknown'),
+        getattr(update, "update_id", "unknown"),
         exc_info=error,
     )
     logger.error(f"Error type: {error_type}")
@@ -80,6 +84,7 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
             )
         except Exception as e:
             logger.error(f"❌ Failed to send error message to user: {e}")
+
 
 # Instanciar cliente API
 api_client = TasaloApiClient(
@@ -136,11 +141,7 @@ def create_application() -> Application:
     """Crear y configurar la aplicación de python-telegram-bot."""
 
     # Crear aplicación
-    application = (
-        Application.builder()
-        .token(settings.telegram_bot_token)
-        .build()
-    )
+    application = Application.builder().token(settings.telegram_bot_token).build()
 
     # Registrar handlers
     application.add_handler(CommandHandler("start", start))
@@ -148,12 +149,28 @@ def create_application() -> Application:
     application.add_handler(CommandHandler("health", health_check))
     application.add_handler(CommandHandler("refresh", refresh_command))
     application.add_handler(CommandHandler("status", status_command))
+    application.add_handler(CommandHandler("toque", toque_command))
+    application.add_handler(CommandHandler("bcc", bcc_command))
+    application.add_handler(CommandHandler("cadeca", cadeca_command))
 
     # Registrar callback handlers para botones inline
-    application.add_handler(CallbackQueryHandler(tasalo_refresh_callback, pattern="^tasalo_refresh$"))
-    application.add_handler(CallbackQueryHandler(tasalo_provincias_callback, pattern="^tasalo_provincias$"))
-    application.add_handler(CallbackQueryHandler(tasalo_back_callback, pattern="^tasalo_back$"))
-    application.add_handler(CallbackQueryHandler(history_callback, pattern="^tasalo_history:"))
+    application.add_handler(
+        CallbackQueryHandler(tasalo_refresh_callback, pattern="^tasalo_refresh$")
+    )
+    application.add_handler(
+        CallbackQueryHandler(tasalo_provincias_callback, pattern="^tasalo_provincias$")
+    )
+    application.add_handler(
+        CallbackQueryHandler(tasalo_back_callback, pattern="^tasalo_back$")
+    )
+    application.add_handler(
+        CallbackQueryHandler(history_callback, pattern="^tasalo_history:")
+    )
+    application.add_handler(
+        CallbackQueryHandler(
+            source_refresh_callback, pattern="^(toque|bcc|cadeca)_refresh$"
+        )
+    )
 
     # Registrar error handler global
     application.add_error_handler(error_handler)
@@ -162,7 +179,9 @@ def create_application() -> Application:
     # Guardar api_client en bot_data para acceso desde handlers
     application.bot_data["api_client"] = api_client
 
-    logger.info("✅ Handlers registrados: start, tasalo, health, refresh, status, callbacks (refresh, provincias, back, history)")
+    logger.info(
+        "✅ Handlers registrados: start, tasalo, health, refresh, status, callbacks (refresh, provincias, back, history)"
+    )
 
     return application
 
@@ -175,25 +194,27 @@ async def post_init(application: Application):
     try:
         data = await api_client.get_latest()
         if data:
-            logger.info(f"✅ Backend connection OK. Updated at: {data.get('updated_at')}")
+            logger.info(
+                f"✅ Backend connection OK. Updated at: {data.get('updated_at')}"
+            )
         else:
             logger.warning("⚠️ Backend connection: API returned None")
     except Exception as e:
         logger.error(f"❌ Backend connection failed: {e}")
-    
+
     # Obtener y cachear foto de perfil del bot
     try:
         logger.info("📸 Fetching bot profile photo...")
         profile_path = await ensure_bot_profile_photo(application.bot, cache_dir="data")
-        
+
         if profile_path:
             # Crear plantilla con marca de agua
             template_base = settings.template_full_path
             template_with_watermark = os.path.join("data", "template_watermark.png")
-            
+
             # Crear directorio data si no existe
             os.makedirs("data", exist_ok=True)
-            
+
             if os.path.exists(template_base):
                 create_template_with_profile(
                     template_base,
@@ -203,7 +224,9 @@ async def post_init(application: Application):
                     size=(250, 250),
                     opacity=0.12,
                 )
-                logger.info(f"✅ Plantilla con marca de agua creada: {template_with_watermark}")
+                logger.info(
+                    f"✅ Plantilla con marca de agua creada: {template_with_watermark}"
+                )
     except Exception as e:
         logger.error(f"⚠️ Error obteniendo foto de perfil: {e}")
 

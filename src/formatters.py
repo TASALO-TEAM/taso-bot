@@ -13,12 +13,12 @@ from typing import Dict, Any, Optional
 # =============================================================================
 
 # Separadores
-SEPARATOR_THICK = "━" * 30  # Separador principal entre secciones
-SEPARATOR_THIN = "┈" * 30   # Separador secundario
+SEPARATOR_THICK = "━" * 22  # Separador principal entre secciones
+SEPARATOR_THIN = "┈" * 22  # Separador secundario
 
 # Indicadores de cambio
-INDICATOR_UP = "🔺"      # Precio sube
-INDICATOR_DOWN = "🔻"    # Precio baja
+INDICATOR_UP = "🔺"  # Precio sube
+INDICATOR_DOWN = "🔻"  # Precio baja
 INDICATOR_NEUTRAL = "―"  # Sin cambio o datos no disponibles
 
 # Emojis de banderas por moneda
@@ -44,6 +44,7 @@ SOURCES_LABELS = {
 # =============================================================================
 # FUNCIONES AUXILIARES
 # =============================================================================
+
 
 def get_change_indicator(change: Optional[str]) -> str:
     """Retorna el indicador visual según el cambio.
@@ -114,6 +115,7 @@ def parse_iso_datetime(iso_string: Optional[str]) -> str:
 # CONSTRUCTORES DE BLOQUES
 # =============================================================================
 
+
 def build_eltoque_block(data: Dict[str, Any]) -> str:
     """Construye el bloque de Mercado Informal (El Toque).
 
@@ -146,7 +148,7 @@ def build_eltoque_block(data: Dict[str, Any]) -> str:
     priority = ["USD", "EUR", "MLC", "USDT", "BTC", "ETH", "BNB"]
     sorted_currencies = sorted(
         eltoque_data.keys(),
-        key=lambda x: (priority.index(x.upper()) if x.upper() in priority else 99, x)
+        key=lambda x: (priority.index(x.upper()) if x.upper() in priority else 99, x),
     )
 
     for currency in sorted_currencies:
@@ -186,16 +188,13 @@ def build_eltoque_block(data: Dict[str, Any]) -> str:
 
 
 def build_cadeca_block(data: Dict[str, Any]) -> str:
-    """Construye el bloque de CADECA con formato de columnas.
+    """Construye el bloque de CADECA con formato compacto estilo legacy.
 
     Formato:
-        ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-
-        🏢 *CADECA* — Airports, Ports, Hotels
-        ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        Currency      Buy      Sell
-        USD          120.00   125.00
-        EUR          130.00   136.00
+        🏢 *CADECA*
+        ━━━━━━━━━━━━━━━━━━━━━━
+        *USD*    120.00  /  125.00 🔺
+        *EUR*    130.00  /  135.00 ―
 
     Args:
         data: Dict con datos de la API (campo 'data.cadeca')
@@ -210,7 +209,7 @@ def build_cadeca_block(data: Dict[str, Any]) -> str:
     lines.append("")
 
     # Header
-    lines.append("🏢 *CADECA* — Airports, Ports, Hotels")
+    lines.append("🏢 *CADECA*")
     lines.append(SEPARATOR_THICK)
 
     cadeca_data = data.get("cadeca", {})
@@ -220,6 +219,34 @@ def build_cadeca_block(data: Dict[str, Any]) -> str:
         lines.append("")
         return "\n".join(lines)
 
+    # Ordenar monedas: USD, EUR, luego el resto alfabético
+    priority = ["USD", "EUR"]
+    sorted_currencies = sorted(
+        cadeca_data.keys(),
+        key=lambda x: (priority.index(x.upper()) if x.upper() in priority else 99, x),
+    )
+
+    for currency in sorted_currencies:
+        currency_info = cadeca_data[currency]
+
+        if isinstance(currency_info, dict):
+            buy = currency_info.get("buy", 0)
+            sell = currency_info.get("sell", 0)
+            change = currency_info.get("change")
+        else:
+            buy = 0
+            sell = 0
+            change = None
+
+        buy_str = format_rate_value(buy) if buy else "---"
+        sell_str = format_rate_value(sell) if sell else "---"
+        indicator = get_change_indicator(change)
+
+        lines.append(f" *{currency}*    {buy_str}  /  {sell_str} {indicator}")
+
+    lines.append("")  # Linea vacia al final
+    return "\n".join(lines)
+
     # Header de columnas
     lines.append(f"{'Currency':<12} {'Buy':>8} {'Sell':>8}")
 
@@ -227,7 +254,7 @@ def build_cadeca_block(data: Dict[str, Any]) -> str:
     priority = ["USD", "EUR"]
     sorted_currencies = sorted(
         cadeca_data.keys(),
-        key=lambda x: (priority.index(x.upper()) if x.upper() in priority else 99, x)
+        key=lambda x: (priority.index(x.upper()) if x.upper() in priority else 99, x),
     )
 
     for currency in sorted_currencies:
@@ -239,7 +266,9 @@ def build_cadeca_block(data: Dict[str, Any]) -> str:
         else:
             # Formato alternativo
             buy = currency_info.get("buy", 0) if isinstance(currency_info, dict) else 0
-            sell = currency_info.get("sell", 0) if isinstance(currency_info, dict) else 0
+            sell = (
+                currency_info.get("sell", 0) if isinstance(currency_info, dict) else 0
+            )
 
         buy_str = format_rate_value(buy) if buy else "---"
         sell_str = format_rate_value(sell) if sell else "---"
@@ -288,7 +317,7 @@ def build_bcc_block(data: Dict[str, Any]) -> str:
     priority = ["USD", "EUR"]
     sorted_currencies = sorted(
         bcc_data.keys(),
-        key=lambda x: (priority.index(x.upper()) if x.upper() in priority else 99, x)
+        key=lambda x: (priority.index(x.upper()) if x.upper() in priority else 99, x),
     )
 
     for currency in sorted_currencies:
@@ -347,7 +376,7 @@ def build_binance_block(data: Dict[str, Any]) -> str:
     priority = ["USDT", "BTC", "ETH", "BNB"]
     sorted_pairs = sorted(
         binance_data.keys(),
-        key=lambda x: (priority.index(x.upper()) if x.upper() in priority else 99, x)
+        key=lambda x: (priority.index(x.upper()) if x.upper() in priority else 99, x),
     )
 
     for pair in sorted_currencies:
@@ -524,3 +553,73 @@ def build_history_message(
         lines.append("")
 
     return "\n".join(lines)
+
+
+# =============================================================================
+# FUNCIONES PARA COMANDOS INDIVIDUALES POR FUENTE
+# =============================================================================
+
+
+def _build_source_footer(source: str, api_data: Dict[str, Any]) -> str:
+    """Construye footer simple para comandos individuales."""
+    lines = []
+    lines.append(SEPARATOR_THICK)
+
+    updated_at = api_data.get("updated_at")
+    if updated_at:
+        date_str = parse_iso_datetime(updated_at)
+        if date_str:
+            lines.append(f"📆 {date_str}")
+
+    source_url = SOURCES_LABELS.get(source, source)
+    lines.append(f"🔗 {source_url}")
+    return "\n".join(lines)
+
+
+def build_eltoque_only_message(api_data: Dict[str, Any]) -> str:
+    """Construye mensaje con solo ElToque para comando /toque."""
+    eltoque_block = build_eltoque_block(api_data)
+    footer = _build_source_footer("eltoque", api_data)
+    return f"{eltoque_block}\n{footer}"
+
+
+def build_bcc_only_message(api_data: Dict[str, Any]) -> str:
+    """Construye mensaje con solo BCC para comando /bcc."""
+    lines = []
+    lines.append("🏛 *Banco Central (BCC)*")
+    lines.append(SEPARATOR_THICK)
+
+    bcc_data = api_data.get("bcc", {})
+    if not bcc_data:
+        lines.append("_Datos no disponibles_")
+    else:
+        priority = ["USD", "EUR", "MLC"]
+        sorted_currencies = sorted(
+            bcc_data.keys(),
+            key=lambda x: (
+                priority.index(x.upper()) if x.upper() in priority else 99,
+                x,
+            ),
+        )
+        for currency in sorted_currencies:
+            currency_info = bcc_data[currency]
+            if isinstance(currency_info, dict):
+                rate = currency_info.get("rate", 0)
+                change = currency_info.get("change")
+            else:
+                rate = float(currency_info) if currency_info else 0
+                change = None
+            flag = get_currency_flag(currency)
+            indicator = get_change_indicator(change)
+            rate_str = format_rate_value(rate) if rate else "---"
+            lines.append(f"{flag} {currency}   {rate_str} CUP  {indicator}")
+
+    footer = _build_source_footer("bcc", api_data)
+    return f"{'\n'.join(lines)}\n{footer}"
+
+
+def build_cadeca_only_message(api_data: Dict[str, Any]) -> str:
+    """Construye mensaje con solo CADECA para comando /cadeca."""
+    cadeca_block = build_cadeca_block(api_data)
+    footer = _build_source_footer("cadeca", api_data)
+    return f"{cadeca_block}\n{footer}"

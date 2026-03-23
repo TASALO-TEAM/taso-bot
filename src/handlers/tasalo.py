@@ -12,7 +12,15 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
 from src.api_client import TasaloApiClient
-from src.formatters import build_full_message, build_history_message, SEPARATOR_THICK, parse_iso_datetime
+from src.formatters import (
+    build_full_message,
+    build_history_message,
+    SEPARATOR_THICK,
+    parse_iso_datetime,
+    build_eltoque_only_message,
+    build_bcc_only_message,
+    build_cadeca_only_message,
+)
 from src.image_generator import generate_image
 
 logger = logging.getLogger(__name__)
@@ -196,8 +204,7 @@ async def tasalo_refresh_callback(update: Update, context: ContextTypes.DEFAULT_
 
     if not api_client:
         await query.edit_message_text(
-            "⚠️ *Error de Configuración*\n\n"
-            "El bot no está configurado correctamente.",
+            "⚠️ *Error de Configuración*\n\nEl bot no está configurado correctamente.",
             parse_mode="Markdown",
         )
         return
@@ -210,12 +217,16 @@ async def tasalo_refresh_callback(update: Update, context: ContextTypes.DEFAULT_
         return
 
     # Enviar respuesta actualizada
-    await send_tasalo_response(update, data.get("data"), message_id=query.message.message_id)
+    await send_tasalo_response(
+        update, data.get("data"), message_id=query.message.message_id
+    )
 
     logger.info("✅ Refresh completado")
 
 
-async def tasalo_provincias_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def tasalo_provincias_callback(
+    update: Update, context: ContextTypes.DEFAULT_TYPE
+):
     """Callback para el botón 🗺 Ver provincias.
 
     Muestra las tasas por provincia (stub por ahora).
@@ -235,8 +246,7 @@ async def tasalo_provincias_callback(update: Update, context: ContextTypes.DEFAU
 
     if not api_client:
         await query.edit_message_text(
-            "⚠️ *Error de Configuración*\n\n"
-            "El bot no está configurado correctamente.",
+            "⚠️ *Error de Configuración*\n\nEl bot no está configurado correctamente.",
             parse_mode="Markdown",
         )
         return
@@ -255,9 +265,11 @@ async def tasalo_provincias_callback(update: Update, context: ContextTypes.DEFAU
     provincias_text = build_provincias_message(api_data)
 
     # Teclado con botón "Volver"
-    keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("🔙 Volver", callback_data="tasalo_back")],
-    ])
+    keyboard = InlineKeyboardMarkup(
+        [
+            [InlineKeyboardButton("🔙 Volver", callback_data="tasalo_back")],
+        ]
+    )
 
     await query.edit_message_text(
         text=provincias_text,
@@ -286,22 +298,22 @@ def build_provincias_message(api_data: dict) -> str:
     # Verificar si hay datos provinciales en la API
     # La API actual no tiene provincias, mostrar mensaje informativo
     # pero preparado para cuando se implemente
-    
+
     # Por ahora, mostrar las tasas nacionales como placeholder
     eltoque_data = api_data.get("eltoque", {})
-    
+
     if eltoque_data:
         lines.append("_Las tasas se muestran a nivel nacional._")
         lines.append("")
         lines.append("📍 *Tasa Nacional USD:*")
-        
+
         usd_info = eltoque_data.get("USD", {})
         if isinstance(usd_info, dict):
             rate = usd_info.get("rate", 0)
             lines.append(f"   {rate:,.2f} CUP")
         else:
             lines.append(f"   {usd_info:,.2f} CUP")
-        
+
         lines.append("")
         lines.append("🔜 *Próximamente:*")
         lines.append("Desglose por 15 provincias de Cuba")
@@ -339,8 +351,7 @@ async def tasalo_back_callback(update: Update, context: ContextTypes.DEFAULT_TYP
 
     if not api_client:
         await query.edit_message_text(
-            "⚠️ *Error de Configuración*\n\n"
-            "El bot no está configurado correctamente.",
+            "⚠️ *Error de Configuración*\n\nEl bot no está configurado correctamente.",
             parse_mode="Markdown",
         )
         return
@@ -352,7 +363,9 @@ async def tasalo_back_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         return
 
     # Re-enviar la vista principal
-    await send_tasalo_response(update, data.get("data"), message_id=query.message.message_id)
+    await send_tasalo_response(
+        update, data.get("data"), message_id=query.message.message_id
+    )
 
     logger.info("✅ Back callback completado")
 
@@ -396,8 +409,7 @@ async def history_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if not api_client:
         await query.edit_message_text(
-            "⚠️ *Error de Configuración*\n\n"
-            "El bot no está configurado correctamente.",
+            "⚠️ *Error de Configuración*\n\nEl bot no está configurado correctamente.",
             parse_mode="Markdown",
         )
         return
@@ -417,9 +429,11 @@ async def history_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     history_text = build_history_message(currency, source, history_data.get("data", []))
 
     # Teclado con botón "Volver"
-    keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("🔙 Volver", callback_data="tasalo_back")],
-    ])
+    keyboard = InlineKeyboardMarkup(
+        [
+            [InlineKeyboardButton("🔙 Volver", callback_data="tasalo_back")],
+        ]
+    )
 
     await query.edit_message_text(
         text=history_text,
@@ -428,3 +442,112 @@ async def history_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     logger.info(f"✅ Histórico mostrado para {currency}/{source}/{days}d")
+
+
+# =============================================================================
+# COMANDOS INDIVIDUALES POR FUENTE: /toque, /bcc, /cadeca
+# =============================================================================
+
+
+def _build_source_refresh_keyboard(source: str) -> InlineKeyboardMarkup:
+    """Teclado simple con boton de refresh para comando individual."""
+    return InlineKeyboardMarkup(
+        [
+            [InlineKeyboardButton("🔄 Actualizar", callback_data=f"{source}_refresh")],
+        ]
+    )
+
+
+async def _handle_source_command(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    source: str,
+    build_message_func,
+) -> None:
+    """Handler generico para comandos individuales por fuente."""
+    api_client: TasaloApiClient = context.bot_data.get("api_client")
+    if not api_client:
+        await update.message.reply_text("❌ Error de configuración del bot.")
+        return
+
+    # Mensaje de carga
+    loading_msg = await update.message.reply_text(f"⏳ Consultando {source.upper()}...")
+
+    try:
+        api_data = await api_client.get_latest()
+        if not api_data:
+            await loading_msg.edit_text(
+                f"⚠️ No se pudieron obtener datos de {source.upper()}."
+            )
+            return
+
+        text = build_message_func(api_data)
+        keyboard = _build_source_refresh_keyboard(source)
+
+        await loading_msg.edit_text(
+            text=text,
+            reply_markup=keyboard,
+            parse_mode="Markdown",
+        )
+        logger.info(f"✅ Comando /{source} ejecutado correctamente")
+
+    except Exception as e:
+        logger.error(f"Error en comando /{source}: {e}")
+        await loading_msg.edit_text(f"❌ Error consultando {source.upper()}.")
+
+
+async def toque_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Comando /toque — Muestra solo tasas de ElToque."""
+    await _handle_source_command(update, context, "toque", build_eltoque_only_message)
+
+
+async def bcc_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Comando /bcc — Muestra solo tasas del BCC."""
+    await _handle_source_command(update, context, "bcc", build_bcc_only_message)
+
+
+async def cadeca_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Comando /cadeca — Muestra solo tasas de CADECA."""
+    await _handle_source_command(update, context, "cadeca", build_cadeca_only_message)
+
+
+async def source_refresh_callback(
+    update: Update, context: ContextTypes.DEFAULT_TYPE
+) -> None:
+    """Callback generico para refresh de comandos individuales."""
+    query = update.callback_query
+    await query.answer("🔄 Actualizando...")
+
+    # Extraer fuente del callback_data (formato: "{source}_refresh")
+    source = query.data.replace("_refresh", "")
+
+    api_client: TasaloApiClient = context.bot_data.get("api_client")
+    if not api_client:
+        return
+
+    try:
+        api_data = await api_client.get_latest()
+        if not api_data:
+            return
+
+        build_funcs = {
+            "toque": build_eltoque_only_message,
+            "bcc": build_bcc_only_message,
+            "cadeca": build_cadeca_only_message,
+        }
+        build_func = build_funcs.get(source)
+        if not build_func:
+            return
+
+        text = build_func(api_data)
+        keyboard = _build_source_refresh_keyboard(source)
+
+        await query.edit_message_text(
+            text=text,
+            reply_markup=keyboard,
+            parse_mode="Markdown",
+        )
+        logger.info(f"✅ Refresh /{source} completado")
+
+    except Exception as e:
+        logger.error(f"Error en refresh /{source}: {e}")
