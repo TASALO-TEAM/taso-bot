@@ -12,25 +12,14 @@ from typing import Dict, Any, Optional
 # CONSTANTES DE FORMATO
 # =============================================================================
 
-# Separadores
-SEPARATOR_THICK = "━" * 22  # Separador principal entre secciones
-SEPARATOR_THIN = "┈" * 22  # Separador secundario
+# Separadores (legacy style)
+SEPARATOR_THICK = "—" * 33  # Separador principal entre secciones
+SEPARATOR_THIN = "•••"  # Separador secundario estilo legacy
 
 # Indicadores de cambio
 INDICATOR_UP = "🔺"  # Precio sube
 INDICATOR_DOWN = "🔻"  # Precio baja
-INDICATOR_NEUTRAL = "―"  # Sin cambio o datos no disponibles
-
-# Emojis de banderas por moneda
-CURRENCY_FLAGS = {
-    "USD": "🇺🇸",
-    "EUR": "🇪🇺",
-    "MLC": "🧾",
-    "USDT": "₮",
-    "BTC": "₿",
-    "ETH": "Ξ",
-    "BNB": "🟡",
-}
+INDICATOR_NEUTRAL = ""  # Sin cambio (legacy no usa indicador para neutral)
 
 # Fuentes
 SOURCES_LABELS = {
@@ -61,18 +50,6 @@ def get_change_indicator(change: Optional[str]) -> str:
         return INDICATOR_DOWN
     else:
         return INDICATOR_NEUTRAL
-
-
-def get_currency_flag(currency_code: str) -> str:
-    """Retorna el emoji de bandera para una moneda.
-
-    Args:
-        currency_code: Código de moneda (USD, EUR, etc.)
-
-    Returns:
-        Emoji de bandera o string vacío si no hay matching
-    """
-    return CURRENCY_FLAGS.get(currency_code.upper(), "")
 
 
 def format_rate_value(rate: float) -> str:
@@ -117,13 +94,17 @@ def parse_iso_datetime(iso_string: Optional[str]) -> str:
 
 
 def build_eltoque_block(data: Dict[str, Any]) -> str:
-    """Construye el bloque de Mercado Informal (El Toque).
+    """Construye el bloque de Mercado Informal (El Toque) estilo legacy.
 
-    Formato:
-        📊 *Mercado Informal (El Toque)*
-        ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        🇺🇸 USD  365.00 CUP  🔺 +5.00
-        🇪🇺 EUR  398.00 CUP  ―
+    Formato legacy:
+        📊 *MERCADO INFORMAL (El Toque)*
+        —————————————————
+         EUR:   580.00  CUP 
+         USD:   515.00  CUP 
+         MLC:   420.00  CUP 
+         BTC:   516.00  CUP 
+         TRX:   185.00  CUP 
+         USDT:   560.00  CUP 
 
     Args:
         data: Dict con datos de la API (campo 'data.eltoque')
@@ -134,18 +115,18 @@ def build_eltoque_block(data: Dict[str, Any]) -> str:
     lines = []
 
     # Header
-    lines.append("📊 *Mercado Informal (El Toque)*")
+    lines.append("📊 *MERCADO INFORMAL (El Toque)*")
     lines.append(SEPARATOR_THICK)
 
     eltoque_data = data.get("eltoque", {})
 
     if not eltoque_data:
-        lines.append("_Datos no disponibles_")
+        lines.append("Datos no disponibles")
         lines.append("")
         return "\n".join(lines)
 
-    # Ordenar monedas: USD, EUR, MLC, USDT, BTC, ETH, BNB, luego el resto
-    priority = ["USD", "EUR", "MLC", "USDT", "BTC", "ETH", "BNB"]
+    # Ordenar monedas: legacy order - EUR, USD, MLC, BTC, TRX, USDT
+    priority = ["EUR", "USD", "MLC", "BTC", "TRX", "USDT"]
     sorted_currencies = sorted(
         eltoque_data.keys(),
         key=lambda x: (priority.index(x.upper()) if x.upper() in priority else 99, x),
@@ -153,34 +134,34 @@ def build_eltoque_block(data: Dict[str, Any]) -> str:
 
     for currency in sorted_currencies:
         currency_info = eltoque_data[currency]
-        flag = get_currency_flag(currency)
 
         # Extraer tasa y cambio
         if isinstance(currency_info, dict):
             rate = currency_info.get("rate", 0)
             change = currency_info.get("change", None)
-            change_value = currency_info.get("change_value", 0)
+            prev_rate = currency_info.get("prev_rate")
         else:
             rate = currency_info
             change = None
-            change_value = 0
+            prev_rate = None
 
         # Formatear línea
         rate_str = format_rate_value(rate)
-        indicator = get_change_indicator(change)
+        
+        # Calcular indicador y cambio
+        indicator = ""
+        change_str = ""
+        if change == "up" and prev_rate is not None:
+            diff = rate - prev_rate
+            indicator = " " + INDICATOR_UP
+            change_str = f" +{diff:,.2f}"
+        elif change == "down" and prev_rate is not None:
+            diff = rate - prev_rate
+            indicator = " " + INDICATOR_DOWN
+            change_str = f" {diff:,.2f}"
 
-        # Construir línea con o sin valor de cambio
-        if change_value > 0:
-            # Cambio positivo: mostrar con signo +
-            change_str = format_rate_value(change_value)
-            line = f"{flag} {currency}  {rate_str} CUP  {indicator} +{change_str}"
-        elif change_value < 0:
-            # Cambio negativo: mostrar con signo -
-            change_str = format_rate_value(abs(change_value))
-            line = f"{flag} {currency}  {rate_str} CUP  {indicator} -{change_str}"
-        else:
-            line = f"{flag} {currency}  {rate_str} CUP  {indicator}"
-
+        # Formato legacy: " EUR:   580.00  CUP 🔺"
+        line = f" *{currency}:*   {rate_str}  CUP{indicator}{change_str}"
         lines.append(line)
 
     lines.append("")  # Línea vacía al final
@@ -188,13 +169,15 @@ def build_eltoque_block(data: Dict[str, Any]) -> str:
 
 
 def build_cadeca_block(data: Dict[str, Any]) -> str:
-    """Construye el bloque de CADECA con formato compacto estilo legacy.
+    """Construye el bloque de CADECA estilo legacy.
 
-    Formato:
-        🏢 *CADECA*
-        ━━━━━━━━━━━━━━━━━━━━━━
-        *USD*    120.00  /  125.00 🔺
-        *EUR*    130.00  /  135.00 ―
+    Formato legacy:
+        🏢 *CADECA (Exchange Houses)*
+        ↳ _Airports, Ports & Hotels_
+        —————————————————
+        _Currency_     _Buy_      _Sell_
+         *USD*          461.27       506.68  
+         *EUR*          531.94       584.30  
 
     Args:
         data: Dict con datos de la API (campo 'data.cadeca')
@@ -204,23 +187,23 @@ def build_cadeca_block(data: Dict[str, Any]) -> str:
     """
     lines = []
 
-    # Separador thin
-    lines.append(SEPARATOR_THIN)
-    lines.append("")
-
     # Header
-    lines.append("🏢 *CADECA*")
+    lines.append("🏢 *CADECA (Exchange Houses)*")
+    lines.append("↳ _Airports, Ports & Hotels_")
     lines.append(SEPARATOR_THICK)
 
     cadeca_data = data.get("cadeca", {})
 
     if not cadeca_data:
-        lines.append("_Datos no disponibles_")
+        lines.append("⚠️ Not available")
         lines.append("")
         return "\n".join(lines)
 
-    # Ordenar monedas: USD, EUR, luego el resto alfabético
-    priority = ["USD", "EUR"]
+    # Header de columnas
+    lines.append("_Currency_     _Buy_      _Sell_")
+
+    # Ordenar monedas: legacy order - EUR, USD, MLC, CAD, MXN, GBP, CHF, RUB, AUD, JPY
+    priority = ["EUR", "USD", "MLC", "CAD", "MXN", "GBP", "CHF", "RUB", "AUD", "JPY"]
     sorted_currencies = sorted(
         cadeca_data.keys(),
         key=lambda x: (priority.index(x.upper()) if x.upper() in priority else 99, x),
@@ -233,62 +216,40 @@ def build_cadeca_block(data: Dict[str, Any]) -> str:
             buy = currency_info.get("buy", 0)
             sell = currency_info.get("sell", 0)
             change = currency_info.get("change")
+            prev_rate = currency_info.get("prev_rate")
         else:
             buy = 0
             sell = 0
             change = None
+            prev_rate = None
 
-        buy_str = format_rate_value(buy) if buy else "---"
-        sell_str = format_rate_value(sell) if sell else "---"
-        indicator = get_change_indicator(change)
+        buy_str = f"{buy:6.2f}" if buy else "  ---"
+        sell_str = f"{sell:6.2f}" if sell else "  ---"
+        
+        # Indicador solo si hay cambio significativo
+        indicator = ""
+        if change == "up":
+            indicator = " " + INDICATOR_UP
+        elif change == "down":
+            indicator = " " + INDICATOR_DOWN
 
-        lines.append(f" *{currency}*    {buy_str}  /  {sell_str} {indicator}")
+        # Formato legacy: columna alineada
+        line = f" *{currency}*          {buy_str}       {sell_str}{indicator}"
+        lines.append(line)
 
     lines.append("")  # Linea vacia al final
     return "\n".join(lines)
 
-    # Header de columnas
-    lines.append(f"{'Currency':<12} {'Buy':>8} {'Sell':>8}")
-
-    # Ordenar monedas: USD, EUR, luego el resto alfabético
-    priority = ["USD", "EUR"]
-    sorted_currencies = sorted(
-        cadeca_data.keys(),
-        key=lambda x: (priority.index(x.upper()) if x.upper() in priority else 99, x),
-    )
-
-    for currency in sorted_currencies:
-        currency_info = cadeca_data[currency]
-
-        if isinstance(currency_info, dict):
-            buy = currency_info.get("buy", 0)
-            sell = currency_info.get("sell", 0)
-        else:
-            # Formato alternativo
-            buy = currency_info.get("buy", 0) if isinstance(currency_info, dict) else 0
-            sell = (
-                currency_info.get("sell", 0) if isinstance(currency_info, dict) else 0
-            )
-
-        buy_str = format_rate_value(buy) if buy else "---"
-        sell_str = format_rate_value(sell) if sell else "---"
-
-        lines.append(f"{currency:<12} {buy_str:>8} {sell_str:>8}")
-
-    lines.append("")  # Línea vacía al final
-    return "\n".join(lines)
-
 
 def build_bcc_block(data: Dict[str, Any]) -> str:
-    """Construye el bloque del Banco Central (BCC).
+    """Construye el bloque del Banco Central (BCC) estilo legacy.
 
-    Formato:
-        ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-
-        🏛 *Banco Central (BCC)*
-        ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        USD   24.00 CUP
-        EUR   26.50 CUP
+    Formato legacy:
+        🏛 *OFFICIAL RATE (BCC)*
+        —————————————————
+        *EUR:*   551.23   *CUP*  
+        *USD:*   478.00   *CUP*  
+        *CAD:*   348.17   *CUP*  
 
     Args:
         data: Dict con datos de la API (campo 'data.bcc')
@@ -298,23 +259,19 @@ def build_bcc_block(data: Dict[str, Any]) -> str:
     """
     lines = []
 
-    # Separador thin
-    lines.append(SEPARATOR_THIN)
-    lines.append("")
-
     # Header
-    lines.append("🏛 *Banco Central (BCC)*")
+    lines.append("🏛 *OFFICIAL RATE (BCC)*")
     lines.append(SEPARATOR_THICK)
 
     bcc_data = data.get("bcc", {})
 
     if not bcc_data:
-        lines.append("_Datos no disponibles_")
+        lines.append("⚠️ Not available")
         lines.append("")
         return "\n".join(lines)
 
-    # Ordenar monedas: USD, EUR, luego el resto
-    priority = ["USD", "EUR"]
+    # Ordenar monedas: legacy order - EUR, USD, MLC, CAD, MXN, GBP, CHF, RUB, AUD, JPY
+    priority = ["EUR", "USD", "MLC", "CAD", "MXN", "GBP", "CHF", "RUB", "AUD", "JPY"]
     sorted_currencies = sorted(
         bcc_data.keys(),
         key=lambda x: (priority.index(x.upper()) if x.upper() in priority else 99, x),
@@ -326,13 +283,40 @@ def build_bcc_block(data: Dict[str, Any]) -> str:
         # BCC puede venir como número directo o como dict
         if isinstance(currency_info, dict):
             rate = currency_info.get("rate", 0)
+            change = currency_info.get("change")
+            prev_rate = currency_info.get("prev_rate")
         else:
             rate = currency_info
+            change = None
+            prev_rate = None
 
         rate_str = format_rate_value(rate)
-        flag = get_currency_flag(currency)
+        
+        # Indicador y cambio
+        indicator = ""
+        change_str = ""
+        if change == "up" and prev_rate is not None:
+            diff = rate - prev_rate
+            indicator = "  " + INDICATOR_UP
+            change_str = f" +{diff:,.2f}"
+        elif change == "down" and prev_rate is not None:
+            diff = rate - prev_rate
+            indicator = "  " + INDICATOR_DOWN
+            change_str = f" {diff:,.2f}"
 
-        lines.append(f"{flag} {currency}   {rate_str} CUP")
+        # Formato legacy: " EUR:   551.23   CUP  🔺"
+        line = f" *{currency}:*   {rate_str}   *CUP*{indicator}{change_str}"
+        lines.append(line)
+
+    # Otras monedas no estandar (si existen)
+    for currency, currency_info in bcc_data.items():
+        if currency not in priority:
+            if isinstance(currency_info, dict):
+                rate = currency_info.get("rate", 0)
+            else:
+                rate = currency_info
+            rate_str = format_rate_value(rate)
+            lines.append(f" *{currency}:*   {rate_str}  *CUP*")
 
     lines.append("")  # Línea vacía al final
     return "\n".join(lines)
@@ -411,12 +395,15 @@ def build_binance_block(data: Dict[str, Any]) -> str:
 
 
 def build_footer(data: Dict[str, Any]) -> str:
-    """Construye el footer del mensaje con timestamp y fuentes.
+    """Construye el footer del mensaje con timestamp y fuentes estilo legacy.
 
-    Formato:
-        ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        📆 2026-03-22 14:30
-        🔗 elToque.com · cadeca.cu · bc.gob.cu
+    Formato legacy:
+        —————————————————
+        📆 2026-03-23 09:00
+        Fuentes de consulta:
+        🔗 elToque.com
+        🔗 www.cadeca.cu
+        🔗 www.bc.gob.cu
 
     Args:
         data: Dict con datos de la API (campo 'updated_at' y 'sources')
@@ -434,20 +421,31 @@ def build_footer(data: Dict[str, Any]) -> str:
     timestamp = parse_iso_datetime(updated_at)
     lines.append(f"📆 {timestamp}")
 
-    # Fuentes disponibles
-    sources = data.get("sources", [])
+    # Fuentes disponibles - estilo legacy
+    lines.append("Fuentes de consulta:")
+    
+    # Verificar qué fuentes tienen datos
+    sources = []
+    if data.get("eltoque"):
+        sources.append("🔗 elToque.com")
+    if data.get("cadeca"):
+        sources.append("🔗 www.cadeca.cu")
+    if data.get("bcc"):
+        sources.append("🔗 www.bc.gob.cu")
+    
     if sources:
-        source_labels = [SOURCES_LABELS.get(s.lower(), s) for s in sources]
-        lines.append(f"🔗 {' · '.join(source_labels)}")
+        lines.extend(sources)
     else:
         # Fallback: mostrar todas las fuentes posibles
-        lines.append("🔗 elToque.com · cadeca.cu · bc.gob.cu")
+        lines.append("🔗 elToque.com")
+        lines.append("🔗 www.cadeca.cu")
+        lines.append("🔗 www.bc.gob.cu")
 
     return "\n".join(lines)
 
 
 def build_full_message(data: Dict[str, Any]) -> str:
-    """Construye el mensaje completo con todos los bloques.
+    """Construye el mensaje completo con todos los bloques estilo legacy.
 
     Combina los bloques de ElToque, CADECA, BCC y el footer en un solo mensaje.
 
@@ -464,19 +462,24 @@ def build_full_message(data: Dict[str, Any]) -> str:
     if eltoque_block.strip():
         blocks.append(eltoque_block)
 
+    # Separador ••• entre bloques
+    blocks.append(SEPARATOR_THIN)
+
     # Bloque CADECA (si hay datos)
     cadeca_data = data.get("cadeca", {})
     if cadeca_data:
         cadeca_block = build_cadeca_block(data)
         blocks.append(cadeca_block)
+        blocks.append(SEPARATOR_THIN)
 
     # Bloque BCC (si hay datos)
     bcc_data = data.get("bcc", {})
     if bcc_data:
         bcc_block = build_bcc_block(data)
         blocks.append(bcc_block)
+        blocks.append(SEPARATOR_THIN)
 
-    # Footer (siempre presente)
+    # Footer
     footer = build_footer(data)
     blocks.append(footer)
 
@@ -560,66 +563,175 @@ def build_history_message(
 # =============================================================================
 
 
-def _build_source_footer(source: str, api_data: Dict[str, Any]) -> str:
-    """Construye footer simple para comandos individuales."""
+def build_eltoque_only_message(api_data: Dict[str, Any]) -> str:
+    """Construye mensaje con solo ElToque para comando /toque."""
     lines = []
+    
+    lines.append("📊 *MERCADO INFORMAL (El Toque)*")
     lines.append(SEPARATOR_THICK)
-
+    
+    eltoque_data = api_data.get("eltoque", {})
+    
+    if not eltoque_data:
+        lines.append("Datos no disponibles")
+    else:
+        # Ordenar monedas: legacy order - EUR, USD, MLC, BTC, TRX, USDT
+        priority = ["EUR", "USD", "MLC", "BTC", "TRX", "USDT"]
+        sorted_currencies = sorted(
+            eltoque_data.keys(),
+            key=lambda x: (priority.index(x.upper()) if x.upper() in priority else 99, x),
+        )
+        
+        for currency in sorted_currencies:
+            currency_info = eltoque_data[currency]
+            if isinstance(currency_info, dict):
+                rate = currency_info.get("rate", 0)
+                change = currency_info.get("change")
+                prev_rate = currency_info.get("prev_rate")
+            else:
+                rate = currency_info
+                change = None
+                prev_rate = None
+            
+            rate_str = format_rate_value(rate) if rate else "---"
+            
+            indicator = ""
+            change_str = ""
+            if change == "up" and prev_rate is not None:
+                diff = rate - prev_rate
+                indicator = " " + INDICATOR_UP
+                change_str = f" +{diff:,.2f}"
+            elif change == "down" and prev_rate is not None:
+                diff = rate - prev_rate
+                indicator = " " + INDICATOR_DOWN
+                change_str = f" {diff:,.2f}"
+            
+            line = f" *{currency}:*   {rate_str}  CUP{indicator}{change_str}"
+            lines.append(line)
+    
+    lines.append("")
+    lines.append(SEPARATOR_THICK)
+    
+    # Footer
     updated_at = api_data.get("updated_at")
     if updated_at:
         date_str = parse_iso_datetime(updated_at)
-        if date_str:
-            lines.append(f"📆 {date_str}")
-
-    source_url = SOURCES_LABELS.get(source, source)
-    lines.append(f"🔗 {source_url}")
+        lines.append(f"📆 {date_str}")
+    lines.append("🔗 elToque.com")
+    
     return "\n".join(lines)
-
-
-def build_eltoque_only_message(api_data: Dict[str, Any]) -> str:
-    """Construye mensaje con solo ElToque para comando /toque."""
-    eltoque_block = build_eltoque_block(api_data)
-    footer = _build_source_footer("eltoque", api_data)
-    return f"{eltoque_block}\n{footer}"
 
 
 def build_bcc_only_message(api_data: Dict[str, Any]) -> str:
     """Construye mensaje con solo BCC para comando /bcc."""
     lines = []
-    lines.append("🏛 *Banco Central (BCC)*")
+    
+    lines.append("🏛 *OFFICIAL RATE (BCC)*")
     lines.append(SEPARATOR_THICK)
-
+    
     bcc_data = api_data.get("bcc", {})
+    
     if not bcc_data:
-        lines.append("_Datos no disponibles_")
+        lines.append("⚠️ Not available")
     else:
-        priority = ["USD", "EUR", "MLC"]
+        priority = ["EUR", "USD", "MLC", "CAD", "MXN", "GBP", "CHF", "RUB", "AUD", "JPY"]
         sorted_currencies = sorted(
             bcc_data.keys(),
-            key=lambda x: (
-                priority.index(x.upper()) if x.upper() in priority else 99,
-                x,
-            ),
+            key=lambda x: (priority.index(x.upper()) if x.upper() in priority else 99, x),
         )
+        
         for currency in sorted_currencies:
             currency_info = bcc_data[currency]
             if isinstance(currency_info, dict):
                 rate = currency_info.get("rate", 0)
                 change = currency_info.get("change")
+                prev_rate = currency_info.get("prev_rate")
             else:
                 rate = float(currency_info) if currency_info else 0
                 change = None
-            flag = get_currency_flag(currency)
-            indicator = get_change_indicator(change)
+                prev_rate = None
+            
             rate_str = format_rate_value(rate) if rate else "---"
-            lines.append(f"{flag} {currency}   {rate_str} CUP  {indicator}")
-
-    footer = _build_source_footer("bcc", api_data)
-    return f"{'\n'.join(lines)}\n{footer}"
+            
+            indicator = ""
+            change_str = ""
+            if change == "up" and prev_rate is not None:
+                diff = rate - prev_rate
+                indicator = "  " + INDICATOR_UP
+                change_str = f" +{diff:,.2f}"
+            elif change == "down" and prev_rate is not None:
+                diff = rate - prev_rate
+                indicator = "  " + INDICATOR_DOWN
+                change_str = f" {diff:,.2f}"
+            
+            line = f" *{currency}:*   {rate_str}   *CUP*{indicator}{change_str}"
+            lines.append(line)
+    
+    lines.append("")
+    lines.append(SEPARATOR_THICK)
+    
+    # Footer
+    updated_at = api_data.get("updated_at")
+    if updated_at:
+        date_str = parse_iso_datetime(updated_at)
+        lines.append(f"📆 {date_str}")
+    lines.append("🔗 www.bc.gob.cu")
+    
+    return "\n".join(lines)
 
 
 def build_cadeca_only_message(api_data: Dict[str, Any]) -> str:
     """Construye mensaje con solo CADECA para comando /cadeca."""
-    cadeca_block = build_cadeca_block(api_data)
-    footer = _build_source_footer("cadeca", api_data)
-    return f"{cadeca_block}\n{footer}"
+    lines = []
+    
+    lines.append("🏢 *CADECA (Exchange Houses)*")
+    lines.append("↳ _Airports, Ports & Hotels_")
+    lines.append(SEPARATOR_THICK)
+    
+    cadeca_data = api_data.get("cadeca", {})
+    
+    if not cadeca_data:
+        lines.append("⚠️ Not available")
+    else:
+        lines.append("_Currency_     _Buy_      _Sell_")
+        
+        priority = ["EUR", "USD", "MLC", "CAD", "MXN", "GBP", "CHF", "RUB", "AUD", "JPY"]
+        sorted_currencies = sorted(
+            cadeca_data.keys(),
+            key=lambda x: (priority.index(x.upper()) if x.upper() in priority else 99, x),
+        )
+        
+        for currency in sorted_currencies:
+            currency_info = cadeca_data[currency]
+            if isinstance(currency_info, dict):
+                buy = currency_info.get("buy", 0)
+                sell = currency_info.get("sell", 0)
+                change = currency_info.get("change")
+            else:
+                buy = 0
+                sell = 0
+                change = None
+            
+            buy_str = f"{buy:6.2f}" if buy else "  ---"
+            sell_str = f"{sell:6.2f}" if sell else "  ---"
+            
+            indicator = ""
+            if change == "up":
+                indicator = " " + INDICATOR_UP
+            elif change == "down":
+                indicator = " " + INDICATOR_DOWN
+            
+            line = f" *{currency}*          {buy_str}       {sell_str}{indicator}"
+            lines.append(line)
+    
+    lines.append("")
+    lines.append(SEPARATOR_THICK)
+    
+    # Footer
+    updated_at = api_data.get("updated_at")
+    if updated_at:
+        date_str = parse_iso_datetime(updated_at)
+        lines.append(f"📆 {date_str}")
+    lines.append("🔗 www.cadeca.cu")
+    
+    return "\n".join(lines)
