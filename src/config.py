@@ -55,7 +55,13 @@ class Settings(BaseSettings):
         description="Nivel de logging (DEBUG, INFO, WARNING, ERROR)",
         pattern="^(DEBUG|INFO|WARNING|ERROR)$"
     )
-    
+
+    # Image Generation
+    template_path: str = Field(
+        default="data/template.png",
+        description="Ruta a la plantilla de imagen para las tasas",
+    )
+
     @field_validator('admin_chat_ids', mode='before')
     @classmethod
     def parse_admin_chat_ids(cls, v: str) -> str:
@@ -75,11 +81,19 @@ class Settings(BaseSettings):
         if not self.admin_chat_ids:
             return []
         return [int(x.strip()) for x in self.admin_chat_ids.split(',') if x.strip()]
-    
+
     @property
     def is_admin_configured(self) -> bool:
         """Verifica si hay al menos un admin configurado."""
         return len(self.get_admin_chat_ids_list()) > 0
+
+    @property
+    def template_full_path(self) -> str:
+        """Retorna la ruta absoluta a la plantilla de imagen."""
+        import os
+        # Obtener el directorio raíz del proyecto (padre de src/)
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        return os.path.join(base_dir, self.template_path)
 
 
 # Instancia global para usar en toda la aplicación

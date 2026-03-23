@@ -4,6 +4,7 @@
 import logging
 import sys
 import asyncio
+import os
 from typing import Any
 from telegram import Update
 from telegram.ext import (
@@ -15,6 +16,7 @@ from telegram.ext import (
 
 from src.config import settings
 from src.api_client import TasaloApiClient
+from src.bot_profile import ensure_bot_profile_photo, create_template_with_profile
 from src.handlers.tasalo import (
     tasalo_command,
     tasalo_refresh_callback,
@@ -178,6 +180,32 @@ async def post_init(application: Application):
             logger.warning("⚠️ Backend connection: API returned None")
     except Exception as e:
         logger.error(f"❌ Backend connection failed: {e}")
+    
+    # Obtener y cachear foto de perfil del bot
+    try:
+        logger.info("📸 Fetching bot profile photo...")
+        profile_path = await ensure_bot_profile_photo(application.bot, cache_dir="data")
+        
+        if profile_path:
+            # Crear plantilla con marca de agua
+            template_base = settings.template_full_path
+            template_with_watermark = os.path.join("data", "template_watermark.png")
+            
+            # Crear directorio data si no existe
+            os.makedirs("data", exist_ok=True)
+            
+            if os.path.exists(template_base):
+                create_template_with_profile(
+                    template_base,
+                    profile_path,
+                    template_with_watermark,
+                    position="center",
+                    size=(250, 250),
+                    opacity=0.12,
+                )
+                logger.info(f"✅ Plantilla con marca de agua creada: {template_with_watermark}")
+    except Exception as e:
+        logger.error(f"⚠️ Error obteniendo foto de perfil: {e}")
 
 
 def main():
