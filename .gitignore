@@ -5,13 +5,21 @@ __pycache__/
 *.so
 .Python
 .venv/
+
+# Environment variables (NEVER commit)
 .env
+.env.*
+!.env.example
+
+# Generated data (NEVER commit - contains bot profile pictures and templates)
+data/
+!data/.gitkeep
 
 # IDE
 .vscode/
 .idea/
 *.swp
-*.swo
+*.swp
 
 # OS
 .DS_Store
