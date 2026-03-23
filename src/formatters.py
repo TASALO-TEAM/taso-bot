@@ -12,8 +12,8 @@ from typing import Dict, Any, Optional
 # CONSTANTES DE FORMATO
 # =============================================================================
 
-# Separadores (legacy style)
-SEPARATOR_THICK = "—" * 33  # Separador principal entre secciones
+# Separadores (legacy style - ~20 caracteres para mejor legibilidad en móvil)
+SEPARATOR_THICK = "—" * 20  # Separador principal entre secciones
 SEPARATOR_THIN = "•••"  # Separador secundario estilo legacy
 
 # Indicadores de cambio

@@ -464,9 +464,17 @@ async def _handle_source_command(
     source: str,
     build_message_func,
 ) -> None:
-    """Handler generico para comandos individuales por fuente."""
+    """Handler genérico para comandos individuales por fuente.
+
+    Args:
+        update: Update de Telegram con el mensaje del usuario
+        context: Contexto del bot con api_client en bot_data
+        source: Identificador de la fuente ("toque", "bcc", "cadeca")
+        build_message_func: Función formatter específica para la fuente
+    """
     api_client: TasaloApiClient = context.bot_data.get("api_client")
     if not api_client:
+        logger.error("❌ api_client no está disponible en bot_data")
         await update.message.reply_text("❌ Error de configuración del bot.")
         return
 
@@ -474,13 +482,29 @@ async def _handle_source_command(
     loading_msg = await update.message.reply_text(f"⏳ Consultando {source.upper()}...")
 
     try:
-        api_data = await api_client.get_latest()
-        if not api_data:
+        # Obtener response completo de la API
+        response = await api_client.get_latest()
+
+        # Validar respuesta
+        if not response or not response.get("ok"):
+            logger.warning(f"⚠️ API respondió None o ok=False para /{source}")
             await loading_msg.edit_text(
                 f"⚠️ No se pudieron obtener datos de {source.upper()}."
             )
             return
 
+        # Extraer 'data' del response para pasar al formatter
+        # Estructura: {"ok": true, "data": {"eltoque": {...}, "cadeca": {...}, ...}}
+        api_data = response.get("data", {})
+
+        if not api_data:
+            logger.warning(f"⚠️ API data está vacío para /{source}")
+            await loading_msg.edit_text(
+                f"⚠️ Datos no disponibles de {source.upper()}."
+            )
+            return
+
+        # Construir mensaje con el formatter específico
         text = build_message_func(api_data)
         keyboard = _build_source_refresh_keyboard(source)
 
@@ -492,7 +516,7 @@ async def _handle_source_command(
         logger.info(f"✅ Comando /{source} ejecutado correctamente")
 
     except Exception as e:
-        logger.error(f"Error en comando /{source}: {e}")
+        logger.error(f"❌ Error en comando /{source}: {e}", exc_info=True)
         await loading_msg.edit_text(f"❌ Error consultando {source.upper()}.")
 
 
@@ -514,7 +538,12 @@ async def cadeca_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 async def source_refresh_callback(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> None:
-    """Callback generico para refresh de comandos individuales."""
+    """Callback genérico para refresh de comandos individuales.
+
+    Args:
+        update: Update de Telegram con el callback query
+        context: Contexto del bot con api_client en bot_data
+    """
     query = update.callback_query
     await query.answer("🔄 Actualizando...")
 
@@ -523,11 +552,21 @@ async def source_refresh_callback(
 
     api_client: TasaloApiClient = context.bot_data.get("api_client")
     if not api_client:
+        logger.error("❌ api_client no está disponible en source_refresh_callback")
         return
 
     try:
-        api_data = await api_client.get_latest()
+        # Obtener response completo y extraer 'data'
+        response = await api_client.get_latest()
+        if not response or not response.get("ok"):
+            logger.warning(f"⚠️ API respondió None o ok=False en refresh /{source}")
+            await query.answer("⚠️ Error actualizando datos", show_alert=True)
+            return
+
+        api_data = response.get("data", {})
         if not api_data:
+            logger.warning(f"⚠️ API data está vacío en refresh /{source}")
+            await query.answer("⚠️ Datos no disponibles", show_alert=True)
             return
 
         build_funcs = {
@@ -537,6 +576,7 @@ async def source_refresh_callback(
         }
         build_func = build_funcs.get(source)
         if not build_func:
+            logger.error(f"❌ Build function no encontrada para {source}")
             return
 
         text = build_func(api_data)
@@ -550,4 +590,4 @@ async def source_refresh_callback(
         logger.info(f"✅ Refresh /{source} completado")
 
     except Exception as e:
-        logger.error(f"Error en refresh /{source}: {e}")
+        logger.error(f"❌ Error en refresh /{source}: {e}", exc_info=True)

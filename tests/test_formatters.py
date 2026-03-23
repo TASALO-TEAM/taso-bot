@@ -470,6 +470,25 @@ class TestBuildHistoryMessage:
 # =============================================================================
 
 
+class TestSeparatorLength:
+    """Tests para verificar el tamaño de separadores (legacy style ~20 chars)."""
+
+    def test_separator_thick_length(self):
+        """SEPARATOR_THICK debe tener aproximadamente 20 caracteres."""
+        # Legacy style: ~20 caracteres para mejor legibilidad en móvil
+        assert 18 <= len(SEPARATOR_THICK) <= 22
+        assert len(SEPARATOR_THICK) == 20  # Exacto: "—" × 20
+
+    def test_separator_thick_content(self):
+        """SEPARATOR_THICK debe contener solo el caracter '—'."""
+        assert all(c == "—" for c in SEPARATOR_THICK)
+
+    def test_separator_thin_exists(self):
+        """SEPARATOR_THIN debe existir y ser más corto."""
+        assert SEPARATOR_THIN == "•••"
+        assert len(SEPARATOR_THIN) < len(SEPARATOR_THICK)
+
+
 class TestBuildEltoqueOnlyMessage:
     """Tests para build_eltoque_only_message."""
 
@@ -489,6 +508,9 @@ class TestBuildEltoqueOnlyMessage:
         assert "*USD:*" in result
         assert "365.00" in result
         assert "🔗 elToque.com" in result
+        # Verificar nuevo separador legacy
+        assert SEPARATOR_THICK in result
+        assert len(SEPARATOR_THICK) == 20
 
     def test_empty_data(self):
         """Datos vacíos."""
@@ -501,6 +523,21 @@ class TestBuildEltoqueOnlyMessage:
 
         assert "Datos no disponibles" in result
         assert "🔗 elToque.com" in result
+
+    def test_with_change_indicator(self):
+        """Datos con indicador de cambio."""
+        data = {
+            "eltoque": {
+                "USD": {"rate": 365.0, "change": "up", "prev_rate": 360.0},
+                "EUR": {"rate": 398.0, "change": "down", "prev_rate": 400.0},
+            },
+            "updated_at": "2026-03-22T14:30:00Z",
+        }
+
+        result = build_eltoque_only_message(data)
+
+        assert INDICATOR_UP in result  # 🔺 para USD
+        assert INDICATOR_DOWN in result  # 🔻 para EUR
 
 
 class TestBuildBccOnlyMessage:
@@ -522,6 +559,8 @@ class TestBuildBccOnlyMessage:
         assert "*USD:*" in result
         assert "*CUP*" in result
         assert "🔗 www.bc.gob.cu" in result
+        # Verificar nuevo separador legacy
+        assert SEPARATOR_THICK in result
 
     def test_empty_data(self):
         """Datos vacíos."""
@@ -534,6 +573,21 @@ class TestBuildBccOnlyMessage:
 
         assert "⚠️ Not available" in result
         assert "🔗 www.bc.gob.cu" in result
+
+    def test_with_change_indicator(self):
+        """Datos con indicador de cambio."""
+        data = {
+            "bcc": {
+                "USD": {"rate": 24.0, "change": "up", "prev_rate": 23.5},
+                "EUR": {"rate": 26.50, "change": "down", "prev_rate": 27.0},
+            },
+            "updated_at": "2026-03-22T14:30:00Z",
+        }
+
+        result = build_bcc_only_message(data)
+
+        assert INDICATOR_UP in result  # 🔺 para USD
+        assert INDICATOR_DOWN in result  # 🔻 para EUR
 
 
 class TestBuildCadecaOnlyMessage:
@@ -557,6 +611,8 @@ class TestBuildCadecaOnlyMessage:
         assert "_Buy_" in result
         assert "_Sell_" in result
         assert "🔗 www.cadeca.cu" in result
+        # Verificar nuevo separador legacy
+        assert SEPARATOR_THICK in result
 
     def test_empty_data(self):
         """Datos vacíos."""
@@ -569,3 +625,22 @@ class TestBuildCadecaOnlyMessage:
 
         assert "⚠️ Not available" in result
         assert "🔗 www.cadeca.cu" in result
+
+    def test_with_buy_sell_columns(self):
+        """Verificar formato de columnas Buy/Sell."""
+        data = {
+            "cadeca": {
+                "USD": {"buy": 120.0, "sell": 125.0, "change": "up"},
+                "EUR": {"buy": 130.0, "sell": 136.0, "change": "down", "prev_rate": 138.0},
+            },
+            "updated_at": "2026-03-22T14:30:00Z",
+        }
+
+        result = build_cadeca_only_message(data)
+
+        assert "120.00" in result  # Buy USD
+        assert "125.00" in result  # Sell USD
+        assert "130.00" in result  # Buy EUR
+        assert "136.00" in result  # Sell EUR
+        assert INDICATOR_UP in result  # 🔺 para USD
+        assert INDICATOR_DOWN in result  # 🔻 para EUR
