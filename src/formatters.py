@@ -4,8 +4,11 @@ Módulo responsable de formatear las tasas de cambio con el diseño modernizado
 de TASALO, usando separadores unicode, emojis de banderas e indicadores de cambio.
 """
 
+import logging
 from datetime import datetime
 from typing import Dict, Any, Optional
+
+logger = logging.getLogger(__name__)
 
 
 # =============================================================================
