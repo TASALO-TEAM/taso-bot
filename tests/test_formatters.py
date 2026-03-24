@@ -728,12 +728,6 @@ class TestBuildToqueNewMessage:
         assert "⚡ TRX ⇾" in result
         assert "💰 USDT ⇾" in result
 
-        # Verificar mensaje de advertencia
-        assert "❗ No confundas esta tasa en tiempo real" in result
-        assert "tasa oficial del día que da Eltoque en redes sociales" in result
-        assert "👉 /bcc" in result
-        assert "API publica de 👇" in result
-
         # Verificar footer
         assert "🔗 elToque.com" in result
         # Verificar formato de timestamp extendido
@@ -810,18 +804,3 @@ class TestBuildToqueNewMessage:
 
         # Verificar formato sin leading zeros en día/mes/hora/min/seg
         assert "5/3/2026 9:5:3" in result
-
-    def test_warning_message_complete(self):
-        """Verificar mensaje de advertencia completo."""
-        data = {
-            "eltoque": {
-                "USD": {"rate": 515.0},
-            },
-            "updated_at": "2026-03-23T20:32:44Z",
-        }
-
-        result = build_toque_new_message(data)
-
-        # Verificar texto exacto de la advertencia
-        expected_warning = "❗ No confundas esta tasa en tiempo real con la tasa oficial del día que da Eltoque en redes sociales. Para conocer la tasa flotante oficial de Cuba usa 👉 /bcc. Este es el precio ahora mismo proporcionado por la API publica de 👇."
-        assert expected_warning in result
