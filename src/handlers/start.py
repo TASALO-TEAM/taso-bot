@@ -6,7 +6,7 @@ de bienvenida y teclado inline con botones de acceso rápido.
 
 import logging
 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from telegram.ext import ContextTypes, CommandHandler, CallbackQueryHandler
 
 from src.formatters import (
@@ -18,6 +18,9 @@ from src.formatters import (
 from src.api_client import TasaloApiClient
 
 logger = logging.getLogger(__name__)
+
+# URL de la Mini App (producción)
+MINIAPP_URL = "https://tasalo.duckdns.org/miniapp"
 
 
 def build_start_keyboard() -> InlineKeyboardMarkup:
@@ -48,6 +51,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     Muestra mensaje de bienvenida con información del bot
     y botones inline para acceder rápidamente a las tasas.
+    Incluye botón Web App para abrir la Mini App en Telegram.
 
     Args:
         update: Update de Telegram con el mensaje del usuario
@@ -59,12 +63,17 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     welcome_text = (
         f"👋 ¡Hola {user.mention_html()}!\n\n"
         f"Soy TASALO, un bot para consultar las tasas de cambio de Cuba.\n"
-        f"Puedes consultar tanto el mercado informal de Eltoque como el mercado Oficial BCC y CADECA.\n\n"
+        f"Puedes consultar tanto el mercado informal de ElToque como el mercado Oficial BCC y CADECA.\n\n"
         f"Presiona el botón del tipo de tasas que desees consultar:"
     )
 
-    # Construir teclado inline
+    # Construir teclado inline con botones de comandos
     keyboard = build_start_keyboard()
+
+    # Agregar botón Web App para abrir la Mini App
+    keyboard.inline_keyboard.append(
+        [InlineKeyboardButton("🌐 Abrir TASALO Web", web_app=WebAppInfo(url=MINIAPP_URL))]
+    )
 
     await update.message.reply_html(
         text=welcome_text,
