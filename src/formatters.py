@@ -88,6 +88,35 @@ def parse_iso_datetime(iso_string: Optional[str]) -> str:
         return datetime.now().strftime("%Y-%m-%d %H:%M")
 
 
+def parse_iso_datetime_extended(iso_string: Optional[str]) -> str:
+    """Parsea datetime ISO a formato extendido para /toque.
+
+    Formato: DD/M/YYYY HH:MM:SS (ej: 23/3/2026 20:32:44)
+
+    Args:
+        iso_string: datetime en formato ISO 8601
+
+    Returns:
+        String formateado como "DD/M/YYYY HH:MM:SS"
+    """
+    if not iso_string:
+        now = datetime.now()
+        return f"{now.day}/{now.month}/{now.year} {now.hour}:{now.minute}:{now.second}"
+
+    try:
+        # Manejar formato con o sin timezone
+        iso_string = iso_string.replace("Z", "+00:00")
+        if "+" in iso_string:
+            iso_string = iso_string.split("+")[0]
+
+        dt = datetime.fromisoformat(iso_string)
+        # Formato: DD/M/YYYY HH:MM:SS (sin leading zeros en día/mes)
+        return f"{dt.day}/{dt.month}/{dt.year} {dt.hour}:{dt.minute}:{dt.second}"
+    except (ValueError, AttributeError):
+        now = datetime.now()
+        return f"{now.day}/{now.month}/{now.year} {now.hour}:{now.minute}:{now.second}"
+
+
 # =============================================================================
 # CONSTRUCTORES DE BLOQUES
 # =============================================================================
@@ -733,5 +762,120 @@ def build_cadeca_only_message(api_data: Dict[str, Any]) -> str:
         date_str = parse_iso_datetime(updated_at)
         lines.append(f"📆 {date_str}")
     lines.append("🔗 www.cadeca.cu")
-    
+
+    return "\n".join(lines)
+
+
+# =============================================================================
+# NUEVO FORMATO PARA COMANDO /toque
+# =============================================================================
+
+
+def build_toque_new_message(api_data: Dict[str, Any]) -> str:
+    """Construye mensaje con nuevo formato para comando /toque.
+
+    Formato:
+        📊 MERCADO INFORMAL
+        💹 Tasa en tiempo real
+        ————————————————————
+
+        » Valores actuales del mercado:  
+        🇪🇺 EUR ⇾ 580.00  CUP
+        🇺🇸 USD ⇾ 515.00  CUP 
+        💳 MLC ⇾ 400.00  CUP  
+
+        » Mercado Criptomonedas  
+        🪙 BTC ⇾ 520.00 CUP
+        ⚡ TRX ⇾ 185.00 CUP
+        💰 USDT ⇾ 560.00  CUP    
+
+        ❗ No confundas esta tasa en tiempo real con la tasa oficial del día que da Eltoque en redes sociales. Para conocer la tasa flotante oficial de Cuba usa 👉 /bcc. Este es el precio ahora mismo proporcionado por la API publica de 👇. 
+
+        ————————————————————
+        🔗 elToque.com
+        ↳ 🕒 23/3/2026 20:32:44
+
+    Args:
+        api_data: Dict con datos de la API (campo 'data.eltoque')
+
+    Returns:
+        String formateado con el bloque completo
+    """
+    lines = []
+
+    # Header
+    lines.append("📊 MERCADO INFORMAL")
+    lines.append("💹 Tasa en tiempo real")
+    lines.append(SEPARATOR_THICK)
+    lines.append("")
+
+    eltoque_data = api_data.get("eltoque", {})
+
+    if not eltoque_data:
+        lines.append("⚠️ Datos no disponibles")
+        lines.append("")
+        lines.append(SEPARATOR_THICK)
+        updated_at = api_data.get("updated_at")
+        if updated_at:
+            date_str = parse_iso_datetime_extended(updated_at)
+            lines.append(f"📆 {date_str}")
+        lines.append("🔗 elToque.com")
+        return "\n".join(lines)
+
+    # Sección 1: Valores actuales del mercado (Fiat - EUR, USD, MLC)
+    lines.append("» Valores actuales del mercado:")
+    lines.append("")
+
+    fiat_priority = ["EUR", "USD", "MLC"]
+    fiat_flags = {"EUR": "🇪🇺", "USD": "🇺🇸", "MLC": "💳"}
+
+    for currency in fiat_priority:
+        if currency in eltoque_data:
+            currency_info = eltoque_data[currency]
+            if isinstance(currency_info, dict):
+                rate = currency_info.get("rate", 0)
+            else:
+                rate = currency_info
+
+            rate_str = format_rate_value(rate) if rate else "---"
+            flag = fiat_flags.get(currency, "")
+            lines.append(f"{flag} {currency} ⇾ {rate_str}  CUP")
+
+    lines.append("")
+
+    # Sección 2: Mercado Criptomonedas (BTC, TRX, USDT)
+    lines.append("» Mercado Criptomonedas")
+    lines.append("")
+
+    crypto_priority = ["BTC", "TRX", "USDT"]
+    crypto_icons = {"BTC": "🪙", "TRX": "⚡", "USDT": "💰"}
+
+    for currency in crypto_priority:
+        if currency in eltoque_data:
+            currency_info = eltoque_data[currency]
+            if isinstance(currency_info, dict):
+                rate = currency_info.get("rate", 0)
+            else:
+                rate = currency_info
+
+            rate_str = format_rate_value(rate) if rate else "---"
+            icon = crypto_icons.get(currency, "")
+            lines.append(f"{icon} {currency} ⇾ {rate_str} CUP")
+
+    lines.append("")
+    lines.append("")
+
+    # Mensaje de advertencia
+    lines.append("❗ No confundas esta tasa en tiempo real con la tasa oficial del día que da Eltoque en redes sociales. Para conocer la tasa flotante oficial de Cuba usa 👉 /bcc. Este es el precio ahora mismo proporcionado por la API publica de 👇.")
+    lines.append("")
+    lines.append(SEPARATOR_THICK)
+
+    # Footer con timestamp
+    updated_at = api_data.get("updated_at")
+    if updated_at:
+        date_str = parse_iso_datetime_extended(updated_at)
+        lines.append(f"📆 {date_str}")
+
+    lines.append("🔗 elToque.com")
+
     return "\n".join(lines)

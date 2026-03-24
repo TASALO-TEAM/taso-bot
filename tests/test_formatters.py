@@ -7,6 +7,7 @@ from src.formatters import (
     get_change_indicator,
     format_rate_value,
     parse_iso_datetime,
+    parse_iso_datetime_extended,
     build_eltoque_block,
     build_cadeca_block,
     build_bcc_block,
@@ -15,6 +16,7 @@ from src.formatters import (
     build_eltoque_only_message,
     build_bcc_only_message,
     build_cadeca_only_message,
+    build_toque_new_message,
     INDICATOR_UP,
     INDICATOR_DOWN,
     INDICATOR_NEUTRAL,
@@ -104,6 +106,45 @@ class TestParseIsoDatetime:
         """Datetime inválido devuelve actual."""
         result = parse_iso_datetime("invalid")
         assert len(result) == 16
+
+
+class TestParseIsoDatetimeExtended:
+    """Tests para parse_iso_datetime_extended."""
+
+    def test_iso_with_z(self):
+        """ISO datetime con Z suffix - formato extendido DD/M/YYYY HH:MM:SS."""
+        result = parse_iso_datetime_extended("2026-03-22T14:30:45Z")
+        assert result == "22/3/2026 14:30:45"
+
+    def test_iso_with_timezone(self):
+        """ISO datetime con timezone."""
+        result = parse_iso_datetime_extended("2026-03-22T14:30:45+00:00")
+        assert result == "22/3/2026 14:30:45"
+
+    def test_iso_without_timezone(self):
+        """ISO datetime sin timezone."""
+        result = parse_iso_datetime_extended("2026-03-22T14:30:45")
+        assert result == "22/3/2026 14:30:45"
+
+    def test_single_digit_day_month(self):
+        """Día y mes sin leading zero."""
+        result = parse_iso_datetime_extended("2026-01-05T09:05:03")
+        # Note: hours/minutes/seconds also don't have leading zeros
+        assert result == "5/1/2026 9:5:3"
+
+    def test_none_datetime(self):
+        """None devuelve datetime actual en formato extendido."""
+        result = parse_iso_datetime_extended(None)
+        # Verificar formato DD/M/YYYY HH:MM:SS
+        assert "/" in result
+        assert ":" in result
+        assert " " in result
+
+    def test_invalid_datetime(self):
+        """Datetime inválido devuelve actual."""
+        result = parse_iso_datetime_extended("invalid")
+        assert "/" in result
+        assert ":" in result
 
 
 # =============================================================================
@@ -644,3 +685,143 @@ class TestBuildCadecaOnlyMessage:
         assert "136.00" in result  # Sell EUR
         assert INDICATOR_UP in result  # 🔺 para USD
         assert INDICATOR_DOWN in result  # 🔻 para EUR
+
+
+# =============================================================================
+# TESTS PARA NUEVO FORMATO /toque
+# =============================================================================
+
+
+class TestBuildToqueNewMessage:
+    """Tests para build_toque_new_message - nuevo formato del comando /toque."""
+
+    def test_complete_data_structure(self):
+        """Datos completos de ElToque - verificar estructura del mensaje."""
+        data = {
+            "eltoque": {
+                "USD": {"rate": 515.0, "change": "up", "prev_rate": 510.0},
+                "EUR": {"rate": 580.0, "change": "neutral"},
+                "MLC": {"rate": 400.0, "change": "down", "prev_rate": 405.0},
+                "BTC": {"rate": 520.0, "change": "up", "prev_rate": 515.0},
+                "TRX": {"rate": 185.0, "change": "neutral"},
+                "USDT": {"rate": 560.0, "change": "up", "prev_rate": 555.0},
+            },
+            "updated_at": "2026-03-23T20:32:44Z",
+        }
+
+        result = build_toque_new_message(data)
+
+        # Verificar header
+        assert "📊 MERCADO INFORMAL" in result
+        assert "💹 Tasa en tiempo real" in result
+        assert SEPARATOR_THICK in result
+
+        # Verificar sección de fiat
+        assert "» Valores actuales del mercado:" in result
+        assert "🇪🇺 EUR ⇾" in result
+        assert "🇺🇸 USD ⇾" in result
+        assert "💳 MLC ⇾" in result
+
+        # Verificar sección de cripto
+        assert "» Mercado Criptomonedas" in result
+        assert "🪙 BTC ⇾" in result
+        assert "⚡ TRX ⇾" in result
+        assert "💰 USDT ⇾" in result
+
+        # Verificar mensaje de advertencia
+        assert "❗ No confundas esta tasa en tiempo real" in result
+        assert "tasa oficial del día que da Eltoque en redes sociales" in result
+        assert "👉 /bcc" in result
+        assert "API publica de 👇" in result
+
+        # Verificar footer
+        assert "🔗 elToque.com" in result
+        # Verificar formato de timestamp extendido
+        assert "23/3/2026 20:32:44" in result
+
+    def test_fiat_currencies_format(self):
+        """Verificar formato de monedas fiat."""
+        data = {
+            "eltoque": {
+                "EUR": {"rate": 580.50},
+                "USD": {"rate": 515.00},
+                "MLC": {"rate": 400.25},
+            },
+            "updated_at": "2026-03-23T20:32:44Z",
+        }
+
+        result = build_toque_new_message(data)
+
+        # Verificar formato con 2 decimales
+        assert "580.50" in result
+        assert "515.00" in result
+        assert "400.25" in result
+        # Verificar que están en la sección correcta
+        assert "🇪🇺 EUR ⇾ 580.50  CUP" in result
+        assert "🇺🇸 USD ⇾ 515.00  CUP" in result
+        assert "💳 MLC ⇾ 400.25  CUP" in result
+
+    def test_crypto_currencies_format(self):
+        """Verificar formato de criptomonedas."""
+        data = {
+            "eltoque": {
+                "BTC": {"rate": 52000.00},
+                "TRX": {"rate": 185.50},
+                "USDT": {"rate": 560.00},
+            },
+            "updated_at": "2026-03-23T20:32:44Z",
+        }
+
+        result = build_toque_new_message(data)
+
+        # Verificar formato con 2 decimales
+        assert "52,000.00" in result  # BTC con separador de miles
+        assert "185.50" in result
+        assert "560.00" in result
+        # Verificar que están en la sección correcta
+        assert "🪙 BTC ⇾ 52,000.00 CUP" in result
+        assert "⚡ TRX ⇾ 185.50 CUP" in result
+        assert "💰 USDT ⇾ 560.00 CUP" in result
+
+    def test_empty_data(self):
+        """Datos vacíos."""
+        data = {
+            "eltoque": {},
+            "updated_at": "2026-03-23T20:32:44Z",
+        }
+
+        result = build_toque_new_message(data)
+
+        assert "⚠️ Datos no disponibles" in result
+        assert "🔗 elToque.com" in result
+        # Verificar timestamp en formato extendido (sin leading zeros)
+        assert "23/3/2026 20:32:44" in result
+
+    def test_timestamp_format(self):
+        """Verificar formato de timestamp DD/M/YYYY HH:MM:SS."""
+        data = {
+            "eltoque": {
+                "USD": {"rate": 515.0},
+            },
+            "updated_at": "2026-03-05T09:05:03Z",
+        }
+
+        result = build_toque_new_message(data)
+
+        # Verificar formato sin leading zeros en día/mes/hora/min/seg
+        assert "5/3/2026 9:5:3" in result
+
+    def test_warning_message_complete(self):
+        """Verificar mensaje de advertencia completo."""
+        data = {
+            "eltoque": {
+                "USD": {"rate": 515.0},
+            },
+            "updated_at": "2026-03-23T20:32:44Z",
+        }
+
+        result = build_toque_new_message(data)
+
+        # Verificar texto exacto de la advertencia
+        expected_warning = "❗ No confundas esta tasa en tiempo real con la tasa oficial del día que da Eltoque en redes sociales. Para conocer la tasa flotante oficial de Cuba usa 👉 /bcc. Este es el precio ahora mismo proporcionado por la API publica de 👇."
+        assert expected_warning in result

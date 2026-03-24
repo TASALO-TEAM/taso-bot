@@ -20,6 +20,7 @@ from src.formatters import (
     build_eltoque_only_message,
     build_bcc_only_message,
     build_cadeca_only_message,
+    build_toque_new_message,
 )
 from src.image_generator import generate_image
 
@@ -521,8 +522,8 @@ async def _handle_source_command(
 
 
 async def toque_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Comando /toque — Muestra solo tasas de ElToque."""
-    await _handle_source_command(update, context, "toque", build_eltoque_only_message)
+    """Comando /toque — Muestra solo tasas de ElToque (nuevo formato)."""
+    await _handle_source_command(update, context, "toque", build_toque_new_message)
 
 
 async def bcc_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -570,7 +571,7 @@ async def source_refresh_callback(
             return
 
         build_funcs = {
-            "toque": build_eltoque_only_message,
+            "toque": build_toque_new_message,
             "bcc": build_bcc_only_message,
             "cadeca": build_cadeca_only_message,
         }
