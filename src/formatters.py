@@ -609,12 +609,12 @@ def build_history_message(
 def build_eltoque_only_message(api_data: Dict[str, Any]) -> str:
     """Construye mensaje con solo ElToque para comando /toque."""
     lines = []
-    
+
     lines.append("📊 *MERCADO INFORMAL (El Toque)*")
     lines.append(SEPARATOR_THICK)
-    
+
     eltoque_data = api_data.get("eltoque", {})
-    
+
     if not eltoque_data:
         lines.append("Datos no disponibles")
     else:
@@ -624,7 +624,7 @@ def build_eltoque_only_message(api_data: Dict[str, Any]) -> str:
             eltoque_data.keys(),
             key=lambda x: (priority.index(x.upper()) if x.upper() in priority else 99, x),
         )
-        
+
         for currency in sorted_currencies:
             currency_info = eltoque_data[currency]
             if isinstance(currency_info, dict):
@@ -635,9 +635,10 @@ def build_eltoque_only_message(api_data: Dict[str, Any]) -> str:
                 rate = currency_info
                 change = None
                 prev_rate = None
-            
+
             rate_str = format_rate_value(rate) if rate else "---"
-            
+
+            # Calcular indicador y cambio (mismo formato que build_eltoque_block)
             indicator = ""
             change_str = ""
             if change == "up" and prev_rate is not None:
@@ -648,20 +649,21 @@ def build_eltoque_only_message(api_data: Dict[str, Any]) -> str:
                 diff = rate - prev_rate
                 indicator = " " + INDICATOR_DOWN
                 change_str = f" {diff:,.2f}"
-            
+
+            # Formato legacy: " *EUR:*   580.00  CUP 🔺 +5.00"
             line = f" *{currency}:*   {rate_str}  CUP{indicator}{change_str}"
             lines.append(line)
-    
+
     lines.append("")
     lines.append(SEPARATOR_THICK)
-    
+
     # Footer
     updated_at = api_data.get("updated_at")
     if updated_at:
         date_str = parse_iso_datetime(updated_at)
         lines.append(f"📆 {date_str}")
     lines.append("🔗 elToque.com")
-    
+
     return "\n".join(lines)
 
 
