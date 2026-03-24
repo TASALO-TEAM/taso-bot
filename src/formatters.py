@@ -205,8 +205,8 @@ def build_cadeca_block(data: Dict[str, Any]) -> str:
         ↳ _Airports, Ports & Hotels_
         —————————————————
         _Currency_     _Buy_      _Sell_
-         *USD*          461.27       506.68  
-         *EUR*          531.94       584.30  
+         *USD*          461.27       506.68
+         *EUR*          531.94       584.30
 
     Args:
         data: Dict con datos de la API (campo 'data.cadeca')
@@ -222,6 +222,9 @@ def build_cadeca_block(data: Dict[str, Any]) -> str:
     lines.append(SEPARATOR_THICK)
 
     cadeca_data = data.get("cadeca", {})
+    
+    # Debug logging
+    logger.info(f"🔍 CADECA data received: {cadeca_data}")
 
     if not cadeca_data:
         lines.append("⚠️ Not available")
