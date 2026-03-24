@@ -30,9 +30,9 @@ class Settings(BaseSettings):
     
     # Backend API
     tasalo_api_url: str = Field(
-        default="http://localhost:8000",
+        default="http://localhost:8040",
         description="URL base de la API de taso-api",
-        examples=["http://localhost:8000", "https://api.tasalo.app"]
+        examples=["http://localhost:8040", "https://api.tasalo.app"]
     )
     
     tasalo_admin_key: str = Field(
