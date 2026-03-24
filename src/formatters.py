@@ -242,19 +242,27 @@ def build_cadeca_block(data: Dict[str, Any]) -> str:
         currency_info = cadeca_data[currency]
 
         if isinstance(currency_info, dict):
-            buy = currency_info.get("buy", 0)
-            sell = currency_info.get("sell", 0)
+            buy = currency_info.get("buy")
+            sell = currency_info.get("sell")
             change = currency_info.get("change")
             prev_rate = currency_info.get("prev_rate")
         else:
-            buy = 0
-            sell = 0
+            buy = None
+            sell = None
             change = None
             prev_rate = None
 
-        buy_str = f"{buy:6.2f}" if buy else "  ---"
-        sell_str = f"{sell:6.2f}" if sell else "  ---"
-        
+        # Formatear compra y venta - mostrar --- solo si es None (no si es 0)
+        if buy is not None:
+            buy_str = f"{buy:6.2f}"
+        else:
+            buy_str = "  ---"
+            
+        if sell is not None:
+            sell_str = f"{sell:6.2f}"
+        else:
+            sell_str = "  ---"
+
         # Indicador solo si hay cambio significativo
         indicator = ""
         if change == "up":
@@ -733,23 +741,31 @@ def build_cadeca_only_message(api_data: Dict[str, Any]) -> str:
         for currency in sorted_currencies:
             currency_info = cadeca_data[currency]
             if isinstance(currency_info, dict):
-                buy = currency_info.get("buy", 0)
-                sell = currency_info.get("sell", 0)
+                buy = currency_info.get("buy")
+                sell = currency_info.get("sell")
                 change = currency_info.get("change")
             else:
-                buy = 0
-                sell = 0
+                buy = None
+                sell = None
                 change = None
-            
-            buy_str = f"{buy:6.2f}" if buy else "  ---"
-            sell_str = f"{sell:6.2f}" if sell else "  ---"
-            
+
+            # Formatear compra y venta - mostrar --- solo si es None (no si es 0)
+            if buy is not None:
+                buy_str = f"{buy:6.2f}"
+            else:
+                buy_str = "  ---"
+                
+            if sell is not None:
+                sell_str = f"{sell:6.2f}"
+            else:
+                sell_str = "  ---"
+
             indicator = ""
             if change == "up":
                 indicator = " " + INDICATOR_UP
             elif change == "down":
                 indicator = " " + INDICATOR_DOWN
-            
+
             line = f" *{currency}*          {buy_str}       {sell_str}{indicator}"
             lines.append(line)
     
