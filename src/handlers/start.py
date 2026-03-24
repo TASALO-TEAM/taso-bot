@@ -24,11 +24,12 @@ MINIAPP_URL = "https://tasalo.duckdns.org/miniapp"
 
 
 def build_start_keyboard() -> InlineKeyboardMarkup:
-    """Construye el teclado inline con 4 botones para comandos.
+    """Construye el teclado inline con 4 botones para comandos + Web App.
 
-    Distribución 2x2:
+    Distribución:
         [📊 Tasalo] [📈 Toque]
         [🏛 BCC    ] [🏢 CADECA]
+        [🌐 Abrir TASALO Web]
 
     Returns:
         InlineKeyboardMarkup con los botones de acción
@@ -41,6 +42,9 @@ def build_start_keyboard() -> InlineKeyboardMarkup:
         [
             InlineKeyboardButton("🏛 BCC", callback_data="start_bcc"),
             InlineKeyboardButton("🏢 CADECA", callback_data="start_cadeca"),
+        ],
+        [
+            InlineKeyboardButton("🌐 Abrir TASALO Web", web_app=WebAppInfo(url=MINIAPP_URL)),
         ],
     ]
     return InlineKeyboardMarkup(keyboard)
@@ -67,13 +71,8 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"Presiona el botón del tipo de tasas que desees consultar:"
     )
 
-    # Construir teclado inline con botones de comandos
+    # Construir teclado inline (ya incluye Web App en build_start_keyboard)
     keyboard = build_start_keyboard()
-
-    # Agregar botón Web App para abrir la Mini App
-    keyboard.inline_keyboard.append(
-        [InlineKeyboardButton("🌐 Abrir TASALO Web", web_app=WebAppInfo(url=MINIAPP_URL))]
-    )
 
     await update.message.reply_html(
         text=welcome_text,

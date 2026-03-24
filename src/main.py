@@ -74,10 +74,10 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
     logger.error(f"Error message: {error}")
 
     # Context data para debugging
-    if context.chat_id:
-        logger.error(f"Chat ID: {context.chat_id}")
-    if context.user_id:
-        logger.error(f"User ID: {context.user_id}")
+    if isinstance(update, Update) and update.effective_chat:
+        logger.error(f"Chat ID: {update.effective_chat.id}")
+    if isinstance(update, Update) and update.effective_user:
+        logger.error(f"User ID: {update.effective_user.id}")
 
     # Notificar al usuario si es posible
     if isinstance(update, Update) and update.effective_message:
