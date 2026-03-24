@@ -37,13 +37,13 @@ def test_config_requires_bot_token():
 def test_config_with_minimal_env():
     """Config funciona con solo el bot token."""
     from src.config import Settings
-    
+
     os.environ['TELEGRAM_BOT_TOKEN'] = 'test_token'
-    
+
     try:
         config = Settings()
         assert config.telegram_bot_token == 'test_token'
-        assert config.tasalo_api_url == 'http://localhost:8000'
+        assert config.tasalo_api_url == 'http://localhost:8040'
         assert config.api_timeout_seconds == 15
     finally:
         os.environ.pop('TELEGRAM_BOT_TOKEN', None)
