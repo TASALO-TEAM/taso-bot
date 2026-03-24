@@ -23,6 +23,7 @@ from src.formatters import (
     build_toque_new_message,
 )
 from src.image_generator import generate_image
+from src.stats_tracker import track_command_usage
 
 logger = logging.getLogger(__name__)
 
@@ -137,6 +138,9 @@ async def tasalo_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     logger.info(f"📊 /tasalo command invoked by user {user_id}")
 
+    # Trackear comando (fire-and-forget)
+    asyncio.create_task(track_command_usage(update, context, "/tasalo"))
+
     # Mensaje de estado inicial
     status_msg = await update.message.reply_text("⏳ Consultando tasas...")
 
@@ -164,6 +168,8 @@ async def tasalo_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Inténtalo de nuevo en unos momentos.",
             parse_mode="Markdown",
         )
+        # Trackear como fallo
+        asyncio.create_task(track_command_usage(update, context, "/tasalo", success=False))
         return
 
     # Verificar estructura de datos
@@ -176,6 +182,8 @@ async def tasalo_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Inténtalo de nuevo más tarde.",
             parse_mode="Markdown",
         )
+        # Trackear como fallo
+        asyncio.create_task(track_command_usage(update, context, "/tasalo", success=False))
         return
 
     # Enviar respuesta con imagen + texto + botones
@@ -473,6 +481,10 @@ async def _handle_source_command(
         source: Identificador de la fuente ("toque", "bcc", "cadeca")
         build_message_func: Función formatter específica para la fuente
     """
+    # Trackear comando (fire-and-forget)
+    command_name = f"/{source}"
+    asyncio.create_task(track_command_usage(update, context, command_name, source=source))
+
     api_client: TasaloApiClient = context.bot_data.get("api_client")
     if not api_client:
         logger.error("❌ api_client no está disponible en bot_data")
@@ -492,6 +504,8 @@ async def _handle_source_command(
             await loading_msg.edit_text(
                 f"⚠️ No se pudieron obtener datos de {source.upper()}."
             )
+            # Trackear como fallo
+            asyncio.create_task(track_command_usage(update, context, command_name, source=source, success=False))
             return
 
         # Extraer 'data' del response para pasar al formatter
@@ -503,6 +517,8 @@ async def _handle_source_command(
             await loading_msg.edit_text(
                 f"⚠️ Datos no disponibles de {source.upper()}."
             )
+            # Trackear como fallo
+            asyncio.create_task(track_command_usage(update, context, command_name, source=source, success=False))
             return
 
         # Construir mensaje con el formatter específico
@@ -519,6 +535,8 @@ async def _handle_source_command(
     except Exception as e:
         logger.error(f"❌ Error en comando /{source}: {e}", exc_info=True)
         await loading_msg.edit_text(f"❌ Error consultando {source.upper()}.")
+        # Trackear como fallo
+        asyncio.create_task(track_command_usage(update, context, command_name, source=source, success=False))
 
 
 async def toque_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

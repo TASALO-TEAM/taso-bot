@@ -275,3 +275,81 @@ class TasaloApiClient:
         except Exception as e:
             logger.error(f"❌ Error inesperado en histórico: {e}", exc_info=True)
             return None
+
+    async def track_command(
+        self,
+        command: str,
+        user_id: int,
+        username: Optional[str] = None,
+        source: Optional[str] = None,
+        success: bool = True,
+    ) -> None:
+        """
+        Registra el uso de un comando en la API para estadísticas.
+
+        Args:
+            command: Nombre del comando ejecutado
+            user_id: ID del usuario
+            username: Username del usuario (opcional)
+            source: Fuente consultada si aplica
+            success: Si el comando se ejecutó con éxito
+
+        Endpoint: POST /api/v1/admin/stats/track
+        """
+        url = f"{self.api_url}/api/v1/admin/stats/track"
+        payload = {
+            "command": command,
+            "user_id": user_id,
+            "username": username,
+            "source": source,
+            "success": success,
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=5) as client:  # Timeout corto para no bloquear
+                response = await client.post(url, headers=self._admin_headers, json=payload)
+                response.raise_for_status()
+                logger.debug(f"✅ Comando trackeado: {command} por user {user_id}")
+        except httpx.TimeoutException:
+            # No logueamos como error - es fire-and-forget
+            logger.debug(f"⏱️ Timeout trackeando comando {command}")
+        except Exception as e:
+            # Silencioso - el tracking no debe afectar el funcionamiento del bot
+            logger.debug(f"⚠️ Error trackeando comando {command}: {e}")
+
+    async def get_stats_summary(self) -> Optional[Dict[str, Any]]:
+        """
+        Obtiene resumen de estadísticas del bot.
+
+        Returns:
+            Dict con estadísticas o None si hay error.
+
+        Endpoint: GET /api/v1/admin/stats/summary
+        Requiere: X-API-Key header
+        """
+        if not self.admin_key:
+            logger.error("❌ get_stats_summary requiere admin_key configurado")
+            return None
+
+        url = f"{self.api_url}/api/v1/admin/stats/summary"
+
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.get(url, headers=self._admin_headers)
+                response.raise_for_status()
+                data = response.json()
+
+                if data.get('ok'):
+                    logger.info("✅ Estadísticas obtenidas")
+                    return data
+                return None
+
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 401:
+                logger.error("🔑 Error 401: API key inválida o faltante")
+            else:
+                logger.error(f"❌ Error HTTP {e.response.status_code}: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"❌ Error en get_stats_summary: {e}")
+            return None
