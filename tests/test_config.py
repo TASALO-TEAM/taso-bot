@@ -38,6 +38,8 @@ def test_config_with_minimal_env():
     """Config funciona con solo el bot token."""
     from src.config import Settings
 
+    # Clear any existing env vars that might interfere
+    os.environ.pop('TASALO_API_URL', None)
     os.environ['TELEGRAM_BOT_TOKEN'] = 'test_token'
 
     try:
@@ -47,6 +49,7 @@ def test_config_with_minimal_env():
         assert config.api_timeout_seconds == 15
     finally:
         os.environ.pop('TELEGRAM_BOT_TOKEN', None)
+        os.environ.pop('TASALO_API_URL', None)
 
 def test_admin_chat_ids_parsed():
     """ADMIN_CHAT_IDS se parsea como lista de enteros."""
