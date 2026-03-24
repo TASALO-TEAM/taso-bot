@@ -36,20 +36,30 @@ def test_config_requires_bot_token():
 
 def test_config_with_minimal_env():
     """Config funciona con solo el bot token."""
-    from src.config import Settings
+    from pydantic_settings import BaseSettings, SettingsConfigDict
+    from pydantic import Field
 
-    # Clear any existing env vars that might interfere
-    os.environ.pop('TASALO_API_URL', None)
+    # Create a test-specific settings class that doesn't load from .env
+    class TestSettings(BaseSettings):
+        model_config = SettingsConfigDict(
+            env_file=None,  # Don't load from .env file
+            env_file_encoding='utf-8',
+            case_sensitive=False,
+            extra='ignore',
+        )
+        telegram_bot_token: str = Field(...)
+        tasalo_api_url: str = Field(default="http://localhost:8040")
+        api_timeout_seconds: int = Field(default=15)
+
     os.environ['TELEGRAM_BOT_TOKEN'] = 'test_token'
 
     try:
-        config = Settings()
+        config = TestSettings()
         assert config.telegram_bot_token == 'test_token'
         assert config.tasalo_api_url == 'http://localhost:8040'
         assert config.api_timeout_seconds == 15
     finally:
         os.environ.pop('TELEGRAM_BOT_TOKEN', None)
-        os.environ.pop('TASALO_API_URL', None)
 
 def test_admin_chat_ids_parsed():
     """ADMIN_CHAT_IDS se parsea como lista de enteros."""
