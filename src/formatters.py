@@ -788,9 +788,7 @@ def build_toque_new_message(api_data: Dict[str, Any]) -> str:
         🪙 BTC ⇾ 520.00 CUP
         ⚡ TRX ⇾ 185.00 CUP
         💰 USDT ⇾ 560.00  CUP    
-
-        ❗ No confundas esta tasa en tiempo real con la tasa oficial del día que da Eltoque en redes sociales. Para conocer la tasa flotante oficial de Cuba usa 👉 /bcc. Este es el precio ahora mismo proporcionado por la API publica de 👇. 
-
+   
         ————————————————————
         🔗 elToque.com
         ↳ 🕒 23/3/2026 20:32:44
@@ -864,11 +862,6 @@ def build_toque_new_message(api_data: Dict[str, Any]) -> str:
 
     lines.append("")
     lines.append("")
-
-    # Mensaje de advertencia
-    lines.append("❗ No confundas esta tasa en tiempo real con la tasa oficial del día que da Eltoque en redes sociales. Para conocer la tasa flotante oficial de Cuba usa 👉 /bcc. Este es el precio ahora mismo proporcionado por la API publica de 👇.")
-    lines.append("")
-    lines.append(SEPARATOR_THICK)
 
     # Footer con timestamp
     updated_at = api_data.get("updated_at")
