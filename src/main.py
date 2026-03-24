@@ -28,6 +28,10 @@ from src.handlers.tasalo import (
     cadeca_command,
     source_refresh_callback,
 )
+from src.handlers.start import (
+    start_command,
+    start_button_callback,
+)
 from src.handlers.admin import (
     refresh_command,
     status_command,
@@ -94,16 +98,6 @@ api_client = TasaloApiClient(
 )
 
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handler para el comando /start."""
-    user = update.effective_user
-    await update.message.reply_html(
-        f"👋 ¡Hola {user.mention_html()}!\n\n"
-        f"Soy <b>TASALO</b>, tu bot para consultar las tasas de cambio de Cuba.\n\n"
-        f"Usa /tasalo para ver las tasas actuales."
-    )
-
-
 async def health_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler para el comando /health.
 
@@ -144,7 +138,7 @@ def create_application() -> Application:
     application = Application.builder().token(settings.telegram_bot_token).build()
 
     # Registrar handlers
-    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CommandHandler("tasalo", tasalo_command))
     application.add_handler(CommandHandler("health", health_check))
     application.add_handler(CommandHandler("refresh", refresh_command))
@@ -170,6 +164,10 @@ def create_application() -> Application:
         CallbackQueryHandler(
             source_refresh_callback, pattern="^(toque|bcc|cadeca)_refresh$"
         )
+    )
+    # Registrar callback handler para botones del /start
+    application.add_handler(
+        CallbackQueryHandler(start_button_callback, pattern="^start_(tasalo|toque|bcc|cadeca)$")
     )
 
     # Registrar error handler global
