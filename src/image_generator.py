@@ -1,17 +1,17 @@
-"""Generador de imágenes profesional para el bot TASALO.
+"""Generador de imágenes Dark Glass v2 para el bot TASALO.
 
 Módulo responsable de generar imágenes visualmente atractivas con las tasas
-de cambio, usando un diseño de tabla horizontal compacta y profesional,
-optimizada para compartir en redes sociales.
+de cambio, usando diseño Dark Glass (modo oscuro) consistente con taso-app.
 
-Diseño:
-- Tabla horizontal con columnas (ElToque | BCC | CADECA)
-- Marca de agua @tasalobot discreta (10% opacity)
-- Formato 1200×630px (ratio 1.91:1, óptimo para redes)
-- Colores de alto contraste (WCAG AA)
-- Indicadores 🔺🔻― integrados
+Diseño Dark Glass v2:
+- Modo oscuro con glassmorphism (blur + bordes sutiles)
+- Tabla horizontal 1200×630px para /tasalo
+- Tarjetas verticales 800×1000px para comandos individuales
+- Marca de agua @tasalobot discreta (5% opacity)
+- Colores mejorados: rojo coral (subida), turquesa (bajada)
+- Gradiente oscuro de fondo (#10102A → #1A1A3E)
 
-Inspirado en el diseño aprobado: plans/2026-03-26-taso-bot-image-redesign.md
+Inspirado en: plans/2026-03-26-taso-bot-dark-glass-image-v2.md
 """
 
 import asyncio
@@ -29,62 +29,84 @@ logger = logging.getLogger(__name__)
 
 
 # =============================================================================
-# TASALO DESIGN SYSTEM — Constantes de Diseño
+# TASALO DARK GLASS DESIGN SYSTEM v2
 # =============================================================================
 
-# Dimensiones de la imagen (ratio 1.91:1 - óptimo para redes sociales)
-IMG_WIDTH = 1200
-IMG_HEIGHT = 630
+# Dimensiones
+IMG_WIDTH_HORIZONTAL = 1200  # Para /tasalo
+IMG_HEIGHT_HORIZONTAL = 630   # Ratio 1.91:1
+IMG_WIDTH_VERTICAL = 800      # Para comandos individuales
+IMG_HEIGHT_VERTICAL = 1000    # Ratio 4:5
 PADDING = 40
 COLUMN_GAP = 20
 
-# Colores (TASALO Design System)
-COLOR_BG = "#F8FAFC"              # Fondo principal (gris azulado muy claro)
-COLOR_SURFACE = "#FFFFFF"         # Superficie de la tabla (blanco)
-COLOR_TEXT = "#0F172A"            # Texto primario (oscuro)
-COLOR_TEXT_MUTED = "#64748B"      # Texto secundario (gris)
-COLOR_ACCENT = "#3B82F6"          # Acento primario (azul)
-COLOR_UP = "#DC2626"              # Rojo para subida 🔺
-COLOR_DOWN = "#16A34A"            # Verde para bajada 🔻
-COLOR_NEUTRAL = "#94A3B8"         # Gris para neutral ―
-COLOR_DIVIDER = "#E2E8F0"         # Divisores y bordes
+# Colores (Dark Glass)
+COLOR_BG = "#10102A"                    # Fondo principal (azul oscuro profundo)
+COLOR_BG_GRADIENT_START = "#10102A"     # Gradiente inicio
+COLOR_BG_GRADIENT_MID = "#1A1A3E"       # Gradiente medio
+COLOR_BG_GRADIENT_END = "#0F0F2D"       # Gradiente fin
 
-# Marca de agua (10% opacity)
-COLOR_WATERMARK = (226, 232, 240, 25)  # RGBA con alpha=25 (~10%)
+# Superficie Glass (RGBA para transparencia)
+COLOR_SURFACE = (255, 255, 255, 13)     # 5% opacity (13/255)
+COLOR_SURFACE_BORDER = (255, 255, 255, 31)  # 12% opacity (31/255)
 
-# Layout de columnas (3 columnas de ~380px cada una)
-COLUMN_X_START = PADDING
-COLUMN_WIDTH = (IMG_WIDTH - (PADDING * 2) - (COLUMN_GAP * 2)) // 3
+# Texto
+COLOR_TEXT_PRIMARY = "#FFFFFF"          # Blanco (alto contraste: 18.5:1)
+COLOR_TEXT_SECONDARY = "#A0B0D0"        # Gris azulado (6.8:1)
 
-# Posiciones X para cada columna
+# Acentos
+COLOR_ACCENT = "#5B8AFF"                # Azul brillante (8.2:1)
+COLOR_ACCENT_GRADIENT_END = "#9B7BFF"   # Violeta
+
+# Indicadores (colores mejorados)
+COLOR_UP = "#FF6B6B"                    # Rojo coral (subida)
+COLOR_DOWN = "#4ECDC4"                  # Turquesa (bajada)
+COLOR_NEUTRAL = "#6C7A89"               # Gris azulado (neutral)
+
+# Marca de agua (5% opacity, visible pero no intrusiva)
+COLOR_WATERMARK = (255, 255, 255, 13)   # 5% opacity
+
+# Shadow
+COLOR_SHADOW = (0, 0, 0, 102)           # 40% opacity
+
+# Layout de columnas (horizontal)
+COLUMN_WIDTH_HORIZONTAL = (IMG_WIDTH_HORIZONTAL - (PADDING * 2) - (COLUMN_GAP * 2)) // 3
+
 COLUMN_POSITIONS = {
     "eltoque": {
         "start": PADDING,
-        "end": PADDING + COLUMN_WIDTH,
+        "end": PADDING + COLUMN_WIDTH_HORIZONTAL,
     },
     "bcc": {
-        "start": PADDING + COLUMN_WIDTH + COLUMN_GAP,
-        "end": PADDING + (COLUMN_WIDTH * 2) + COLUMN_GAP,
+        "start": PADDING + COLUMN_WIDTH_HORIZONTAL + COLUMN_GAP,
+        "end": PADDING + (COLUMN_WIDTH_HORIZONTAL * 2) + COLUMN_GAP,
     },
     "cadeca": {
-        "start": PADDING + (COLUMN_WIDTH * 2) + (COLUMN_GAP * 2),
-        "end": IMG_WIDTH - PADDING,
+        "start": PADDING + (COLUMN_WIDTH_HORIZONTAL * 2) + (COLUMN_GAP * 2),
+        "end": IMG_WIDTH_HORIZONTAL - PADDING,
     },
 }
 
-# Tamaños de fuente (relativos al alto de la imagen)
-FONT_SCALE_TITLE = 0.048       # 32px para 1200×630
-FONT_SCALE_SUBTITLE = 0.028    # 18px
-FONT_SCALE_COLUMN_HEADER = 0.032  # 20px
-FONT_SCALE_COLUMN_SUBHEADER = 0.024  # 14px
-FONT_SCALE_CURRENCY = 0.032    # 22px
-FONT_SCALE_RATE = 0.036        # 24px
-FONT_SCALE_FOOTER = 0.022      # 14px
-FONT_SCALE_WATERMARK = 0.075   # 48px
+# Layout vertical (single source)
+CARD_WIDTH = IMG_WIDTH_VERTICAL - (PADDING * 2)
+CARD_X_START = PADDING
+CARD_X_END = IMG_WIDTH_VERTICAL - PADDING
+
+# Tamaños de fuente (escalados por alto de imagen)
+FONT_SCALE = {
+    "title": 0.036,         # 36px para 1000px
+    "subtitle": 0.020,      # 20px
+    "column_header": 0.024, # 24px
+    "column_subheader": 0.016, # 16px
+    "currency": 0.024,      # 24px
+    "rate_value": 0.028,    # 28px
+    "footer": 0.016,        # 16px
+    "watermark": 0.056,     # 56px
+}
 
 # Altura de fila
-ROW_HEIGHT = 42
-HEADER_HEIGHT = 60
+ROW_HEIGHT = 48
+HEADER_HEIGHT = 80
 
 
 # =============================================================================
@@ -159,7 +181,7 @@ def load_fonts() -> Fonts:
         Fonts namedtuple con todas las fuentes cargadas
     """
     font_path = get_font_path()
-    
+
     if not font_path:
         logger.warning("⚠️ No se encontraron fuentes TrueType, usando fuente por defecto")
         default_font = ImageFont.load_default()
@@ -173,18 +195,18 @@ def load_fonts() -> Fonts:
             footer=default_font,
             watermark=default_font,
         )
-    
+
     try:
-        # Calcular tamaños basados en la altura de la plantilla
+        # Calcular tamaños basados en IMG_HEIGHT_VERTICAL (1000px)
         return Fonts(
-            title=ImageFont.truetype(font_path, int(IMG_HEIGHT * FONT_SCALE_TITLE)),
-            subtitle=ImageFont.truetype(font_path, int(IMG_HEIGHT * FONT_SCALE_SUBTITLE)),
-            column_header=ImageFont.truetype(font_path, int(IMG_HEIGHT * FONT_SCALE_COLUMN_HEADER)),
-            column_subheader=ImageFont.truetype(font_path, int(IMG_HEIGHT * FONT_SCALE_COLUMN_SUBHEADER)),
-            currency=ImageFont.truetype(font_path, int(IMG_HEIGHT * FONT_SCALE_CURRENCY)),
-            rate_value=ImageFont.truetype(font_path, int(IMG_HEIGHT * FONT_SCALE_RATE)),
-            footer=ImageFont.truetype(font_path, int(IMG_HEIGHT * FONT_SCALE_FOOTER)),
-            watermark=ImageFont.truetype(font_path, int(IMG_HEIGHT * FONT_SCALE_WATERMARK)),
+            title=ImageFont.truetype(font_path, int(IMG_HEIGHT_VERTICAL * FONT_SCALE["title"])),
+            subtitle=ImageFont.truetype(font_path, int(IMG_HEIGHT_VERTICAL * FONT_SCALE["subtitle"])),
+            column_header=ImageFont.truetype(font_path, int(IMG_HEIGHT_VERTICAL * FONT_SCALE["column_header"])),
+            column_subheader=ImageFont.truetype(font_path, int(IMG_HEIGHT_VERTICAL * FONT_SCALE["column_subheader"])),
+            currency=ImageFont.truetype(font_path, int(IMG_HEIGHT_VERTICAL * FONT_SCALE["currency"])),
+            rate_value=ImageFont.truetype(font_path, int(IMG_HEIGHT_VERTICAL * FONT_SCALE["rate_value"])),
+            footer=ImageFont.truetype(font_path, int(IMG_HEIGHT_VERTICAL * FONT_SCALE["footer"])),
+            watermark=ImageFont.truetype(font_path, int(IMG_HEIGHT_VERTICAL * FONT_SCALE["watermark"])),
         )
     except OSError as e:
         logger.warning(f"⚠️ Error cargando fuentes: {e}. Usando fuente por defecto.")
@@ -301,6 +323,33 @@ def get_currency_flag(currency: str) -> str:
         "JPY": "🇯🇵",
     }
     return flags.get(currency.upper(), "💱")
+
+
+def draw_gradient_background(
+    draw: ImageDraw.ImageDraw,
+    W: int,
+    H: int,
+) -> None:
+    """Dibujar fondo con gradiente oscuro (Dark Glass).
+    
+    Crea un gradiente vertical suave de 3 bandas:
+    - Superior: #10102A
+    - Media: #1A1A3E
+    - Inferior: #0F0F2D
+    
+    Args:
+        draw: Objeto ImageDraw
+        W: Ancho de imagen
+        H: Alto de imagen
+    """
+    # Gradiente vertical simple (3 bandas)
+    h1 = H // 3
+    h2 = H * 2 // 3
+    
+    # Dibujar bandas de gradiente
+    draw.rectangle((0, 0, W, h1), fill=COLOR_BG_GRADIENT_START)
+    draw.rectangle((0, h1, W, h2), fill=COLOR_BG_GRADIENT_MID)
+    draw.rectangle((0, h2, W, H), fill=COLOR_BG_GRADIENT_END)
 
 
 def draw_rounded_rectangle(
