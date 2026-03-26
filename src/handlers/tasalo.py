@@ -48,15 +48,17 @@ def build_inline_keyboard() -> InlineKeyboardMarkup:
 
 async def send_tasalo_response(
     update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
     api_data: dict,
-    message: Optional[object] = None,
+    message_id: Optional[int] = None,
 ):
     """Envía la respuesta del comando /tasalo con imagen + texto + botones.
 
     Args:
         update: Update de Telegram
+        context: Contexto del bot (necesario para métodos de edición)
         api_data: Datos de la API
-        message: Mensaje a editar (None para enviar nuevo desde comando)
+        message_id: ID del mensaje a editar (None para enviar nuevo desde comando)
     """
     # Construir teclado inline
     keyboard = build_inline_keyboard()
@@ -80,15 +82,18 @@ async def send_tasalo_response(
     # Enviar respuesta
     if image_bytes:
         # Enviar con imagen
-        if message:
-            # Editar mensaje existente con foto
-            await message.edit_message_caption(
+        if message_id:
+            # Editar mensaje existente con foto (usar context.bot)
+            await context.bot.edit_message_caption(
                 caption=text,
+                chat_id=update.effective_chat.id,
+                message_id=message_id,
                 reply_markup=keyboard,
                 parse_mode="Markdown",
             )
             # Enviar foto como nuevo mensaje (no se puede editar a foto)
-            await message.reply_photo(
+            await context.bot.send_photo(
+                chat_id=update.effective_chat.id,
                 photo=image_bytes,
                 caption=text,
                 reply_markup=keyboard,
@@ -104,9 +109,11 @@ async def send_tasalo_response(
         logger.info("✅ Imagen + texto enviados correctamente")
     else:
         # Fallback: solo texto
-        if message:
-            await message.edit_message_text(
+        if message_id:
+            await context.bot.edit_message_text(
                 text=text,
+                chat_id=update.effective_chat.id,
+                message_id=message_id,
                 reply_markup=keyboard,
                 parse_mode="Markdown",
             )
@@ -187,7 +194,7 @@ async def tasalo_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # Enviar respuesta con imagen + texto + botones
-    await send_tasalo_response(update, api_data)
+    await send_tasalo_response(update, context, api_data)
 
     # Eliminar mensaje de estado
     await status_msg.delete()
@@ -227,7 +234,7 @@ async def tasalo_refresh_callback(update: Update, context: ContextTypes.DEFAULT_
 
     # Enviar respuesta actualizada
     await send_tasalo_response(
-        update, data.get("data"), message=query.message
+        update, context, data.get("data"), message_id=query.message.message_id
     )
 
     logger.info("✅ Refresh completado")
@@ -373,7 +380,7 @@ async def tasalo_back_callback(update: Update, context: ContextTypes.DEFAULT_TYP
 
     # Re-enviar la vista principal
     await send_tasalo_response(
-        update, data.get("data"), message=query.message
+        update, context, data.get("data"), message_id=query.message.message_id
     )
 
     logger.info("✅ Back callback completado")
