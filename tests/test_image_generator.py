@@ -1,7 +1,6 @@
 """Tests para el generador de imágenes de TASALO.
 
-Tests para verificar la generación de imágenes con tabla horizontal
-para los comandos /tasalo, /toque, /bcc, /cadeca.
+Tests para verificar la generación de imágenes con diseño v3 minimalista.
 """
 
 import pytest
@@ -13,18 +12,16 @@ from src.image_generator import (
     generate_tasalo_image,
     generate_single_source_image,
     generate_image_sync,
-    get_change_emoji,
+    get_change_indicator,
     get_change_color,
     format_rate_value,
     parse_iso_datetime,
-    get_currency_flag,
     load_fonts,
     IMG_WIDTH_HORIZONTAL,
     IMG_HEIGHT_HORIZONTAL,
     IMG_WIDTH_VERTICAL,
     IMG_HEIGHT_VERTICAL,
     COLOR_BG,
-    COLOR_SURFACE,
     COLOR_UP,
     COLOR_DOWN,
     COLOR_NEUTRAL,
@@ -106,18 +103,18 @@ def sample_cadeca_data():
 class TestAuxiliaryFunctions:
     """Tests para funciones auxiliares."""
 
-    def test_get_change_emoji_up(self):
-        """Emoji para subida."""
-        assert get_change_emoji("up") == "🔺"
+    def test_get_change_indicator_up(self):
+        """Indicador para subida."""
+        assert get_change_indicator("up") == "+"
 
-    def test_get_change_emoji_down(self):
-        """Emoji para bajada."""
-        assert get_change_emoji("down") == "🔻"
+    def test_get_change_indicator_down(self):
+        """Indicador para bajada."""
+        assert get_change_indicator("down") == "-"
 
-    def test_get_change_emoji_neutral(self):
-        """Emoji para sin cambio."""
-        assert get_change_emoji(None) == "―"
-        assert get_change_emoji("neutral") == "―"
+    def test_get_change_indicator_neutral(self):
+        """Indicador para sin cambio."""
+        assert get_change_indicator(None) == "="
+        assert get_change_indicator("neutral") == "="
 
     def test_get_change_color_up(self):
         """Color para subida (rojo)."""
@@ -149,14 +146,6 @@ class TestAuxiliaryFunctions:
         """Parseo de None usa datetime actual."""
         result = parse_iso_datetime(None)
         assert datetime.now().strftime("%d/%m/%Y") in result
-
-    def test_get_currency_flag(self):
-        """Banderas de monedas."""
-        assert get_currency_flag("USD") == "🇺🇸"
-        assert get_currency_flag("EUR") == "🇪🇺"
-        assert get_currency_flag("BTC") == "₿"
-        assert get_currency_flag("USDT") == "₮"
-        assert get_currency_flag("UNKNOWN") == "💱"
 
 
 # =============================================================================
