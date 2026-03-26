@@ -356,7 +356,9 @@ def draw_rounded_rectangle(
     draw: ImageDraw.ImageDraw,
     rect: Tuple[int, int, int, int],
     radius: int,
-    fill: str,
+    fill: Tuple[int, int, int, int] | str | None = None,
+    outline: Tuple[int, int, int, int] | str | None = None,
+    width: int = 1,
 ) -> None:
     """Dibujar rectángulo con bordes redondeados (compatible con Pillow <10.2).
 
@@ -364,15 +366,25 @@ def draw_rounded_rectangle(
         draw: Objeto ImageDraw
         rect: Tupla (x1, y1, x2, y2)
         radius: Radio de los bordes redondeados
-        fill: Color de relleno
+        fill: Color de relleno (RGBA o None)
+        outline: Color de borde (RGBA o None)
+        width: Ancho del borde
     """
     try:
         # Intentar usar método nativo (Pillow >=10.2)
-        draw.rounded_rectangle(rect, radius=radius, fill=fill)
+        if fill is not None and outline is not None:
+            draw.rounded_rectangle(rect, radius=radius, fill=fill, outline=outline, width=width)
+        elif fill is not None:
+            draw.rounded_rectangle(rect, radius=radius, fill=fill)
+        elif outline is not None:
+            draw.rounded_rectangle(rect, radius=radius, outline=outline, width=width)
     except AttributeError:
         # Fallback para versiones antiguas
         x1, y1, x2, y2 = rect
-        draw.rectangle(rect, fill=fill)
+        if fill is not None:
+            draw.rectangle(rect, fill=fill)
+        if outline is not None:
+            draw.rectangle(rect, outline=outline, width=width)
 
 
 # =============================================================================
@@ -405,7 +417,7 @@ def draw_header(
         fill=COLOR_TEXT_PRIMARY,
         font=fonts.title,
     )
-    y += int(H * FONT_SCALE_TITLE) + 10
+    y += int(H * FONT_SCALE["title"]) + 10
     
     # Subtítulo con fecha
     date_str = datetime.now().strftime("%d/%m/%Y · Cuba")
@@ -863,8 +875,8 @@ def draw_single_source_card(
     )
     
     # Fondo glass con border
-    draw_rounded_rectangle(card_rect, radius=16, fill=COLOR_SURFACE)
-    draw_rounded_rectangle(card_rect, radius=16, outline=COLOR_SURFACE_BORDER, width=1)
+    draw_rounded_rectangle(draw, card_rect, radius=16, fill=COLOR_SURFACE)
+    draw_rounded_rectangle(draw, card_rect, radius=16, outline=COLOR_SURFACE_BORDER, width=1)
     
     # Contenido de la tarjeta
     inner_y = y_content + 20
