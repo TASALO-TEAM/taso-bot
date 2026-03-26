@@ -49,14 +49,14 @@ def build_inline_keyboard() -> InlineKeyboardMarkup:
 async def send_tasalo_response(
     update: Update,
     api_data: dict,
-    message_id: Optional[int] = None,
+    message: Optional[object] = None,
 ):
     """Envía la respuesta del comando /tasalo con imagen + texto + botones.
 
     Args:
         update: Update de Telegram
         api_data: Datos de la API
-        message_id: ID del mensaje a editar (None para enviar nuevo)
+        message: Mensaje a editar (None para enviar nuevo desde comando)
     """
     # Construir teclado inline
     keyboard = build_inline_keyboard()
@@ -80,15 +80,15 @@ async def send_tasalo_response(
     # Enviar respuesta
     if image_bytes:
         # Enviar con imagen
-        if message_id:
+        if message:
             # Editar mensaje existente con foto
-            await update.effective_message.edit_message_caption(
+            await message.edit_message_caption(
                 caption=text,
                 reply_markup=keyboard,
                 parse_mode="Markdown",
             )
             # Enviar foto como nuevo mensaje (no se puede editar a foto)
-            await update.effective_message.reply_photo(
+            await message.reply_photo(
                 photo=image_bytes,
                 caption=text,
                 reply_markup=keyboard,
@@ -104,8 +104,8 @@ async def send_tasalo_response(
         logger.info("✅ Imagen + texto enviados correctamente")
     else:
         # Fallback: solo texto
-        if message_id:
-            await update.effective_message.edit_message_text(
+        if message:
+            await message.edit_message_text(
                 text=text,
                 reply_markup=keyboard,
                 parse_mode="Markdown",
@@ -227,7 +227,7 @@ async def tasalo_refresh_callback(update: Update, context: ContextTypes.DEFAULT_
 
     # Enviar respuesta actualizada
     await send_tasalo_response(
-        update, data.get("data"), message_id=query.message.message_id
+        update, data.get("data"), message=query.message
     )
 
     logger.info("✅ Refresh completado")
@@ -373,7 +373,7 @@ async def tasalo_back_callback(update: Update, context: ContextTypes.DEFAULT_TYP
 
     # Re-enviar la vista principal
     await send_tasalo_response(
-        update, data.get("data"), message_id=query.message.message_id
+        update, data.get("data"), message=query.message
     )
 
     logger.info("✅ Back callback completado")
