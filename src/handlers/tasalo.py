@@ -40,7 +40,8 @@ def build_inline_keyboard() -> InlineKeyboardMarkup:
     keyboard = [
         [
             InlineKeyboardButton("🔄 Actualizar", callback_data="tasalo_refresh"),
-            InlineKeyboardButton("🗺 Ver provincias", callback_data="tasalo_provincias"),
+            # TODO: Habilitar cuando la API tenga datos de provincias
+            # InlineKeyboardButton("🗺 Ver provincias", callback_data="tasalo_provincias"),
         ],
     ]
     return InlineKeyboardMarkup(keyboard)

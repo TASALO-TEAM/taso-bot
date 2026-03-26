@@ -154,9 +154,10 @@ def create_application() -> Application:
     application.add_handler(
         CallbackQueryHandler(tasalo_refresh_callback, pattern="^tasalo_refresh$")
     )
-    application.add_handler(
-        CallbackQueryHandler(tasalo_provincias_callback, pattern="^tasalo_provincias$")
-    )
+    # TODO: Habilitar cuando la API tenga datos de provincias
+    # application.add_handler(
+    #     CallbackQueryHandler(tasalo_provincias_callback, pattern="^tasalo_provincias$")
+    # )
     application.add_handler(
         CallbackQueryHandler(tasalo_back_callback, pattern="^tasalo_back$")
     )
