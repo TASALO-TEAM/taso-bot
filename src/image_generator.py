@@ -92,16 +92,16 @@ CARD_WIDTH = IMG_WIDTH_VERTICAL - (PADDING * 2)
 CARD_X_START = PADDING
 CARD_X_END = IMG_WIDTH_VERTICAL - PADDING
 
-# Tamaños de fuente (escalados por alto de imagen)
+# Tamaños de fuente (escalados por alto de imagen) - AUMENTADOS para mejor legibilidad
 FONT_SCALE = {
-    "title": 0.036,         # 36px para 1000px
-    "subtitle": 0.020,      # 20px
-    "column_header": 0.024, # 24px
-    "column_subheader": 0.016, # 16px
-    "currency": 0.024,      # 24px
-    "rate_value": 0.028,    # 28px
-    "footer": 0.016,        # 16px
-    "watermark": 0.056,     # 56px
+    "title": 0.042,         # 42px para 1000px (antes 36px)
+    "subtitle": 0.024,      # 24px (antes 20px)
+    "column_header": 0.028, # 28px (antes 24px)
+    "column_subheader": 0.020, # 20px (antes 16px)
+    "currency": 0.028,      # 28px (antes 24px)
+    "rate_value": 0.032,    # 32px BOLD (antes 28px)
+    "footer": 0.018,        # 18px (antes 16px)
+    "watermark": 0.040,     # 40px (antes 56px - muy grande)
 }
 
 # Altura de fila
@@ -898,7 +898,7 @@ def draw_watermark(
     H: int,
     fonts: Fonts,
 ) -> None:
-    """Dibujar marca de agua @tasalobot discreta.
+    """Dibujar marca de agua @tasalobot en esquina superior derecha.
 
     Args:
         draw: Objeto ImageDraw
@@ -907,19 +907,20 @@ def draw_watermark(
         fonts: Fuentes cargadas
     """
     watermark_text = "@tasalobot"
-    
-    # Calcular posición (centro inferior, antes del footer)
+
+    # Calcular posición (esquina superior derecha)
     bbox = draw.textbbox((0, 0), watermark_text, font=fonts.watermark)
     text_width = bbox[2] - bbox[0]
-    
-    x = (W - text_width) // 2  # Centrado horizontal
-    y = H - 90  # 90px desde el fondo (antes del footer)
-    
-    # Dibujar con transparencia (usar color RGBA)
+
+    x = W - PADDING - text_width  # PADDING desde la derecha
+    y = PADDING // 2  # 20px desde el top
+
+    # Dibujar con transparencia aumentada (15% para mejor visibilidad)
+    watermark_color = (255, 255, 255, 38)  # 15% opacity (38/255)
     draw.text(
         (x, y),
         watermark_text,
-        fill=COLOR_WATERMARK,
+        fill=watermark_color,
         font=fonts.watermark,
     )
 
