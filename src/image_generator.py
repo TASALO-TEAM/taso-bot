@@ -402,7 +402,7 @@ def draw_header(
     draw.text(
         (PADDING, y),
         "📊 TASALO — Tasas de Cambio",
-        fill=COLOR_TEXT,
+        fill=COLOR_TEXT_PRIMARY,
         font=fonts.title,
     )
     y += int(H * FONT_SCALE_TITLE) + 10
@@ -412,7 +412,7 @@ def draw_header(
     draw.text(
         (PADDING, y),
         date_str,
-        fill=COLOR_TEXT_MUTED,
+        fill=COLOR_TEXT_SECONDARY,
         font=fonts.subtitle,
     )
     
@@ -449,18 +449,18 @@ def draw_eltoque_column(
         fill=COLOR_ACCENT,
         font=fonts.column_header,
     )
-    y += int(IMG_HEIGHT * FONT_SCALE_COLUMN_HEADER)
+    y += int(IMG_HEIGHT_VERTICAL * FONT_SCALE["column_header"])
     
     draw.text(
         (x_start, y),
         "ElToque",
-        fill=COLOR_TEXT_MUTED,
+        fill=COLOR_TEXT_SECONDARY,
         font=fonts.column_subheader,
     )
-    y += int(IMG_HEIGHT * FONT_SCALE_COLUMN_SUBHEADER) + 10
+    y += int(IMG_HEIGHT_VERTICAL * FONT_SCALE["column_subheader"]) + 10
     
     # Línea separadora
-    draw.line((x_start, y, x_end, y), fill=COLOR_DIVIDER, width=2)
+    draw.line((x_start, y, x_end, y), fill=COLOR_SURFACE_BORDER, width=2)
     y += 15
     
     # Ordenar monedas por prioridad
@@ -491,7 +491,7 @@ def draw_eltoque_column(
         draw.text(
             (x_start, y),
             f"{flag} {currency}",
-            fill=COLOR_TEXT,
+            fill=COLOR_TEXT_PRIMARY,
             font=fonts.currency,
         )
         
@@ -504,7 +504,7 @@ def draw_eltoque_column(
         draw.text(
             (x_end - 10, y),
             rate_str,
-            fill=COLOR_TEXT,
+            fill=COLOR_TEXT_PRIMARY,
             anchor="rm",
             font=fonts.rate_value,
         )
@@ -552,18 +552,18 @@ def draw_bcc_column(
         fill=COLOR_ACCENT,
         font=fonts.column_header,
     )
-    y += int(IMG_HEIGHT * FONT_SCALE_COLUMN_HEADER)
+    y += int(IMG_HEIGHT_VERTICAL * FONT_SCALE["column_header"])
     
     draw.text(
         (x_start, y),
         "Oficial",
-        fill=COLOR_TEXT_MUTED,
+        fill=COLOR_TEXT_SECONDARY,
         font=fonts.column_subheader,
     )
-    y += int(IMG_HEIGHT * FONT_SCALE_COLUMN_SUBHEADER) + 10
+    y += int(IMG_HEIGHT_VERTICAL * FONT_SCALE["column_subheader"]) + 10
     
     # Línea separadora
-    draw.line((x_start, y, x_end, y), fill=COLOR_DIVIDER, width=2)
+    draw.line((x_start, y, x_end, y), fill=COLOR_SURFACE_BORDER, width=2)
     y += 15
     
     # Ordenar monedas por prioridad
@@ -594,7 +594,7 @@ def draw_bcc_column(
         draw.text(
             (x_start, y),
             f"{flag} {currency}",
-            fill=COLOR_TEXT,
+            fill=COLOR_TEXT_PRIMARY,
             font=fonts.currency,
         )
         
@@ -607,7 +607,7 @@ def draw_bcc_column(
         draw.text(
             (x_end - 10, y),
             rate_str,
-            fill=COLOR_TEXT,
+            fill=COLOR_TEXT_PRIMARY,
             anchor="rm",
             font=fonts.rate_value,
         )
@@ -655,18 +655,18 @@ def draw_cadeca_column(
         fill=COLOR_ACCENT,
         font=fonts.column_header,
     )
-    y += int(IMG_HEIGHT * FONT_SCALE_COLUMN_HEADER)
+    y += int(IMG_HEIGHT_VERTICAL * FONT_SCALE["column_header"])
     
     draw.text(
         (x_start, y),
         "Exchange",
-        fill=COLOR_TEXT_MUTED,
+        fill=COLOR_TEXT_SECONDARY,
         font=fonts.column_subheader,
     )
-    y += int(IMG_HEIGHT * FONT_SCALE_COLUMN_SUBHEADER) + 10
+    y += int(IMG_HEIGHT_VERTICAL * FONT_SCALE["column_subheader"]) + 10
     
     # Línea separadora
-    draw.line((x_start, y, x_end, y), fill=COLOR_DIVIDER, width=2)
+    draw.line((x_start, y, x_end, y), fill=COLOR_SURFACE_BORDER, width=2)
     y += 15
     
     # Headers de columnas (Buy / Sell)
@@ -674,27 +674,27 @@ def draw_cadeca_column(
     draw.text(
         (x_start, y),
         "Moneda",
-        fill=COLOR_TEXT_MUTED,
+        fill=COLOR_TEXT_SECONDARY,
         font=fonts.column_subheader,
     )
     draw.text(
         (x_start + col_width, y),
         "Compra",
-        fill=COLOR_TEXT_MUTED,
+        fill=COLOR_TEXT_SECONDARY,
         font=fonts.column_subheader,
         anchor="rm",
     )
     draw.text(
         (x_end - 10, y),
         "Venta",
-        fill=COLOR_TEXT_MUTED,
+        fill=COLOR_TEXT_SECONDARY,
         font=fonts.column_subheader,
         anchor="rm",
     )
-    y += int(IMG_HEIGHT * FONT_SCALE_COLUMN_SUBHEADER) + 10
+    y += int(IMG_HEIGHT_VERTICAL * FONT_SCALE["column_subheader"]) + 10
     
     # Línea separadora
-    draw.line((x_start, y, x_end, y), fill=COLOR_DIVIDER, width=1)
+    draw.line((x_start, y, x_end, y), fill=COLOR_SURFACE_BORDER, width=1)
     y += 10
     
     # Ordenar monedas por prioridad
@@ -722,7 +722,7 @@ def draw_cadeca_column(
         draw.text(
             (x_start, y),
             currency,
-            fill=COLOR_TEXT,
+            fill=COLOR_TEXT_PRIMARY,
             font=fonts.currency,
         )
         
@@ -732,7 +732,7 @@ def draw_cadeca_column(
             draw.text(
                 (x_start + col_width, y),
                 buy_str,
-                fill=COLOR_TEXT,
+                fill=COLOR_TEXT_PRIMARY,
                 anchor="rm",
                 font=fonts.rate_value,
             )
@@ -740,7 +740,7 @@ def draw_cadeca_column(
             draw.text(
                 (x_start + col_width, y),
                 "---",
-                fill=COLOR_TEXT_MUTED,
+                fill=COLOR_TEXT_SECONDARY,
                 anchor="rm",
                 font=fonts.rate_value,
             )
@@ -751,7 +751,7 @@ def draw_cadeca_column(
             draw.text(
                 (x_end - 10, y),
                 sell_str,
-                fill=COLOR_TEXT,
+                fill=COLOR_TEXT_PRIMARY,
                 anchor="rm",
                 font=fonts.rate_value,
             )
@@ -759,7 +759,7 @@ def draw_cadeca_column(
             draw.text(
                 (x_end - 10, y),
                 "---",
-                fill=COLOR_TEXT_MUTED,
+                fill=COLOR_TEXT_SECONDARY,
                 anchor="rm",
                 font=fonts.rate_value,
             )
@@ -810,6 +810,74 @@ def draw_single_source_column(
         return draw_cadeca_column(draw, data, x_start, x_end, y_start, fonts)
     else:
         return y_start
+
+
+def draw_single_source_card(
+    draw: ImageDraw.ImageDraw,
+    data: Dict[str, Any],
+    source: str,
+    W: int,
+    H: int,
+    fonts: Fonts,
+) -> None:
+    """Dibujar tarjeta vertical para fuente individual (Dark Glass).
+    
+    Args:
+        draw: Objeto ImageDraw
+        data: Datos de la fuente
+        source: Identificador de fuente ("eltoque", "bcc", "cadeca")
+        W: Ancho de imagen
+        H: Alto de imagen
+        fonts: Fuentes cargadas
+    """
+    # Títulos por fuente
+    source_titles = {
+        "eltoque": ("🏠 MERCADO INFORMAL", "ElToque"),
+        "bcc": ("🏛 BANCO CENTRAL", "BCC"),
+        "cadeca": ("🏢 CADECA", "Exchange"),
+    }
+    
+    title, subtitle = source_titles.get(source, ("📊 TASALO", "TASALO"))
+    
+    # Dibujar header personalizado
+    y = PADDING
+    
+    # Título principal
+    draw.text((PADDING, y), title, fill=COLOR_TEXT_PRIMARY, font=fonts.title)
+    y += int(H * FONT_SCALE["title"]) + 10
+    
+    # Subtítulo con fecha
+    date_str = datetime.now().strftime("%d/%m/%Y · Cuba")
+    subtitle_text = f"{subtitle} · {date_str}"
+    draw.text((PADDING, y), subtitle_text, fill=COLOR_TEXT_SECONDARY, font=fonts.subtitle)
+    
+    y_content = y + int(H * FONT_SCALE["subtitle"]) + 40
+    y_content = max(y_content, 120)
+    
+    # Dibujar superficie glass (tarjeta centrada)
+    card_rect = (
+        CARD_X_START,
+        y_content,
+        CARD_X_END,
+        H - 120,  # Antes del footer
+    )
+    
+    # Fondo glass con border
+    draw_rounded_rectangle(card_rect, radius=16, fill=COLOR_SURFACE)
+    draw_rounded_rectangle(card_rect, radius=16, outline=COLOR_SURFACE_BORDER, width=1)
+    
+    # Contenido de la tarjeta
+    inner_y = y_content + 20
+    inner_x_start = CARD_X_START + 20
+    inner_x_end = CARD_X_END - 20
+    
+    # Dibujar columna según fuente
+    if source == "eltoque":
+        draw_eltoque_column(draw, data.get("eltoque", {}), inner_x_start, inner_x_end, inner_y, fonts)
+    elif source == "bcc":
+        draw_bcc_column(draw, data.get("bcc", {}), inner_x_start, inner_x_end, inner_y, fonts)
+    elif source == "cadeca":
+        draw_cadeca_column(draw, data.get("cadeca", {}), inner_x_start, inner_x_end, inner_y, fonts)
 
 
 def draw_watermark(
@@ -888,7 +956,7 @@ def draw_footer(
     draw.text(
         (x, y),
         footer_text,
-        fill=COLOR_TEXT_MUTED,
+        fill=COLOR_TEXT_SECONDARY,
         font=fonts.footer,
     )
 
@@ -898,7 +966,7 @@ def draw_footer(
 # =============================================================================
 
 async def generate_tasalo_image(data: Dict[str, Any]) -> Optional[io.BytesIO]:
-    """Generar imagen con tabla triple (ElToque | BCC | CADECA).
+    """Generar imagen horizontal con tabla triple (ElToque | BCC | CADECA).
 
     Args:
         data: Datos de la API (campo 'data' del response)
@@ -907,32 +975,36 @@ async def generate_tasalo_image(data: Dict[str, Any]) -> Optional[io.BytesIO]:
         BytesIO con PNG optimizado, o None si hay error
     """
     try:
-        # 1. Crear imagen
-        img = Image.new("RGBA", (IMG_WIDTH, IMG_HEIGHT), COLOR_BG)
+        # 1. Crear imagen horizontal
+        img = Image.new("RGBA", (IMG_WIDTH_HORIZONTAL, IMG_HEIGHT_HORIZONTAL), COLOR_BG)
         draw = ImageDraw.Draw(img)
-        
+
         # 2. Cargar fuentes
         fonts = load_fonts()
-        
-        # 3. Dibujar superficie de tabla (rectángulo blanco con sombra)
+
+        # 3. Dibujar fondo gradiente
+        draw_gradient_background(draw, IMG_WIDTH_HORIZONTAL, IMG_HEIGHT_HORIZONTAL)
+
+        # 4. Dibujar superficie glass principal
         surface_rect = (
             PADDING - 10,
-            100,  # y_start después del header
-            IMG_WIDTH - PADDING + 10,
-            IMG_HEIGHT - 70,  # antes del footer
+            100,
+            IMG_WIDTH_HORIZONTAL - PADDING + 10,
+            IMG_HEIGHT_HORIZONTAL - 70,
         )
-        draw_rounded_rectangle(draw, surface_rect, radius=12, fill=COLOR_SURFACE)
-        
-        # 4. Dibujar header
-        y_content = draw_header(draw, IMG_WIDTH, IMG_HEIGHT, fonts)
-        y_content = max(y_content, 120)  # Asegurar espacio suficiente
-        
-        # 5. Extraer datos por fuente
+        draw_rounded_rectangle(draw, surface_rect, radius=16, fill=COLOR_SURFACE)
+        draw_rounded_rectangle(draw, surface_rect, radius=16, outline=COLOR_SURFACE_BORDER, width=1)
+
+        # 5. Dibujar header
+        y_content = draw_header(draw, IMG_WIDTH_HORIZONTAL, IMG_HEIGHT_HORIZONTAL, fonts)
+        y_content = max(y_content, 120)
+
+        # 6. Extraer datos por fuente
         eltoque_data = data.get("eltoque", {})
         bcc_data = data.get("bcc", {})
         cadeca_data = data.get("cadeca", {})
-        
-        # 6. Dibujar columnas
+
+        # 7. Dibujar columnas
         draw_eltoque_column(
             draw,
             eltoque_data,
@@ -941,7 +1013,7 @@ async def generate_tasalo_image(data: Dict[str, Any]) -> Optional[io.BytesIO]:
             y_content,
             fonts,
         )
-        
+
         draw_bcc_column(
             draw,
             bcc_data,
@@ -950,7 +1022,7 @@ async def generate_tasalo_image(data: Dict[str, Any]) -> Optional[io.BytesIO]:
             y_content,
             fonts,
         )
-        
+
         draw_cadeca_column(
             draw,
             cadeca_data,
@@ -959,21 +1031,21 @@ async def generate_tasalo_image(data: Dict[str, Any]) -> Optional[io.BytesIO]:
             y_content,
             fonts,
         )
-        
-        # 7. Dibujar marca de agua (ANTES del footer, DESPUÉS de los datos)
-        draw_watermark(draw, IMG_WIDTH, IMG_HEIGHT, fonts)
-        
-        # 8. Dibujar footer
-        draw_footer(draw, IMG_WIDTH, IMG_HEIGHT, data, fonts)
-        
-        # 9. Guardar como PNG optimizado
+
+        # 8. Dibujar marca de agua
+        draw_watermark(draw, IMG_WIDTH_HORIZONTAL, IMG_HEIGHT_HORIZONTAL, fonts)
+
+        # 9. Dibujar footer
+        draw_footer(draw, IMG_WIDTH_HORIZONTAL, IMG_HEIGHT_HORIZONTAL, data, fonts)
+
+        # 10. Guardar como PNG optimizado
         buffer = io.BytesIO()
         img.save(buffer, format="PNG", optimize=True, compress_level=6)
         buffer.seek(0)
-        
-        logger.info(f"✅ Imagen TASALO generada: {IMG_WIDTH}x{IMG_HEIGHT}px")
+
+        logger.info(f"✅ Imagen TASALO generada: {IMG_WIDTH_HORIZONTAL}x{IMG_HEIGHT_HORIZONTAL}px")
         return buffer
-        
+
     except Exception as e:
         logger.error(f"❌ Error generando imagen TASALO: {e}", exc_info=True)
         return None
@@ -983,7 +1055,7 @@ async def generate_single_source_image(
     data: Dict[str, Any],
     source: str,
 ) -> Optional[io.BytesIO]:
-    """Generar imagen individual para una fuente específica.
+    """Generar imagen vertical individual para una fuente específica.
 
     Args:
         data: Datos de la API (campo 'data' del response)
@@ -993,73 +1065,33 @@ async def generate_single_source_image(
         BytesIO con PNG optimizado, o None si hay error
     """
     try:
-        # 1. Crear imagen
-        img = Image.new("RGBA", (IMG_WIDTH, IMG_HEIGHT), COLOR_BG)
+        # 1. Crear imagen vertical
+        img = Image.new("RGBA", (IMG_WIDTH_VERTICAL, IMG_HEIGHT_VERTICAL), COLOR_BG)
         draw = ImageDraw.Draw(img)
-        
+
         # 2. Cargar fuentes
         fonts = load_fonts()
-        
-        # 3. Dibujar superficie de tabla
-        surface_rect = (
-            PADDING - 10,
-            100,
-            IMG_WIDTH - PADDING + 10,
-            IMG_HEIGHT - 70,
-        )
-        draw_rounded_rectangle(draw, surface_rect, radius=12, fill=COLOR_SURFACE)
-        
-        # 4. Dibujar header (modificado para fuente individual)
-        y = PADDING
-        
-        # Título según fuente
-        source_titles = {
-            "eltoque": "🏠 Mercado Informal",
-            "bcc": "🏛 Banco Central (BCC)",
-            "cadeca": "🏢 CADECA",
-        }
-        title = source_titles.get(source, "📊 TASALO")
-        
-        draw.text((PADDING, y), title, fill=COLOR_TEXT, font=fonts.title)
-        y += int(IMG_HEIGHT * FONT_SCALE_TITLE) + 10
-        
-        # Subtítulo con fecha
-        date_str = datetime.now().strftime("%d/%m/%Y · Cuba")
-        draw.text((PADDING, y), date_str, fill=COLOR_TEXT_MUTED, font=fonts.subtitle)
-        
-        y_content = y + 40
-        
-        # 5. Extraer datos de la fuente
-        source_data = data.get(source, {})
-        
-        # 6. Dibujar columna única (centrada, más ancha)
-        single_x_start = PADDING + 100
-        single_x_end = IMG_WIDTH - PADDING - 100
-        
-        draw_single_source_column(
-            draw,
-            source_data,
-            source,
-            single_x_start,
-            single_x_end,
-            y_content,
-            fonts,
-        )
-        
-        # 7. Dibujar marca de agua
-        draw_watermark(draw, IMG_WIDTH, IMG_HEIGHT, fonts)
-        
-        # 8. Dibujar footer
-        draw_footer(draw, IMG_WIDTH, IMG_HEIGHT, data, fonts)
-        
-        # 9. Guardar como PNG optimizado
+
+        # 3. Dibujar fondo gradiente
+        draw_gradient_background(draw, IMG_WIDTH_VERTICAL, IMG_HEIGHT_VERTICAL)
+
+        # 4. Dibujar tarjeta vertical centrada
+        draw_single_source_card(draw, data, source, IMG_WIDTH_VERTICAL, IMG_HEIGHT_VERTICAL, fonts)
+
+        # 5. Dibujar marca de agua
+        draw_watermark(draw, IMG_WIDTH_VERTICAL, IMG_HEIGHT_VERTICAL, fonts)
+
+        # 6. Dibujar footer
+        draw_footer(draw, IMG_WIDTH_VERTICAL, IMG_HEIGHT_VERTICAL, data, fonts)
+
+        # 7. Guardar como PNG optimizado
         buffer = io.BytesIO()
         img.save(buffer, format="PNG", optimize=True, compress_level=6)
         buffer.seek(0)
-        
-        logger.info(f"✅ Imagen {source.upper()} generada: {IMG_WIDTH}x{IMG_HEIGHT}px")
+
+        logger.info(f"✅ Imagen {source.upper()} generada: {IMG_WIDTH_VERTICAL}x{IMG_HEIGHT_VERTICAL}px")
         return buffer
-        
+
     except Exception as e:
         logger.error(f"❌ Error generando imagen {source.upper()}: {e}", exc_info=True)
         return None
