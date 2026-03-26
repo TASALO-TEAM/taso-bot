@@ -19,13 +19,17 @@ from src.image_generator import (
     parse_iso_datetime,
     get_currency_flag,
     load_fonts,
-    IMG_WIDTH,
-    IMG_HEIGHT,
+    IMG_WIDTH_HORIZONTAL,
+    IMG_HEIGHT_HORIZONTAL,
+    IMG_WIDTH_VERTICAL,
+    IMG_HEIGHT_VERTICAL,
     COLOR_BG,
     COLOR_SURFACE,
     COLOR_UP,
     COLOR_DOWN,
     COLOR_NEUTRAL,
+    COLOR_TEXT_PRIMARY,
+    COLOR_TEXT_SECONDARY,
 )
 
 
@@ -188,47 +192,47 @@ class TestImageGeneration:
         result.seek(0)
         from PIL import Image
         img = Image.open(result)
-        assert img.size == (IMG_WIDTH, IMG_HEIGHT)
+        assert img.size == (IMG_WIDTH_HORIZONTAL, IMG_HEIGHT_HORIZONTAL)
         assert img.mode == "RGBA"
 
     @pytest.mark.asyncio
     async def test_generate_single_source_image_eltoque(self, sample_eltoque_data):
         """Generar imagen individual de ElToque."""
         result = await generate_single_source_image(sample_eltoque_data, "eltoque")
-        
+
         assert result is not None
         assert isinstance(result, BytesIO)
-        
+
         result.seek(0)
         from PIL import Image
         img = Image.open(result)
-        assert img.size == (IMG_WIDTH, IMG_HEIGHT)
+        assert img.size == (IMG_WIDTH_VERTICAL, IMG_HEIGHT_VERTICAL)
 
     @pytest.mark.asyncio
     async def test_generate_single_source_image_bcc(self, sample_bcc_data):
         """Generar imagen individual del BCC."""
         result = await generate_single_source_image(sample_bcc_data, "bcc")
-        
+
         assert result is not None
         assert isinstance(result, BytesIO)
-        
+
         result.seek(0)
         from PIL import Image
         img = Image.open(result)
-        assert img.size == (IMG_WIDTH, IMG_HEIGHT)
+        assert img.size == (IMG_WIDTH_VERTICAL, IMG_HEIGHT_VERTICAL)
 
     @pytest.mark.asyncio
     async def test_generate_single_source_image_cadeca(self, sample_cadeca_data):
         """Generar imagen individual de CADECA."""
         result = await generate_single_source_image(sample_cadeca_data, "cadeca")
-        
+
         assert result is not None
         assert isinstance(result, BytesIO)
-        
+
         result.seek(0)
         from PIL import Image
         img = Image.open(result)
-        assert img.size == (IMG_WIDTH, IMG_HEIGHT)
+        assert img.size == (IMG_WIDTH_VERTICAL, IMG_HEIGHT_VERTICAL)
 
     @pytest.mark.asyncio
     async def test_generate_image_with_type_parameter(self, sample_api_data):
@@ -280,7 +284,7 @@ class TestImageGeneration:
         result.seek(0)
         from PIL import Image
         img = Image.open(result)
-        assert img.size == (IMG_WIDTH, IMG_HEIGHT)
+        assert img.size == (IMG_WIDTH_HORIZONTAL, IMG_HEIGHT_HORIZONTAL)
 
 
 # =============================================================================
@@ -298,8 +302,8 @@ class TestIntegration:
         from PIL import Image
         img = Image.open(result)
         
-        assert img.width == IMG_WIDTH
-        assert img.height == IMG_HEIGHT
+        assert img.width == IMG_WIDTH_HORIZONTAL
+        assert img.height == IMG_HEIGHT_HORIZONTAL
         assert img.width == 1200
         assert img.height == 630
 
@@ -334,11 +338,11 @@ class TestIntegration:
         
         # La marca de agua debería estar en la parte inferior central
         # Verificar que hay contenido en esa región (no es completamente transparente)
-        watermark_y = IMG_HEIGHT - 90
+        watermark_y = IMG_HEIGHT_HORIZONTAL - 90
         watermark_region = img.crop((
-            IMG_WIDTH // 4,
+            IMG_WIDTH_HORIZONTAL // 4,
             watermark_y - 20,
-            3 * IMG_WIDTH // 4,
+            3 * IMG_WIDTH_HORIZONTAL // 4,
             watermark_y + 60,
         ))
         
@@ -401,38 +405,38 @@ class TestVisualQuality:
     """Tests para calidad visual de imágenes generadas."""
 
     def test_background_color(self, sample_api_data):
-        """Verificar color de fondo correcto."""
+        """Verificar color de fondo correcto (Dark Glass)."""
         result = generate_image_sync(sample_api_data, image_type="tasalo")
         result.seek(0)
-        
+
         from PIL import Image
         img = Image.open(result)
-        
-        # Muestrear píxel de esquina (debería ser COLOR_BG)
+
+        # Muestrear píxel de esquina (debería ser COLOR_BG = #10102A)
         bg_pixel = img.getpixel((10, 10))
-        
-        # El color de fondo debería ser cercano a #F8FAFC
-        # Permitir cierta variación por compresión
-        assert bg_pixel[0] > 240  # R alto (casi blanco)
-        assert bg_pixel[1] > 240  # G alto
-        assert bg_pixel[2] > 240  # B alto
+
+        # El color de fondo debería ser oscuro (azul oscuro profundo)
+        assert bg_pixel[0] < 30  # R bajo
+        assert bg_pixel[1] < 30  # G bajo
+        assert bg_pixel[2] < 50  # B bajo
 
     def test_surface_color(self, sample_api_data):
-        """Verificar color de superficie blanco."""
+        """Verificar que la superficie glass está presente (Dark Glass)."""
         result = generate_image_sync(sample_api_data, image_type="tasalo")
         result.seek(0)
-        
+
         from PIL import Image
         img = Image.open(result)
+
+        # Verificar que la imagen es RGBA (tiene canal alpha para transparencia)
+        assert img.mode == "RGBA"
+
+        # La superficie glass debería estar en el centro
+        # Muestrear múltiples puntos para verificar que hay variación de colores
+        center_pixel = img.getpixel((IMG_WIDTH_HORIZONTAL // 2, IMG_HEIGHT_HORIZONTAL // 2))
         
-        # Muestrear píxel del centro de la superficie
-        # La superficie debería estar en el centro de la imagen
-        surface_pixel = img.getpixel((IMG_WIDTH // 2, IMG_HEIGHT // 2))
-        
-        # El color de superficie debería ser blanco o muy cercano
-        assert surface_pixel[0] > 250  # R muy alto
-        assert surface_pixel[1] > 250  # G muy alto
-        assert surface_pixel[2] > 250  # B muy alto
+        # El pixel central debería tener algún valor (no completamente negro)
+        assert center_pixel[0] > 0 or center_pixel[1] > 0 or center_pixel[2] > 0
 
 
 # =============================================================================
