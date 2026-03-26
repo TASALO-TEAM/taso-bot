@@ -1,9 +1,17 @@
-"""Generador de imágenes con plantilla para el bot TASALO.
+"""Generador de imágenes profesional para el bot TASALO.
 
 Módulo responsable de generar imágenes visualmente atractivas con las tasas
-de cambio, usando una plantilla base (template.png) similar a bbalert.
+de cambio, usando un diseño de tabla horizontal compacta y profesional,
+optimizada para compartir en redes sociales.
 
-Inspirado en la implementación de /home/ersus/bot/dev/utils/image_generator.py
+Diseño:
+- Tabla horizontal con columnas (ElToque | BCC | CADECA)
+- Marca de agua @tasalobot discreta (10% opacity)
+- Formato 1200×630px (ratio 1.91:1, óptimo para redes)
+- Colores de alto contraste (WCAG AA)
+- Indicadores 🔺🔻― integrados
+
+Inspirado en el diseño aprobado: plans/2026-03-26-taso-bot-image-redesign.md
 """
 
 import asyncio
@@ -11,7 +19,7 @@ import logging
 import os
 import io
 from datetime import datetime
-from typing import Dict, Any, Optional, List, Tuple
+from typing import Dict, Any, Optional, List, Tuple, NamedTuple
 
 from PIL import Image, ImageDraw, ImageFont
 
@@ -21,39 +29,100 @@ logger = logging.getLogger(__name__)
 
 
 # =============================================================================
-# CONSTANTES DE DISEÑO (TASALO Design System)
+# TASALO DESIGN SYSTEM — Constantes de Diseño
 # =============================================================================
 
-# Colores (usando el esquema de bbalert - tinta oscura sobre plantilla clara)
-COLOR_TINTA = "#0B1E38"        # Color principal para texto (azul oscuro)
-COLOR_TINTA_CLARO = "#1a3a5c"  # Versión más clara para texto secundario
-COLOR_BLANCO = "#FFFFFF"       # Blanco para títulos
-COLOR_GRIS = "#A0B0D0"         # Gris azulado para subtítulos
+# Dimensiones de la imagen (ratio 1.91:1 - óptimo para redes sociales)
+IMG_WIDTH = 1200
+IMG_HEIGHT = 630
+PADDING = 40
+COLUMN_GAP = 20
 
-# Dimensiones de la plantilla
-TEMPLATE_WIDTH = 1200
-TEMPLATE_HEIGHT = 800
+# Colores (TASALO Design System)
+COLOR_BG = "#F8FAFC"              # Fondo principal (gris azulado muy claro)
+COLOR_SURFACE = "#FFFFFF"         # Superficie de la tabla (blanco)
+COLOR_TEXT = "#0F172A"            # Texto primario (oscuro)
+COLOR_TEXT_MUTED = "#64748B"      # Texto secundario (gris)
+COLOR_ACCENT = "#3B82F6"          # Acento primario (azul)
+COLOR_UP = "#DC2626"              # Rojo para subida 🔺
+COLOR_DOWN = "#16A34A"            # Verde para bajada 🔻
+COLOR_NEUTRAL = "#94A3B8"         # Gris para neutral ―
+COLOR_DIVIDER = "#E2E8F0"         # Divisores y bordes
 
-# Fuentes - tamaños relativos al alto de la imagen (como bbalert)
-FONT_SCALE_TITLE = 0.048       # Para título principal
-FONT_SCALE_SECTION = 0.032     # Para nombres de sección
-FONT_SCALE_RATE = 0.032        # Para valores de tasas
-FONT_SCALE_LABEL = 0.024       # Para labels secundarios
-FONT_SCALE_FOOTER = 0.020      # Para footer
+# Marca de agua (10% opacity)
+COLOR_WATERMARK = (226, 232, 240, 25)  # RGBA con alpha=25 (~10%)
+
+# Layout de columnas (3 columnas de ~380px cada una)
+COLUMN_X_START = PADDING
+COLUMN_WIDTH = (IMG_WIDTH - (PADDING * 2) - (COLUMN_GAP * 2)) // 3
+
+# Posiciones X para cada columna
+COLUMN_POSITIONS = {
+    "eltoque": {
+        "start": PADDING,
+        "end": PADDING + COLUMN_WIDTH,
+    },
+    "bcc": {
+        "start": PADDING + COLUMN_WIDTH + COLUMN_GAP,
+        "end": PADDING + (COLUMN_WIDTH * 2) + COLUMN_GAP,
+    },
+    "cadeca": {
+        "start": PADDING + (COLUMN_WIDTH * 2) + (COLUMN_GAP * 2),
+        "end": IMG_WIDTH - PADDING,
+    },
+}
+
+# Tamaños de fuente (relativos al alto de la imagen)
+FONT_SCALE_TITLE = 0.048       # 32px para 1200×630
+FONT_SCALE_SUBTITLE = 0.028    # 18px
+FONT_SCALE_COLUMN_HEADER = 0.032  # 20px
+FONT_SCALE_COLUMN_SUBHEADER = 0.024  # 14px
+FONT_SCALE_CURRENCY = 0.032    # 22px
+FONT_SCALE_RATE = 0.036        # 24px
+FONT_SCALE_FOOTER = 0.022      # 14px
+FONT_SCALE_WATERMARK = 0.075   # 48px
+
+# Altura de fila
+ROW_HEIGHT = 42
+HEADER_HEIGHT = 60
 
 
 # =============================================================================
 # GESTIÓN DE FUENTES
 # =============================================================================
 
-def get_font_path() -> str:
+class Fonts(NamedTuple):
+    """Colección de fuentes cargadas."""
+    title: ImageFont.FreeTypeFont
+    subtitle: ImageFont.FreeTypeFont
+    column_header: ImageFont.FreeTypeFont
+    column_subheader: ImageFont.FreeTypeFont
+    currency: ImageFont.FreeTypeFont
+    rate_value: ImageFont.FreeTypeFont
+    footer: ImageFont.FreeTypeFont
+    watermark: ImageFont.FreeTypeFont
+
+
+def get_font_path() -> Optional[str]:
     """Obtener la ruta a una fuente disponible en el sistema.
-    
+
+    Prioriza Space Grotesk y JetBrains Mono, fallback a DejaVu Sans.
+
     Returns:
         Ruta a la fuente o None si no se encuentra
     """
-    # Priorizar fuentes del sistema
-    font_paths = [
+    # Fuentes preferidas (Space Grotesk, JetBrains Mono)
+    preferred_fonts = [
+        "/usr/share/fonts/truetype/space-grotesk/SpaceGrotesk-Bold.ttf",
+        "/usr/share/fonts/truetype/space-grotesk/SpaceGrotesk-SemiBold.ttf",
+        "/usr/share/fonts/truetype/space-grotesk/SpaceGrotesk-Regular.ttf",
+        "/usr/share/fonts/truetype/jetbrains-mono/JetBrainsMono-Bold.ttf",
+        "/usr/share/fonts/truetype/jetbrains-mono/JetBrainsMono-Medium.ttf",
+        "/usr/share/fonts/truetype/jetbrains-mono/JetBrainsMono-Regular.ttf",
+    ]
+    
+    # Fallback a fuentes del sistema
+    fallback_fonts = [
         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
         "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
         "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf",
@@ -63,49 +132,73 @@ def get_font_path() -> str:
         "C:\\Windows\\Fonts\\arial.ttf",
     ]
     
-    # También buscar en el directorio fonts/ del proyecto
+    # Buscar en directorio fonts/ del proyecto
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     fonts_dir = os.path.join(base_dir, "fonts")
     project_fonts = [
-        os.path.join(fonts_dir, "SpaceGrotesk-Regular.ttf"),
         os.path.join(fonts_dir, "SpaceGrotesk-Bold.ttf"),
+        os.path.join(fonts_dir, "SpaceGrotesk-Regular.ttf"),
+        os.path.join(fonts_dir, "JetBrainsMono-Bold.ttf"),
         os.path.join(fonts_dir, "JetBrainsMono-Regular.ttf"),
     ]
-    font_paths.extend(project_fonts)
     
-    for path in font_paths:
+    # Buscar en orden: preferidas → proyecto → fallback
+    all_fonts = preferred_fonts + project_fonts + fallback_fonts
+    
+    for path in all_fonts:
         if os.path.exists(path):
             return path
     
     return None
 
 
-def load_fonts() -> Tuple[Optional[ImageFont.FreeTypeFont], ...]:
+def load_fonts() -> Fonts:
     """Cargar todas las fuentes necesarias.
-    
+
     Returns:
-        Tupla (font_title, font_section, font_rate, font_label, font_footer)
+        Fonts namedtuple con todas las fuentes cargadas
     """
     font_path = get_font_path()
     
     if not font_path:
         logger.warning("⚠️ No se encontraron fuentes TrueType, usando fuente por defecto")
         default_font = ImageFont.load_default()
-        return (default_font,) * 5
+        return Fonts(
+            title=default_font,
+            subtitle=default_font,
+            column_header=default_font,
+            column_subheader=default_font,
+            currency=default_font,
+            rate_value=default_font,
+            footer=default_font,
+            watermark=default_font,
+        )
     
     try:
         # Calcular tamaños basados en la altura de la plantilla
-        font_title = ImageFont.truetype(font_path, int(TEMPLATE_HEIGHT * FONT_SCALE_TITLE))
-        font_section = ImageFont.truetype(font_path, int(TEMPLATE_HEIGHT * FONT_SCALE_SECTION))
-        font_rate = ImageFont.truetype(font_path, int(TEMPLATE_HEIGHT * FONT_SCALE_RATE))
-        font_label = ImageFont.truetype(font_path, int(TEMPLATE_HEIGHT * FONT_SCALE_LABEL))
-        font_footer = ImageFont.truetype(font_path, int(TEMPLATE_HEIGHT * FONT_SCALE_FOOTER))
-        
-        return font_title, font_section, font_rate, font_label, font_footer
+        return Fonts(
+            title=ImageFont.truetype(font_path, int(IMG_HEIGHT * FONT_SCALE_TITLE)),
+            subtitle=ImageFont.truetype(font_path, int(IMG_HEIGHT * FONT_SCALE_SUBTITLE)),
+            column_header=ImageFont.truetype(font_path, int(IMG_HEIGHT * FONT_SCALE_COLUMN_HEADER)),
+            column_subheader=ImageFont.truetype(font_path, int(IMG_HEIGHT * FONT_SCALE_COLUMN_SUBHEADER)),
+            currency=ImageFont.truetype(font_path, int(IMG_HEIGHT * FONT_SCALE_CURRENCY)),
+            rate_value=ImageFont.truetype(font_path, int(IMG_HEIGHT * FONT_SCALE_RATE)),
+            footer=ImageFont.truetype(font_path, int(IMG_HEIGHT * FONT_SCALE_FOOTER)),
+            watermark=ImageFont.truetype(font_path, int(IMG_HEIGHT * FONT_SCALE_WATERMARK)),
+        )
     except OSError as e:
         logger.warning(f"⚠️ Error cargando fuentes: {e}. Usando fuente por defecto.")
         default_font = ImageFont.load_default()
-        return (default_font,) * 5
+        return Fonts(
+            title=default_font,
+            subtitle=default_font,
+            column_header=default_font,
+            column_subheader=default_font,
+            currency=default_font,
+            rate_value=default_font,
+            footer=default_font,
+            watermark=default_font,
+        )
 
 
 # =============================================================================
@@ -114,10 +207,10 @@ def load_fonts() -> Tuple[Optional[ImageFont.FreeTypeFont], ...]:
 
 def get_change_emoji(change: Optional[str]) -> str:
     """Obtener emoji según la dirección del cambio.
-    
+
     Args:
         change: "up", "down", o None
-        
+
     Returns:
         Emoji correspondiente (🔺, 🔻, ―)
     """
@@ -131,27 +224,27 @@ def get_change_emoji(change: Optional[str]) -> str:
 
 def get_change_color(change: Optional[str]) -> str:
     """Obtener color según la dirección del cambio.
-    
+
     Args:
         change: "up", "down", o None
-        
+
     Returns:
         Color hexadecimal
     """
     if change == "up":
-        return "#DC2626"  # Rojo para subida
+        return COLOR_UP
     elif change == "down":
-        return "#16A34A"  # Verde para bajada
+        return COLOR_DOWN
     else:
-        return COLOR_TINTA_CLARO
+        return COLOR_NEUTRAL
 
 
 def format_rate_value(rate: float) -> str:
     """Formatear valor de tasa con 2 decimales.
-    
+
     Args:
         rate: Valor numérico
-        
+
     Returns:
         String formateado
     """
@@ -160,15 +253,15 @@ def format_rate_value(rate: float) -> str:
 
 def parse_iso_datetime(iso_string: Optional[str]) -> str:
     """Parsear datetime ISO a formato legible.
-    
+
     Args:
         iso_string: datetime en formato ISO 8601
-        
+
     Returns:
-        String formateado como "YYYY-MM-DD HH:MM"
+        String formateado como "DD/MM/YYYY HH:MM"
     """
     if not iso_string:
-        return datetime.now().strftime("%Y-%m-%d %H:%M")
+        return datetime.now().strftime("%d/%m/%Y %H:%M")
     
     try:
         iso_string = iso_string.replace("Z", "+00:00")
@@ -176,387 +269,782 @@ def parse_iso_datetime(iso_string: Optional[str]) -> str:
             iso_string = iso_string.split("+")[0]
         
         dt = datetime.fromisoformat(iso_string)
-        return dt.strftime("%Y-%m-%d %H:%M")
+        return dt.strftime("%d/%m/%Y %H:%M")
     except (ValueError, AttributeError):
-        return datetime.now().strftime("%Y-%m-%d %H:%M")
+        return datetime.now().strftime("%d/%m/%Y %H:%M")
 
 
 def get_currency_flag(currency: str) -> str:
     """Obtener emoji de bandera para una moneda.
-    
+
     Args:
         currency: Código de moneda (USD, EUR, etc.)
-        
+
     Returns:
         Emoji de bandera o símbolo
     """
     flags = {
         "USD": "🇺🇸",
         "EUR": "🇪🇺",
-        "MLC": "🧾",
+        "MLC": "💳",
         "USDT": "₮",
         "BTC": "₿",
         "ETH": "Ξ",
         "BNB": "🟡",
         "TRX": "🔷",
+        "CAD": "🇨🇦",
+        "MXN": "🇲🇽",
+        "GBP": "🇬🇧",
+        "CHF": "🇨🇭",
+        "RUB": "🇷🇺",
+        "AUD": "🇦🇺",
+        "JPY": "🇯🇵",
     }
     return flags.get(currency.upper(), "💱")
 
 
-# =============================================================================
-# FUNCIONES DE DIBUJO POR BLOQUE
-# =============================================================================
-
-def draw_eltoque_section(
+def draw_rounded_rectangle(
     draw: ImageDraw.ImageDraw,
-    eltoque_data: Dict[str, Any],
-    start_y: float,
-    row_height: float,
-    font_section: ImageFont.FreeTypeFont,
-    font_rate: ImageFont.FreeTypeFont,
-    W: int,
-    H: int,
-) -> float:
-    """Dibujar sección de Mercado Informal (El Toque).
-    
+    rect: Tuple[int, int, int, int],
+    radius: int,
+    fill: str,
+) -> None:
+    """Dibujar rectángulo con bordes redondeados (compatible con Pillow <10.2).
+
     Args:
         draw: Objeto ImageDraw
-        eltoque_data: Datos de El Toque
-        start_y: Posición Y inicial
-        row_height: Altura entre filas
-        font_section: Fuente para nombres
-        font_rate: Fuente para valores
+        rect: Tupla (x1, y1, x2, y2)
+        radius: Radio de los bordes redondeados
+        fill: Color de relleno
+    """
+    try:
+        # Intentar usar método nativo (Pillow >=10.2)
+        draw.rounded_rectangle(rect, radius=radius, fill=fill)
+    except AttributeError:
+        # Fallback para versiones antiguas
+        x1, y1, x2, y2 = rect
+        draw.rectangle(rect, fill=fill)
+
+
+# =============================================================================
+# FUNCIONES DE DIBUJO POR SECCIÓN
+# =============================================================================
+
+def draw_header(
+    draw: ImageDraw.ImageDraw,
+    W: int,
+    H: int,
+    fonts: Fonts,
+) -> int:
+    """Dibujar header con título y subtítulo.
+
+    Args:
+        draw: Objeto ImageDraw
         W: Ancho de imagen
         H: Alto de imagen
-        
+        fonts: Fuentes cargadas
+
+    Returns:
+        Posición Y para el contenido principal
+    """
+    y = PADDING
+    
+    # Título principal
+    draw.text(
+        (PADDING, y),
+        "📊 TASALO — Tasas de Cambio",
+        fill=COLOR_TEXT,
+        font=fonts.title,
+    )
+    y += int(H * FONT_SCALE_TITLE) + 10
+    
+    # Subtítulo con fecha
+    date_str = datetime.now().strftime("%d/%m/%Y · Cuba")
+    draw.text(
+        (PADDING, y),
+        date_str,
+        fill=COLOR_TEXT_MUTED,
+        font=fonts.subtitle,
+    )
+    
+    return y + 40  # Retornar Y para contenido principal
+
+
+def draw_eltoque_column(
+    draw: ImageDraw.ImageDraw,
+    data: Dict[str, Any],
+    x_start: int,
+    x_end: int,
+    y_start: int,
+    fonts: Fonts,
+) -> int:
+    """Dibujar columna de ElToque con tasas.
+
+    Args:
+        draw: Objeto ImageDraw
+        data: Datos de ElToque
+        x_start: Posición X inicial
+        x_end: Posición X final
+        y_start: Posición Y inicial
+        fonts: Fuentes cargadas
+
     Returns:
         Nueva posición Y
     """
-    y = start_y
+    y = y_start
     
-    # Título de sección
-    draw.text((W * 0.15, y), "📊 MERCADO INFORMAL", fill=COLOR_TINTA, font=font_section)
-    y += row_height * 0.9
+    # Header de columna
+    draw.text(
+        (x_start, y),
+        "🏠 informal",
+        fill=COLOR_ACCENT,
+        font=fonts.column_header,
+    )
+    y += int(IMG_HEIGHT * FONT_SCALE_COLUMN_HEADER)
+    
+    draw.text(
+        (x_start, y),
+        "ElToque",
+        fill=COLOR_TEXT_MUTED,
+        font=fonts.column_subheader,
+    )
+    y += int(IMG_HEIGHT * FONT_SCALE_COLUMN_SUBHEADER) + 10
     
     # Línea separadora
-    draw.line((W * 0.15, y, W * 0.85, y), fill=COLOR_TINTA_CLARO, width=2)
-    y += row_height * 0.6
+    draw.line((x_start, y, x_end, y), fill=COLOR_DIVIDER, width=2)
+    y += 15
     
     # Ordenar monedas por prioridad
-    priority = ["USD", "EUR", "MLC", "USDT", "BTC", "ETH", "BNB", "TRX"]
+    priority = ["EUR", "USD", "MLC", "USDT", "BTC", "TRX", "BNB", "ETH"]
     sorted_currencies = sorted(
-        eltoque_data.keys(),
-        key=lambda x: (priority.index(x.upper()) if x.upper() in priority else 99, x)
+        data.keys() if isinstance(data, dict) else [],
+        key=lambda x: priority.index(x.upper()) if x.upper() in priority else 99,
     )
     
-    for currency in sorted_currencies[:8]:  # Máximo 8 monedas
-        currency_info = eltoque_data[currency]
+    # Dibujar filas (máximo 8)
+    for currency in sorted_currencies[:8]:
+        if not isinstance(data, dict):
+            break
+            
+        currency_info = data.get(currency, {})
         
         if isinstance(currency_info, dict):
             rate = currency_info.get("rate", 0)
-            change = currency_info.get("change", None)
+            change = currency_info.get("change")
         else:
             rate = currency_info
             change = None
         
+        # Emoji de bandera
         flag = get_currency_flag(currency)
-        rate_str = format_rate_value(rate)
         
-        # Dibujar moneda con bandera (izquierda)
-        currency_text = f"{flag} {currency}"
-        draw.text((W * 0.15, y), currency_text, fill=COLOR_TINTA, font=font_rate)
+        # Dibujar moneda (izquierda)
+        draw.text(
+            (x_start, y),
+            f"{flag} {currency}",
+            fill=COLOR_TEXT,
+            font=fonts.currency,
+        )
         
         # Dibujar valor (derecha)
-        value_text = f"{rate_str} CUP"
-        draw.text((W * 0.78, y), value_text, fill=COLOR_TINTA, anchor="rm", font=font_rate)
-        
-        # Dibujar indicador de cambio (centro-derecha)
+        rate_str = format_rate_value(rate) if rate else "---"
         indicator = get_change_emoji(change)
-        if indicator != "―":
-            change_color = get_change_color(change)
-            draw.text((W * 0.82, y), indicator, fill=change_color, font=font_rate)
+        indicator_color = get_change_color(change)
         
-        y += row_height
+        # Valor alineado a derecha
+        draw.text(
+            (x_end - 10, y),
+            rate_str,
+            fill=COLOR_TEXT,
+            anchor="rm",
+            font=fonts.rate_value,
+        )
+        
+        # Indicador (después del valor)
+        draw.text(
+            (x_end + 15, y),
+            indicator,
+            fill=indicator_color,
+            font=fonts.rate_value,
+        )
+        
+        y += ROW_HEIGHT
     
     return y
 
 
-def draw_cadeca_section(
+def draw_bcc_column(
     draw: ImageDraw.ImageDraw,
-    cadeca_data: Dict[str, Any],
-    start_y: float,
-    row_height: float,
-    font_section: ImageFont.FreeTypeFont,
-    font_rate: ImageFont.FreeTypeFont,
-    font_label: ImageFont.FreeTypeFont,
-    W: int,
-    H: int,
-) -> float:
-    """Dibujar sección de CADECA.
-    
+    data: Dict[str, Any],
+    x_start: int,
+    x_end: int,
+    y_start: int,
+    fonts: Fonts,
+) -> int:
+    """Dibujar columna del BCC con tasas.
+
     Args:
         draw: Objeto ImageDraw
-        cadeca_data: Datos de CADECA
-        start_y: Posición Y inicial
-        row_height: Altura entre filas
-        font_section: Fuente para títulos
-        font_rate: Fuente para valores
-        font_label: Fuente para labels
-        W: Ancho de imagen
-        H: Alto de imagen
-        
+        data: Datos del BCC
+        x_start: Posición X inicial
+        x_end: Posición X final
+        y_start: Posición Y inicial
+        fonts: Fuentes cargadas
+
     Returns:
         Nueva posición Y
     """
-    y = start_y
+    y = y_start
     
-    # Título
-    draw.text((W * 0.15, y), "🏢 CADECA", fill=COLOR_TINTA, font=font_section)
-    y += row_height * 0.9
+    # Header de columna
+    draw.text(
+        (x_start, y),
+        "🏛 BCC",
+        fill=COLOR_ACCENT,
+        font=fonts.column_header,
+    )
+    y += int(IMG_HEIGHT * FONT_SCALE_COLUMN_HEADER)
+    
+    draw.text(
+        (x_start, y),
+        "Oficial",
+        fill=COLOR_TEXT_MUTED,
+        font=fonts.column_subheader,
+    )
+    y += int(IMG_HEIGHT * FONT_SCALE_COLUMN_SUBHEADER) + 10
     
     # Línea separadora
-    draw.line((W * 0.15, y, W * 0.85, y), fill=COLOR_TINTA_CLARO, width=2)
-    y += row_height * 0.6
+    draw.line((x_start, y, x_end, y), fill=COLOR_DIVIDER, width=2)
+    y += 15
     
-    # Headers de columnas
-    draw.text((W * 0.15, y), "Moneda", fill=COLOR_TINTA_CLARO, font=font_label)
-    draw.text((W * 0.50, y), "Compra", fill=COLOR_TINTA_CLARO, font=font_label, anchor="rm")
-    draw.text((W * 0.65, y), "Venta", fill=COLOR_TINTA_CLARO, font=font_label, anchor="rm")
-    y += row_height * 0.9
-    
-    # Ordenar monedas
-    priority = ["USD", "EUR"]
+    # Ordenar monedas por prioridad
+    priority = ["EUR", "USD", "MLC", "CAD", "MXN", "GBP", "CHF", "RUB", "AUD", "JPY"]
     sorted_currencies = sorted(
-        cadeca_data.keys(),
-        key=lambda x: (priority.index(x.upper()) if x.upper() in priority else 99, x)
+        data.keys() if isinstance(data, dict) else [],
+        key=lambda x: priority.index(x.upper()) if x.upper() in priority else 99,
     )
     
-    for currency in sorted_currencies[:6]:  # Máximo 6 monedas
-        currency_info = cadeca_data[currency]
-        
-        if isinstance(currency_info, dict):
-            buy = currency_info.get("buy", 0)
-            sell = currency_info.get("sell", 0)
-        else:
-            buy = 0
-            sell = 0
-        
-        buy_str = format_rate_value(buy) if buy else "—"
-        sell_str = format_rate_value(sell) if sell else "—"
-        
-        draw.text((W * 0.15, y), currency, fill=COLOR_TINTA, font=font_rate)
-        draw.text((W * 0.50, y), buy_str, fill=COLOR_TINTA, anchor="rm", font=font_rate)
-        draw.text((W * 0.65, y), sell_str, fill=COLOR_TINTA, anchor="rm", font=font_rate)
-        
-        y += row_height
-    
-    return y
-
-
-def draw_bcc_section(
-    draw: ImageDraw.ImageDraw,
-    bcc_data: Dict[str, Any],
-    start_y: float,
-    row_height: float,
-    font_section: ImageFont.FreeTypeFont,
-    font_rate: ImageFont.FreeTypeFont,
-    W: int,
-    H: int,
-) -> float:
-    """Dibujar sección del Banco Central (BCC).
-    
-    Args:
-        draw: Objeto ImageDraw
-        bcc_data: Datos del BCC
-        start_y: Posición Y inicial
-        row_height: Altura entre filas
-        font_section: Fuente para títulos
-        font_rate: Fuente para valores
-        W: Ancho de imagen
-        H: Alto de imagen
-        
-    Returns:
-        Nueva posición Y
-    """
-    y = start_y
-    
-    # Título
-    draw.text((W * 0.15, y), "🏛 BANCO CENTRAL (BCC)", fill=COLOR_TINTA, font=font_section)
-    y += row_height * 0.9
-    
-    # Línea separadora
-    draw.line((W * 0.15, y, W * 0.85, y), fill=COLOR_TINTA_CLARO, width=2)
-    y += row_height * 0.6
-    
-    # Ordenar monedas
-    priority = ["USD", "EUR"]
-    sorted_currencies = sorted(
-        bcc_data.keys(),
-        key=lambda x: (priority.index(x.upper()) if x.upper() in priority else 99, x)
-    )
-    
-    for currency in sorted_currencies[:6]:  # Máximo 6 monedas
-        currency_info = bcc_data[currency]
+    # Dibujar filas (máximo 8)
+    for currency in sorted_currencies[:8]:
+        if not isinstance(data, dict):
+            break
+            
+        currency_info = data.get(currency, {})
         
         if isinstance(currency_info, dict):
             rate = currency_info.get("rate", 0)
+            change = currency_info.get("change")
         else:
             rate = currency_info
+            change = None
         
+        # Emoji de bandera
         flag = get_currency_flag(currency)
-        rate_str = format_rate_value(rate)
         
-        draw.text((W * 0.15, y), f"{flag} {currency}", fill=COLOR_TINTA, font=font_rate)
-        draw.text((W * 0.78, y), f"{rate_str} CUP", fill=COLOR_TINTA, anchor="rm", font=font_rate)
+        # Dibujar moneda (izquierda)
+        draw.text(
+            (x_start, y),
+            f"{flag} {currency}",
+            fill=COLOR_TEXT,
+            font=fonts.currency,
+        )
         
-        y += row_height
+        # Dibujar valor (derecha)
+        rate_str = format_rate_value(rate) if rate else "---"
+        indicator = get_change_emoji(change)
+        indicator_color = get_change_color(change)
+        
+        # Valor alineado a derecha
+        draw.text(
+            (x_end - 10, y),
+            rate_str,
+            fill=COLOR_TEXT,
+            anchor="rm",
+            font=fonts.rate_value,
+        )
+        
+        # Indicador (después del valor)
+        draw.text(
+            (x_end + 15, y),
+            indicator,
+            fill=indicator_color,
+            font=fonts.rate_value,
+        )
+        
+        y += ROW_HEIGHT
     
     return y
+
+
+def draw_cadeca_column(
+    draw: ImageDraw.ImageDraw,
+    data: Dict[str, Any],
+    x_start: int,
+    x_end: int,
+    y_start: int,
+    fonts: Fonts,
+) -> int:
+    """Dibujar columna de CADECA con tasas (buy/sell).
+
+    Args:
+        draw: Objeto ImageDraw
+        data: Datos de CADECA
+        x_start: Posición X inicial
+        x_end: Posición X final
+        y_start: Posición Y inicial
+        fonts: Fuentes cargadas
+
+    Returns:
+        Nueva posición Y
+    """
+    y = y_start
+    
+    # Header de columna
+    draw.text(
+        (x_start, y),
+        "🏢 CADECA",
+        fill=COLOR_ACCENT,
+        font=fonts.column_header,
+    )
+    y += int(IMG_HEIGHT * FONT_SCALE_COLUMN_HEADER)
+    
+    draw.text(
+        (x_start, y),
+        "Exchange",
+        fill=COLOR_TEXT_MUTED,
+        font=fonts.column_subheader,
+    )
+    y += int(IMG_HEIGHT * FONT_SCALE_COLUMN_SUBHEADER) + 10
+    
+    # Línea separadora
+    draw.line((x_start, y, x_end, y), fill=COLOR_DIVIDER, width=2)
+    y += 15
+    
+    # Headers de columnas (Buy / Sell)
+    col_width = (x_end - x_start) // 3
+    draw.text(
+        (x_start, y),
+        "Moneda",
+        fill=COLOR_TEXT_MUTED,
+        font=fonts.column_subheader,
+    )
+    draw.text(
+        (x_start + col_width, y),
+        "Compra",
+        fill=COLOR_TEXT_MUTED,
+        font=fonts.column_subheader,
+        anchor="rm",
+    )
+    draw.text(
+        (x_end - 10, y),
+        "Venta",
+        fill=COLOR_TEXT_MUTED,
+        font=fonts.column_subheader,
+        anchor="rm",
+    )
+    y += int(IMG_HEIGHT * FONT_SCALE_COLUMN_SUBHEADER) + 10
+    
+    # Línea separadora
+    draw.line((x_start, y, x_end, y), fill=COLOR_DIVIDER, width=1)
+    y += 10
+    
+    # Ordenar monedas por prioridad
+    priority = ["EUR", "USD", "MLC", "CAD", "MXN", "GBP", "CHF", "RUB", "AUD", "JPY"]
+    sorted_currencies = sorted(
+        data.keys() if isinstance(data, dict) else [],
+        key=lambda x: priority.index(x.upper()) if x.upper() in priority else 99,
+    )
+    
+    # Dibujar filas (máximo 6 para CADECA)
+    for currency in sorted_currencies[:6]:
+        if not isinstance(data, dict):
+            break
+            
+        currency_info = data.get(currency, {})
+        
+        if isinstance(currency_info, dict):
+            buy = currency_info.get("buy")
+            sell = currency_info.get("sell")
+        else:
+            buy = None
+            sell = None
+        
+        # Dibujar moneda (izquierda)
+        draw.text(
+            (x_start, y),
+            currency,
+            fill=COLOR_TEXT,
+            font=fonts.currency,
+        )
+        
+        # Dibujar compra (centro)
+        if buy is not None:
+            buy_str = format_rate_value(buy)
+            draw.text(
+                (x_start + col_width, y),
+                buy_str,
+                fill=COLOR_TEXT,
+                anchor="rm",
+                font=fonts.rate_value,
+            )
+        else:
+            draw.text(
+                (x_start + col_width, y),
+                "---",
+                fill=COLOR_TEXT_MUTED,
+                anchor="rm",
+                font=fonts.rate_value,
+            )
+        
+        # Dibujar venta (derecha)
+        if sell is not None:
+            sell_str = format_rate_value(sell)
+            draw.text(
+                (x_end - 10, y),
+                sell_str,
+                fill=COLOR_TEXT,
+                anchor="rm",
+                font=fonts.rate_value,
+            )
+        else:
+            draw.text(
+                (x_end - 10, y),
+                "---",
+                fill=COLOR_TEXT_MUTED,
+                anchor="rm",
+                font=fonts.rate_value,
+            )
+        
+        y += ROW_HEIGHT
+    
+    return y
+
+
+def draw_single_source_column(
+    draw: ImageDraw.ImageDraw,
+    data: Dict[str, Any],
+    source: str,
+    x_start: int,
+    x_end: int,
+    y_start: int,
+    fonts: Fonts,
+) -> int:
+    """Dibujar columna individual para una fuente específica.
+
+    Args:
+        draw: Objeto ImageDraw
+        data: Datos de la fuente
+        source: Identificador de fuente ("eltoque", "bcc", "cadeca")
+        x_start: Posición X inicial
+        x_end: Posición X final
+        y_start: Posición Y inicial
+        fonts: Fuentes cargadas
+
+    Returns:
+        Nueva posición Y
+    """
+    # Configurar según fuente
+    if source == "eltoque":
+        icon = "🏠"
+        title = "informal"
+        subtitle = "ElToque"
+        return draw_eltoque_column(draw, data, x_start, x_end, y_start, fonts)
+    elif source == "bcc":
+        icon = "🏛"
+        title = "BCC"
+        subtitle = "Oficial"
+        return draw_bcc_column(draw, data, x_start, x_end, y_start, fonts)
+    elif source == "cadeca":
+        icon = "🏢"
+        title = "CADECA"
+        subtitle = "Exchange"
+        return draw_cadeca_column(draw, data, x_start, x_end, y_start, fonts)
+    else:
+        return y_start
+
+
+def draw_watermark(
+    draw: ImageDraw.ImageDraw,
+    W: int,
+    H: int,
+    fonts: Fonts,
+) -> None:
+    """Dibujar marca de agua @tasalobot discreta.
+
+    Args:
+        draw: Objeto ImageDraw
+        W: Ancho de imagen
+        H: Alto de imagen
+        fonts: Fuentes cargadas
+    """
+    watermark_text = "@tasalobot"
+    
+    # Calcular posición (centro inferior, antes del footer)
+    bbox = draw.textbbox((0, 0), watermark_text, font=fonts.watermark)
+    text_width = bbox[2] - bbox[0]
+    
+    x = (W - text_width) // 2  # Centrado horizontal
+    y = H - 90  # 90px desde el fondo (antes del footer)
+    
+    # Dibujar con transparencia (usar color RGBA)
+    draw.text(
+        (x, y),
+        watermark_text,
+        fill=COLOR_WATERMARK,
+        font=fonts.watermark,
+    )
 
 
 def draw_footer(
     draw: ImageDraw.ImageDraw,
-    timestamp: str,
-    footer_y: float,
-    font_footer: ImageFont.FreeTypeFont,
     W: int,
     H: int,
+    data: Dict[str, Any],
+    fonts: Fonts,
 ) -> None:
     """Dibujar footer con timestamp y fuentes.
-    
+
     Args:
         draw: Objeto ImageDraw
-        timestamp: Fecha y hora formateada
-        footer_y: Posición Y del footer
-        font_footer: Fuente para footer
         W: Ancho de imagen
         H: Alto de imagen
+        data: Datos de la API
+        fonts: Fuentes cargadas
     """
-    footer_text = f"Actualizado: {timestamp} · Fuente: elToque.com · CADECA · BCC"
-    draw.text((W / 2, footer_y), footer_text, fill=COLOR_TINTA_CLARO, anchor="mt", font=font_footer)
+    y = H - 50
+    
+    # Timestamp
+    updated_at = data.get("updated_at")
+    timestamp = parse_iso_datetime(updated_at)
+    
+    # Fuentes disponibles
+    sources = []
+    if data.get("eltoque"):
+        sources.append("elToque")
+    if data.get("bcc"):
+        sources.append("BCC")
+    if data.get("cadeca"):
+        sources.append("CADECA")
+    
+    sources_str = " · ".join(sources) if sources else "TASALO"
+    
+    # Texto del footer
+    footer_text = f"Actualizado: {timestamp} · {sources_str}"
+    
+    # Centrar horizontalmente
+    bbox = draw.textbbox((0, 0), footer_text, font=fonts.footer)
+    text_width = bbox[2] - bbox[0]
+    x = (W - text_width) // 2
+    
+    draw.text(
+        (x, y),
+        footer_text,
+        fill=COLOR_TEXT_MUTED,
+        font=fonts.footer,
+    )
 
 
 # =============================================================================
-# FUNCIÓN PRINCIPAL DE GENERACIÓN
+# FUNCIONES PRINCIPALES DE GENERACIÓN
 # =============================================================================
 
-async def generate_image(data: Dict[str, Any]) -> Optional[io.BytesIO]:
-    """Generar imagen con las tasas de cambio usando plantilla.
-    
-    Implementación basada en bbalert:
-    - Carga template.png como fondo (o template_watermark.png si existe)
-    - Superpone las tasas en posiciones relativas
-    - Genera JPEG optimizado para Telegram
-    
+async def generate_tasalo_image(data: Dict[str, Any]) -> Optional[io.BytesIO]:
+    """Generar imagen con tabla triple (ElToque | BCC | CADECA).
+
     Args:
-        data: Diccionario con datos de la API (campo 'data' del response)
-        
+        data: Datos de la API (campo 'data' del response)
+
     Returns:
-        BytesIO con la imagen PNG, o None si hay error
+        BytesIO con PNG optimizado, o None si hay error
     """
     try:
-        # 1. Cargar plantilla (priorizar template_watermark.png si existe)
-        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        data_dir = os.path.join(base_dir, "data")
-        
-        # Priorizar plantilla con marca de agua
-        template_path = os.path.join(data_dir, "template_watermark.png")
-        if not os.path.exists(template_path):
-            template_path = settings.template_full_path
-        
-        if not os.path.exists(template_path):
-            logger.error(f"❌ No se encuentra la plantilla en: {template_path}")
-            return None
-        
-        img = Image.open(template_path).convert("RGBA")
-        W, H = img.size
+        # 1. Crear imagen
+        img = Image.new("RGBA", (IMG_WIDTH, IMG_HEIGHT), COLOR_BG)
         draw = ImageDraw.Draw(img)
         
         # 2. Cargar fuentes
-        font_title, font_section, font_rate, font_label, font_footer = load_fonts()
+        fonts = load_fonts()
         
-        # 3. Extraer datos
-        eltoque_data = data.get("eltoque", {})
-        cadeca_data = data.get("cadeca", {})
-        bcc_data = data.get("bcc", {})
-        updated_at = data.get("updated_at")
-        timestamp = parse_iso_datetime(updated_at)
-        
-        # 4. Calcular posiciones
-        # El contenido comienza después del header (~48% de la altura)
-        start_y = H * 0.48
-        
-        # Espacio disponible para contenido (~30% de la altura)
-        espacio_disponible = H * 0.30
-        
-        # Calcular número total de filas estimadas
-        total_rows = 0
-        if eltoque_data:
-            total_rows += min(len(eltoque_data), 8)
-        if cadeca_data:
-            total_rows += min(len(cadeca_data), 6) + 3  # +3 para headers
-        if bcc_data:
-            total_rows += min(len(bcc_data), 6) + 2  # +2 para header
-        
-        # Altura dinámica por fila
-        if total_rows > 0:
-            row_height = espacio_disponible / (total_rows + 1)
-        else:
-            row_height = H * 0.04  # Valor por defecto
-        
-        # 5. Dibujar secciones
-        y = start_y
-        
-        if eltoque_data:
-            y = draw_eltoque_section(
-                draw, eltoque_data, y, row_height,
-                font_section, font_rate, W, H
-            )
-            y += row_height * 0.5  # Espacio entre secciones
-        
-        if cadeca_data:
-            y = draw_cadeca_section(
-                draw, cadeca_data, y, row_height,
-                font_section, font_rate, font_label, W, H
-            )
-            y += row_height * 0.5
-        
-        if bcc_data:
-            y = draw_bcc_section(
-                draw, bcc_data, y, row_height,
-                font_section, font_rate, W, H
-            )
-        
-        # 6. Dibujar footer
-        footer_y = H * 0.77
-        draw_footer(draw, timestamp, footer_y, font_footer, W, H)
-        
-        # 7. Guardar como JPEG optimizado
-        buffer = io.BytesIO()
-        img_rgb = img.convert('RGB')  # Eliminar canal alpha para JPEG
-        img_rgb.save(
-            buffer,
-            format='JPEG',
-            quality=85,
-            optimize=True,
-            progressive=True,
+        # 3. Dibujar superficie de tabla (rectángulo blanco con sombra)
+        surface_rect = (
+            PADDING - 10,
+            100,  # y_start después del header
+            IMG_WIDTH - PADDING + 10,
+            IMG_HEIGHT - 70,  # antes del footer
         )
+        draw_rounded_rectangle(draw, surface_rect, radius=12, fill=COLOR_SURFACE)
+        
+        # 4. Dibujar header
+        y_content = draw_header(draw, IMG_WIDTH, IMG_HEIGHT, fonts)
+        y_content = max(y_content, 120)  # Asegurar espacio suficiente
+        
+        # 5. Extraer datos por fuente
+        eltoque_data = data.get("eltoque", {})
+        bcc_data = data.get("bcc", {})
+        cadeca_data = data.get("cadeca", {})
+        
+        # 6. Dibujar columnas
+        draw_eltoque_column(
+            draw,
+            eltoque_data,
+            COLUMN_POSITIONS["eltoque"]["start"],
+            COLUMN_POSITIONS["eltoque"]["end"],
+            y_content,
+            fonts,
+        )
+        
+        draw_bcc_column(
+            draw,
+            bcc_data,
+            COLUMN_POSITIONS["bcc"]["start"],
+            COLUMN_POSITIONS["bcc"]["end"],
+            y_content,
+            fonts,
+        )
+        
+        draw_cadeca_column(
+            draw,
+            cadeca_data,
+            COLUMN_POSITIONS["cadeca"]["start"],
+            COLUMN_POSITIONS["cadeca"]["end"],
+            y_content,
+            fonts,
+        )
+        
+        # 7. Dibujar marca de agua (ANTES del footer, DESPUÉS de los datos)
+        draw_watermark(draw, IMG_WIDTH, IMG_HEIGHT, fonts)
+        
+        # 8. Dibujar footer
+        draw_footer(draw, IMG_WIDTH, IMG_HEIGHT, data, fonts)
+        
+        # 9. Guardar como PNG optimizado
+        buffer = io.BytesIO()
+        img.save(buffer, format="PNG", optimize=True, compress_level=6)
         buffer.seek(0)
         
-        logger.info(f"✅ Imagen generada: {W}x{H}px (JPEG optimizado)")
+        logger.info(f"✅ Imagen TASALO generada: {IMG_WIDTH}x{IMG_HEIGHT}px")
         return buffer
         
     except Exception as e:
-        logger.error(f"❌ Error generando imagen: {e}", exc_info=True)
+        logger.error(f"❌ Error generando imagen TASALO: {e}", exc_info=True)
         return None
 
 
-def generate_image_sync(data: Dict[str, Any]) -> Optional[io.BytesIO]:
+async def generate_single_source_image(
+    data: Dict[str, Any],
+    source: str,
+) -> Optional[io.BytesIO]:
+    """Generar imagen individual para una fuente específica.
+
+    Args:
+        data: Datos de la API (campo 'data' del response)
+        source: Identificador de fuente ("eltoque", "bcc", "cadeca")
+
+    Returns:
+        BytesIO con PNG optimizado, o None si hay error
+    """
+    try:
+        # 1. Crear imagen
+        img = Image.new("RGBA", (IMG_WIDTH, IMG_HEIGHT), COLOR_BG)
+        draw = ImageDraw.Draw(img)
+        
+        # 2. Cargar fuentes
+        fonts = load_fonts()
+        
+        # 3. Dibujar superficie de tabla
+        surface_rect = (
+            PADDING - 10,
+            100,
+            IMG_WIDTH - PADDING + 10,
+            IMG_HEIGHT - 70,
+        )
+        draw_rounded_rectangle(draw, surface_rect, radius=12, fill=COLOR_SURFACE)
+        
+        # 4. Dibujar header (modificado para fuente individual)
+        y = PADDING
+        
+        # Título según fuente
+        source_titles = {
+            "eltoque": "🏠 Mercado Informal",
+            "bcc": "🏛 Banco Central (BCC)",
+            "cadeca": "🏢 CADECA",
+        }
+        title = source_titles.get(source, "📊 TASALO")
+        
+        draw.text((PADDING, y), title, fill=COLOR_TEXT, font=fonts.title)
+        y += int(IMG_HEIGHT * FONT_SCALE_TITLE) + 10
+        
+        # Subtítulo con fecha
+        date_str = datetime.now().strftime("%d/%m/%Y · Cuba")
+        draw.text((PADDING, y), date_str, fill=COLOR_TEXT_MUTED, font=fonts.subtitle)
+        
+        y_content = y + 40
+        
+        # 5. Extraer datos de la fuente
+        source_data = data.get(source, {})
+        
+        # 6. Dibujar columna única (centrada, más ancha)
+        single_x_start = PADDING + 100
+        single_x_end = IMG_WIDTH - PADDING - 100
+        
+        draw_single_source_column(
+            draw,
+            source_data,
+            source,
+            single_x_start,
+            single_x_end,
+            y_content,
+            fonts,
+        )
+        
+        # 7. Dibujar marca de agua
+        draw_watermark(draw, IMG_WIDTH, IMG_HEIGHT, fonts)
+        
+        # 8. Dibujar footer
+        draw_footer(draw, IMG_WIDTH, IMG_HEIGHT, data, fonts)
+        
+        # 9. Guardar como PNG optimizado
+        buffer = io.BytesIO()
+        img.save(buffer, format="PNG", optimize=True, compress_level=6)
+        buffer.seek(0)
+        
+        logger.info(f"✅ Imagen {source.upper()} generada: {IMG_WIDTH}x{IMG_HEIGHT}px")
+        return buffer
+        
+    except Exception as e:
+        logger.error(f"❌ Error generando imagen {source.upper()}: {e}", exc_info=True)
+        return None
+
+
+async def generate_image(
+    data: Dict[str, Any],
+    image_type: str = "tasalo",
+) -> Optional[io.BytesIO]:
+    """Generar imagen con tasas de cambio.
+
+    Args:
+        data: Datos de la API (campo 'data' del response)
+        image_type: Tipo de imagen ("tasalo", "eltoque", "bcc", "cadeca")
+
+    Returns:
+        BytesIO con PNG optimizado, o None si hay error
+    """
+    if image_type == "tasalo":
+        return await generate_tasalo_image(data)
+    elif image_type in ("eltoque", "bcc", "cadeca"):
+        return await generate_single_source_image(data, image_type)
+    else:
+        logger.error(f"❌ Tipo de imagen desconocido: {image_type}")
+        return None
+
+
+def generate_image_sync(data: Dict[str, Any], image_type: str = "tasalo") -> Optional[io.BytesIO]:
     """Versión síncrona para testing.
-    
+
     Args:
         data: Datos de la API
-        
+        image_type: Tipo de imagen
+
     Returns:
         BytesIO con la imagen
     """
@@ -566,7 +1054,7 @@ def generate_image_sync(data: Dict[str, Any]) -> Optional[io.BytesIO]:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
     
-    return loop.run_until_complete(generate_image(data))
+    return loop.run_until_complete(generate_image(data, image_type))
 
 
 # =============================================================================
@@ -577,32 +1065,68 @@ if __name__ == "__main__":
     # Datos de prueba
     test_data = {
         "eltoque": {
-            "USD": {"rate": 385.50, "change": "up", "change_value": 2.50},
-            "EUR": {"rate": 415.20, "change": "down", "change_value": -1.80},
-            "MLC": {"rate": 390.00, "change": None, "change_value": 0},
-            "USDT": {"rate": 388.00, "change": "up", "change_value": 1.20},
-            "BTC": {"rate": 28500000, "change": "up", "change_value": 500000},
-        },
-        "cadeca": {
-            "USD": {"buy": 122.00, "sell": 128.00},
-            "EUR": {"buy": 132.50, "sell": 138.50},
+            "EUR": {"rate": 580.00, "change": "up", "prev_rate": 575.00},
+            "USD": {"rate": 515.00, "change": "up", "prev_rate": 512.00},
+            "MLC": {"rate": 420.00, "change": None, "prev_rate": 420.00},
+            "BTC": {"rate": 52000000, "change": "up", "prev_rate": 51500000},
+            "TRX": {"rate": 185.00, "change": "down", "prev_rate": 190.00},
+            "USDT": {"rate": 560.00, "change": "up", "prev_rate": 558.00},
         },
         "bcc": {
-            "USD": {"rate": 122.00},
-            "EUR": {"rate": 132.50},
+            "EUR": {"rate": 551.23, "change": "up", "prev_rate": 548.00},
+            "USD": {"rate": 478.00, "change": None, "prev_rate": 478.00},
+            "CAD": {"rate": 348.17, "change": "down", "prev_rate": 352.00},
+        },
+        "cadeca": {
+            "EUR": {"buy": 531.94, "sell": 584.30},
+            "USD": {"buy": 461.27, "sell": 506.68},
         },
         "updated_at": datetime.now().isoformat(),
     }
     
     logging.basicConfig(level=logging.INFO)
     
-    print("🧪 Generando imagen de prueba...")
-    result = generate_image_sync(test_data)
+    print("🎨 Generando imágenes de prueba...")
     
-    if result:
-        output_path = "test_output.jpg"
-        with open(output_path, "wb") as f:
-            f.write(result.read())
-        print(f"✅ Imagen guardada en: {output_path}")
+    # Probar imagen triple TASALO
+    print("\n📊 Generando imagen TASALO (tabla triple)...")
+    img_tasalo = generate_image_sync(test_data, image_type="tasalo")
+    if img_tasalo:
+        with open("test_tasalo.png", "wb") as f:
+            f.write(img_tasalo.read())
+        print("✅ test_tasalo.png generada")
     else:
-        print("❌ Error generando imagen")
+        print("❌ Error generando test_tasalo.png")
+    
+    # Probar imagen individual ElToque
+    print("\n🏠 Generando imagen ElToque...")
+    img_eltoque = generate_image_sync(test_data, image_type="eltoque")
+    if img_eltoque:
+        with open("test_eltoque.png", "wb") as f:
+            f.write(img_eltoque.read())
+        print("✅ test_eltoque.png generada")
+    else:
+        print("❌ Error generando test_eltoque.png")
+    
+    # Probar imagen individual BCC
+    print("\n🏛 Generando imagen BCC...")
+    img_bcc = generate_image_sync(test_data, image_type="bcc")
+    if img_bcc:
+        with open("test_bcc.png", "wb") as f:
+            f.write(img_bcc.read())
+        print("✅ test_bcc.png generada")
+    else:
+        print("❌ Error generando test_bcc.png")
+    
+    # Probar imagen individual CADECA
+    print("\n🏢 Generando imagen CADECA...")
+    img_cadeca = generate_image_sync(test_data, image_type="cadeca")
+    if img_cadeca:
+        with open("test_cadeca.png", "wb") as f:
+            f.write(img_cadeca.read())
+        print("✅ test_cadeca.png generada")
+    else:
+        print("❌ Error generando test_cadeca.png")
+    
+    print("\n🎨 Pruebas completadas")
+    print("📁 Archivos generados: test_tasalo.png, test_eltoque.png, test_bcc.png, test_cadeca.png")

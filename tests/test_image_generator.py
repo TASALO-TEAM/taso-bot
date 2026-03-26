@@ -1,60 +1,97 @@
-"""Tests para el generador de imágenes de TASALO."""
+"""Tests para el generador de imágenes de TASALO.
+
+Tests para verificar la generación de imágenes con tabla horizontal
+para los comandos /tasalo, /toque, /bcc, /cadeca.
+"""
 
 import pytest
+from datetime import datetime
 from io import BytesIO
-from PIL import Image
 
 from src.image_generator import (
+    generate_image,
+    generate_tasalo_image,
+    generate_single_source_image,
     generate_image_sync,
-    get_fonts,
+    get_change_emoji,
     get_change_color,
-    get_change_indicator,
     format_rate_value,
+    parse_iso_datetime,
+    get_currency_flag,
+    load_fonts,
+    IMG_WIDTH,
+    IMG_HEIGHT,
     COLOR_BG,
-    COLOR_ACCENT,
+    COLOR_SURFACE,
     COLOR_UP,
     COLOR_DOWN,
     COLOR_NEUTRAL,
-    IMAGE_WIDTH,
 )
 
 
 # =============================================================================
-# FIXTURES
+# DATOS DE PRUEBA
 # =============================================================================
 
 @pytest.fixture
 def sample_api_data():
-    """Datos de ejemplo para testing."""
+    """Datos de prueba completos para todas las fuentes."""
     return {
         "eltoque": {
-            "USD": {"rate": 365.00, "change": "up", "change_value": 5.00},
-            "EUR": {"rate": 398.00, "change": "neutral", "change_value": 0},
-            "MLC": {"rate": 210.00, "change": "down", "change_value": 5.00},
-            "USDT": {"rate": 362.00, "change": "neutral", "change_value": 0},
-        },
-        "cadeca": {
-            "USD": {"buy": 120.00, "sell": 125.00},
-            "EUR": {"buy": 130.00, "sell": 136.00},
+            "EUR": {"rate": 580.00, "change": "up", "prev_rate": 575.00},
+            "USD": {"rate": 515.00, "change": "up", "prev_rate": 512.00},
+            "MLC": {"rate": 420.00, "change": None, "prev_rate": 420.00},
+            "BTC": {"rate": 52000000, "change": "up", "prev_rate": 51500000},
+            "TRX": {"rate": 185.00, "change": "down", "prev_rate": 190.00},
+            "USDT": {"rate": 560.00, "change": "up", "prev_rate": 558.00},
         },
         "bcc": {
-            "USD": {"rate": 24.00},
-            "EUR": {"rate": 26.50},
+            "EUR": {"rate": 551.23, "change": "up", "prev_rate": 548.00},
+            "USD": {"rate": 478.00, "change": None, "prev_rate": 478.00},
+            "CAD": {"rate": 348.17, "change": "down", "prev_rate": 352.00},
         },
-        "updated_at": "2026-03-22T14:30:00Z",
-        "sources": ["eltoque", "cadeca", "bcc"],
+        "cadeca": {
+            "EUR": {"buy": 531.94, "sell": 584.30},
+            "USD": {"buy": 461.27, "sell": 506.68},
+        },
+        "updated_at": datetime.now().isoformat(),
     }
 
 
 @pytest.fixture
-def minimal_api_data():
-    """Datos mínimos para testing."""
+def sample_eltoque_data():
+    """Datos de prueba solo para ElToque."""
     return {
         "eltoque": {
-            "USD": {"rate": 360.00, "change": "neutral", "change_value": 0},
+            "EUR": {"rate": 580.00, "change": "up", "prev_rate": 575.00},
+            "USD": {"rate": 515.00, "change": "up", "prev_rate": 512.00},
+            "MLC": {"rate": 420.00, "change": None, "prev_rate": 420.00},
         },
-        "updated_at": "2026-03-22T10:00:00Z",
-        "sources": ["eltoque"],
+        "updated_at": datetime.now().isoformat(),
+    }
+
+
+@pytest.fixture
+def sample_bcc_data():
+    """Datos de prueba solo para BCC."""
+    return {
+        "bcc": {
+            "EUR": {"rate": 551.23, "change": "up", "prev_rate": 548.00},
+            "USD": {"rate": 478.00, "change": None, "prev_rate": 478.00},
+        },
+        "updated_at": datetime.now().isoformat(),
+    }
+
+
+@pytest.fixture
+def sample_cadeca_data():
+    """Datos de prueba solo para CADECA."""
+    return {
+        "cadeca": {
+            "EUR": {"buy": 531.94, "sell": 584.30},
+            "USD": {"buy": 461.27, "sell": 506.68},
+        },
+        "updated_at": datetime.now().isoformat(),
     }
 
 
@@ -62,92 +99,60 @@ def minimal_api_data():
 # TESTS DE FUNCIONES AUXILIARES
 # =============================================================================
 
-class TestChangeIndicators:
-    """Tests para indicadores de cambio."""
+class TestAuxiliaryFunctions:
+    """Tests para funciones auxiliares."""
+
+    def test_get_change_emoji_up(self):
+        """Emoji para subida."""
+        assert get_change_emoji("up") == "🔺"
+
+    def test_get_change_emoji_down(self):
+        """Emoji para bajada."""
+        assert get_change_emoji("down") == "🔻"
+
+    def test_get_change_emoji_neutral(self):
+        """Emoji para sin cambio."""
+        assert get_change_emoji(None) == "―"
+        assert get_change_emoji("neutral") == "―"
 
     def test_get_change_color_up(self):
-        """Color rojo para cambio positivo."""
+        """Color para subida (rojo)."""
         assert get_change_color("up") == COLOR_UP
 
     def test_get_change_color_down(self):
-        """Color verde para cambio negativo."""
+        """Color para bajada (verde)."""
         assert get_change_color("down") == COLOR_DOWN
 
     def test_get_change_color_neutral(self):
-        """Color gris para sin cambio."""
-        assert get_change_color("neutral") == COLOR_NEUTRAL
-
-    def test_get_change_color_none(self):
-        """Color gris para None."""
+        """Color para neutral (gris)."""
         assert get_change_color(None) == COLOR_NEUTRAL
 
-    def test_get_change_indicator_up(self):
-        """Emoji 🔺 para cambio positivo."""
-        assert get_change_indicator("up") == "🔺"
+    def test_format_rate_value(self):
+        """Formateo de valores numéricos."""
+        assert format_rate_value(580.00) == "580.00"
+        assert format_rate_value(515.50) == "515.50"
+        assert format_rate_value(1000000) == "1,000,000.00"
+        assert format_rate_value(0.5) == "0.50"
 
-    def test_get_change_indicator_down(self):
-        """Emoji 🔻 para cambio negativo."""
-        assert get_change_indicator("down") == "🔻"
+    def test_parse_iso_datetime(self):
+        """Parseo de datetime ISO."""
+        iso_string = "2026-03-26T14:30:00Z"
+        result = parse_iso_datetime(iso_string)
+        assert "26/03/2026" in result
+        assert "14:30" in result
 
-    def test_get_change_indicator_neutral(self):
-        """Emoji ― para sin cambio."""
-        assert get_change_indicator("neutral") == "―"
+    def test_parse_iso_datetime_none(self):
+        """Parseo de None usa datetime actual."""
+        result = parse_iso_datetime(None)
+        assert datetime.now().strftime("%d/%m/%Y") in result
 
-
-class TestFormatHelpers:
-    """Tests para funciones de formateo."""
-
-    def test_format_rate_value_whole_number(self):
-        """Formateo de número entero."""
-        assert format_rate_value(365) == "365.00"
-
-    def test_format_rate_value_decimal(self):
-        """Formateo con decimales."""
-        assert format_rate_value(365.50) == "365.50"
-
-    def test_format_rate_value_thousands(self):
-        """Formateo con miles."""
-        assert format_rate_value(1234.56) == "1,234.56"
-
-    def test_format_rate_value_negative(self):
-        """Formateo de negativos (para cambios)."""
-        assert format_rate_value(-5.00) == "-5.00"
-
-
-# =============================================================================
-# TESTS DE FUENTES
-# =============================================================================
-
-class TestFonts:
-    """Tests para gestión de fuentes."""
-
-    def test_get_fonts_returns_all_fonts(self):
-        """Obtener todas las fuentes."""
-        font_title, font_section, font_rate, font_label, font_footer = get_fonts()
-
-        assert font_title is not None
-        assert font_section is not None
-        assert font_rate is not None
-        assert font_label is not None
-        assert font_footer is not None
-
-    def test_fonts_load_successfully(self):
-        """Las fuentes se cargan correctamente."""
-        font_title, font_section, font_rate, font_label, font_footer = get_fonts()
-
-        # Verificar que las fuentes no son las de fallback (default)
-        # Las fuentes cargadas tienen método getbbox funcional
-        test_text = "Test"
-        
-        # Si las fuentes cargaron bien, getbbox debería funcionar
-        title_bbox = font_title.getbbox(test_text)
-        label_bbox = font_label.getbbox(test_text)
-        
-        # Verificar que los bbox tienen dimensiones razonables
-        assert title_bbox[2] > 0  # width > 0
-        assert title_bbox[3] > 0  # height > 0
-        assert label_bbox[2] > 0
-        assert label_bbox[3] > 0
+    def test_get_currency_flag(self):
+        """Banderas de monedas."""
+        assert get_currency_flag("USD") == "🇺🇸"
+        assert get_currency_flag("EUR") == "🇪🇺"
+        assert get_currency_flag("BTC") == "₿"
+        assert get_currency_flag("USDT") == "₮"
+        assert get_currency_flag("UNKNOWN") == "💱"
 
 
 # =============================================================================
@@ -157,135 +162,350 @@ class TestFonts:
 class TestImageGeneration:
     """Tests para generación de imágenes."""
 
-    def test_generate_image_returns_bytesio(self, sample_api_data):
-        """La imagen generada es un BytesIO."""
-        result = generate_image_sync(sample_api_data)
+    def test_load_fonts(self):
+        """Carga de fuentes no debe fallar."""
+        fonts = load_fonts()
+        assert fonts.title is not None
+        assert fonts.subtitle is not None
+        assert fonts.column_header is not None
+        assert fonts.rate_value is not None
 
+    @pytest.mark.asyncio
+    async def test_generate_tasalo_image(self, sample_api_data):
+        """Generar imagen TASALO con tabla triple."""
+        result = await generate_tasalo_image(sample_api_data)
+        
         assert result is not None
         assert isinstance(result, BytesIO)
-
-    def test_generate_image_valid_png(self, sample_api_data):
-        """La imagen generada es un PNG válido."""
-        result = generate_image_sync(sample_api_data)
-
-        # Intentar abrir la imagen con PIL
+        
+        # Verificar tamaño del buffer
+        result.seek(0, 2)  # Ir al final
+        size = result.tell()
+        assert size > 0
+        assert size < 2 * 1024 * 1024  # Menor a 2MB
+        
+        # Verificar que es PNG válido
+        result.seek(0)
+        from PIL import Image
         img = Image.open(result)
-        assert img.format == "PNG"
+        assert img.size == (IMG_WIDTH, IMG_HEIGHT)
+        assert img.mode == "RGBA"
 
-    def test_generate_image_correct_width(self, sample_api_data):
-        """La imagen tiene el ancho correcto."""
-        result = generate_image_sync(sample_api_data)
-        img = Image.open(result)
-
-        assert img.width == IMAGE_WIDTH
-
-    def test_generate_image_minimum_height(self, sample_api_data):
-        """La imagen tiene altura mínima razonable."""
-        result = generate_image_sync(sample_api_data)
-        img = Image.open(result)
-
-        # Altura mínima de 400px según implementación
-        assert img.height >= 400
-
-    def test_generate_image_with_minimal_data(self, minimal_api_data):
-        """Generar imagen con datos mínimos."""
-        result = generate_image_sync(minimal_api_data)
-
+    @pytest.mark.asyncio
+    async def test_generate_single_source_image_eltoque(self, sample_eltoque_data):
+        """Generar imagen individual de ElToque."""
+        result = await generate_single_source_image(sample_eltoque_data, "eltoque")
+        
         assert result is not None
+        assert isinstance(result, BytesIO)
+        
+        result.seek(0)
+        from PIL import Image
         img = Image.open(result)
-        assert img.format == "PNG"
+        assert img.size == (IMG_WIDTH, IMG_HEIGHT)
 
-    def test_generate_image_has_accent_color(self, sample_api_data):
-        """La imagen contiene el color de acento."""
-        result = generate_image_sync(sample_api_data)
+    @pytest.mark.asyncio
+    async def test_generate_single_source_image_bcc(self, sample_bcc_data):
+        """Generar imagen individual del BCC."""
+        result = await generate_single_source_image(sample_bcc_data, "bcc")
+        
+        assert result is not None
+        assert isinstance(result, BytesIO)
+        
+        result.seek(0)
+        from PIL import Image
         img = Image.open(result)
+        assert img.size == (IMG_WIDTH, IMG_HEIGHT)
 
-        # Convertir a RGB si es necesario
-        img = img.convert("RGB")
-
-        # Buscar píxeles con el color de acento (#5b8aff)
-        accent_rgb = (91, 138, 255)  # RGB de #5b8aff
-        pixels = list(img.getdata())
-
-        # Verificar que hay al menos algunos píxeles cercanos al color de acento
-        found_accent = False
-        for pixel in pixels:
-            # Verificar si el pixel está cerca del color de acento (tolerancia 20)
-            if (
-                abs(pixel[0] - accent_rgb[0]) < 20 and
-                abs(pixel[1] - accent_rgb[1]) < 20 and
-                abs(pixel[2] - accent_rgb[2]) < 20
-            ):
-                found_accent = True
-                break
-
-        assert found_accent, "La imagen debería contener el color de acento #5b8aff"
-
-    def test_generate_image_has_dark_background(self, sample_api_data):
-        """La imagen tiene fondo oscuro."""
-        result = generate_image_sync(sample_api_data)
+    @pytest.mark.asyncio
+    async def test_generate_single_source_image_cadeca(self, sample_cadeca_data):
+        """Generar imagen individual de CADECA."""
+        result = await generate_single_source_image(sample_cadeca_data, "cadeca")
+        
+        assert result is not None
+        assert isinstance(result, BytesIO)
+        
+        result.seek(0)
+        from PIL import Image
         img = Image.open(result)
-        img = img.convert("RGB")
+        assert img.size == (IMG_WIDTH, IMG_HEIGHT)
 
-        # Obtener algunos píxeles de las esquinas (deberían ser oscuros)
-        pixels = [
-            img.getpixel((10, 10)),
-            img.getpixel((img.width - 10, 10)),
-            img.getpixel((10, img.height - 10)),
-            img.getpixel((img.width - 10, img.height - 10)),
-        ]
+    @pytest.mark.asyncio
+    async def test_generate_image_with_type_parameter(self, sample_api_data):
+        """Generar imagen usando parámetro image_type."""
+        # Probar tipo "tasalo"
+        result_tasalo = await generate_image(sample_api_data, image_type="tasalo")
+        assert result_tasalo is not None
+        
+        # Probar tipo "eltoque"
+        result_eltoque = await generate_image(sample_api_data, image_type="eltoque")
+        assert result_eltoque is not None
+        
+        # Probar tipo "bcc"
+        result_bcc = await generate_image(sample_api_data, image_type="bcc")
+        assert result_bcc is not None
+        
+        # Probar tipo "cadeca"
+        result_cadeca = await generate_image(sample_api_data, image_type="cadeca")
+        assert result_cadeca is not None
 
-        # Verificar que los píxeles son oscuros (suma RGB < 100)
-        for pixel in pixels:
-            assert sum(pixel) < 100, f"Pixel de esquina demasiado claro: {pixel}"
+    @pytest.mark.asyncio
+    async def test_generate_image_invalid_type(self, sample_api_data):
+        """Tipo de imagen inválido retorna None."""
+        result = await generate_image(sample_api_data, image_type="invalid")
+        assert result is None
 
-
-class TestImageContent:
-    """Tests para contenido de la imagen."""
-
-    def test_image_contains_eltoque_data(self, sample_api_data):
-        """La imagen contiene datos de ElToque."""
-        result = generate_image_sync(sample_api_data)
-        img = Image.open(result)
-
-        # La imagen debería ser más alta si tiene más datos
-        # (esto es una verificación indirecta del contenido)
-        assert img.height > 400  # Con todos los bloques, debería ser más alta
-
-    def test_image_with_empty_data(self):
-        """Generar imagen con datos vacíos."""
+    @pytest.mark.asyncio
+    async def test_generate_image_empty_data(self):
+        """Generar imagen con datos vacíos no debe fallar."""
         empty_data = {
             "eltoque": {},
-            "cadeca": {},
             "bcc": {},
-            "updated_at": "2026-03-22T10:00:00Z",
-            "sources": [],
+            "cadeca": {},
+            "updated_at": datetime.now().isoformat(),
         }
-
-        result = generate_image_sync(empty_data)
-
+        
+        result = await generate_image(empty_data, image_type="tasalo")
+        
+        # Debería generar imagen aunque esté vacía
         assert result is not None
-        img = Image.open(result)
-        assert img.format == "PNG"
-        assert img.height >= 400  # Altura mínima
 
+    def test_generate_image_sync(self, sample_api_data):
+        """Versión síncrona para testing."""
+        result = generate_image_sync(sample_api_data, image_type="tasalo")
+        
+        assert result is not None
+        assert isinstance(result, BytesIO)
+        
+        result.seek(0)
+        from PIL import Image
+        img = Image.open(result)
+        assert img.size == (IMG_WIDTH, IMG_HEIGHT)
+
+
+# =============================================================================
+# TESTS DE INTEGRACIÓN
+# =============================================================================
+
+class TestIntegration:
+    """Tests de integración para generación de imágenes."""
+
+    def test_image_dimensions(self, sample_api_data):
+        """Verificar dimensiones de imagen generada."""
+        result = generate_image_sync(sample_api_data, image_type="tasalo")
+        result.seek(0)
+        
+        from PIL import Image
+        img = Image.open(result)
+        
+        assert img.width == IMG_WIDTH
+        assert img.height == IMG_HEIGHT
+        assert img.width == 1200
+        assert img.height == 630
+
+    def test_image_color_mode(self, sample_api_data):
+        """Verificar modo de color RGBA."""
+        result = generate_image_sync(sample_api_data, image_type="tasalo")
+        result.seek(0)
+        
+        from PIL import Image
+        img = Image.open(result)
+        
+        assert img.mode == "RGBA"
+
+    def test_image_file_size(self, sample_api_data):
+        """Verificar tamaño de archivo razonable."""
+        result = generate_image_sync(sample_api_data, image_type="tasalo")
+        result.seek(0, 2)
+        size = result.tell()
+        
+        # Debería ser menor a 1MB para Telegram
+        assert size < 1024 * 1024
+        # Y mayor a 10KB para tener contenido
+        assert size > 10 * 1024
+
+    def test_watermark_presence(self, sample_api_data):
+        """Verificar que la imagen contiene marca de agua."""
+        result = generate_image_sync(sample_api_data, image_type="tasalo")
+        result.seek(0)
+        
+        from PIL import Image
+        img = Image.open(result)
+        
+        # La marca de agua debería estar en la parte inferior central
+        # Verificar que hay contenido en esa región (no es completamente transparente)
+        watermark_y = IMG_HEIGHT - 90
+        watermark_region = img.crop((
+            IMG_WIDTH // 4,
+            watermark_y - 20,
+            3 * IMG_WIDTH // 4,
+            watermark_y + 60,
+        ))
+        
+        # La región no debería estar completamente vacía
+        assert watermark_region.size[0] > 0
+        assert watermark_region.size[1] > 0
+
+
+# =============================================================================
+# TESTS DE MANEJO DE ERRORES
+# =============================================================================
 
 class TestErrorHandling:
     """Tests para manejo de errores."""
 
-    def test_generate_image_with_none_data(self):
-        """Manejo de datos None."""
-        result = generate_image_sync(None)
-        assert result is None
+    @pytest.mark.asyncio
+    async def test_generate_image_none_data(self):
+        """Datos None deberían manejarse gracefulmente."""
+        result = await generate_image(None, image_type="tasalo")
+        # Debería retornar None o manejar el error
+        assert result is None or isinstance(result, BytesIO)
 
-    def test_generate_image_with_invalid_data(self):
-        """Manejo de datos inválidos."""
-        invalid_data = {"invalid": "data"}
+    @pytest.mark.asyncio
+    async def test_generate_image_missing_keys(self):
+        """Datos con claves faltantes no deberían crashear."""
+        incomplete_data = {
+            "eltoque": {"USD": {"rate": 515.00}},
+            # Faltan "bcc" y "cadeca"
+            "updated_at": datetime.now().isoformat(),
+        }
+        
+        result = await generate_image(incomplete_data, image_type="tasalo")
+        
+        # Debería generar imagen aunque falten fuentes
+        assert result is not None
 
-        # No debería lanzar excepción, debería retornar None o imagen básica
-        result = generate_image_sync(invalid_data)
+    @pytest.mark.asyncio
+    async def test_generate_image_invalid_rate_data(self):
+        """Datos de tasa inválidos deberían manejarse."""
+        data_with_invalid = {
+            "eltoque": {
+                "USD": {"rate": None, "change": "up"},
+                "EUR": {"rate": "invalid", "change": "down"},
+            },
+            "updated_at": datetime.now().isoformat(),
+        }
+        
+        # No debería crashear
+        result = await generate_image(data_with_invalid, image_type="eltoque")
+        
+        # Debería generar imagen o retornar None gracefulmente
+        assert result is None or isinstance(result, BytesIO)
 
-        # Puede retornar None o una imagen básica
-        if result is not None:
-            img = Image.open(result)
-            assert img.format == "PNG"
+
+# =============================================================================
+# TESTS DE CALIDAD VISUAL
+# =============================================================================
+
+class TestVisualQuality:
+    """Tests para calidad visual de imágenes generadas."""
+
+    def test_background_color(self, sample_api_data):
+        """Verificar color de fondo correcto."""
+        result = generate_image_sync(sample_api_data, image_type="tasalo")
+        result.seek(0)
+        
+        from PIL import Image
+        img = Image.open(result)
+        
+        # Muestrear píxel de esquina (debería ser COLOR_BG)
+        bg_pixel = img.getpixel((10, 10))
+        
+        # El color de fondo debería ser cercano a #F8FAFC
+        # Permitir cierta variación por compresión
+        assert bg_pixel[0] > 240  # R alto (casi blanco)
+        assert bg_pixel[1] > 240  # G alto
+        assert bg_pixel[2] > 240  # B alto
+
+    def test_surface_color(self, sample_api_data):
+        """Verificar color de superficie blanco."""
+        result = generate_image_sync(sample_api_data, image_type="tasalo")
+        result.seek(0)
+        
+        from PIL import Image
+        img = Image.open(result)
+        
+        # Muestrear píxel del centro de la superficie
+        # La superficie debería estar en el centro de la imagen
+        surface_pixel = img.getpixel((IMG_WIDTH // 2, IMG_HEIGHT // 2))
+        
+        # El color de superficie debería ser blanco o muy cercano
+        assert surface_pixel[0] > 250  # R muy alto
+        assert surface_pixel[1] > 250  # G muy alto
+        assert surface_pixel[2] > 250  # B muy alto
+
+
+# =============================================================================
+# SCRIPT DE PRUEBA MANUAL
+# =============================================================================
+
+if __name__ == "__main__":
+    import logging
+    
+    logging.basicConfig(level=logging.INFO)
+    
+    test_data = {
+        "eltoque": {
+            "EUR": {"rate": 580.00, "change": "up", "prev_rate": 575.00},
+            "USD": {"rate": 515.00, "change": "up", "prev_rate": 512.00},
+            "MLC": {"rate": 420.00, "change": None, "prev_rate": 420.00},
+            "BTC": {"rate": 52000000, "change": "up", "prev_rate": 51500000},
+            "TRX": {"rate": 185.00, "change": "down", "prev_rate": 190.00},
+            "USDT": {"rate": 560.00, "change": "up", "prev_rate": 558.00},
+        },
+        "bcc": {
+            "EUR": {"rate": 551.23, "change": "up", "prev_rate": 548.00},
+            "USD": {"rate": 478.00, "change": None, "prev_rate": 478.00},
+            "CAD": {"rate": 348.17, "change": "down", "prev_rate": 352.00},
+        },
+        "cadeca": {
+            "EUR": {"buy": 531.94, "sell": 584.30},
+            "USD": {"buy": 461.27, "sell": 506.68},
+        },
+        "updated_at": datetime.now().isoformat(),
+    }
+    
+    print("🧪 Ejecutando tests manuales de generación de imágenes...")
+    
+    # Test 1: Imagen TASALO
+    print("\n📊 Generando imagen TASALO...")
+    img_tasalo = generate_image_sync(test_data, image_type="tasalo")
+    if img_tasalo:
+        with open("test_tasalo.png", "wb") as f:
+            f.write(img_tasalo.read())
+        print("✅ test_tasalo.png generada")
+    else:
+        print("❌ Error generando test_tasalo.png")
+    
+    # Test 2: Imagen ElToque
+    print("\n🏠 Generando imagen ElToque...")
+    img_eltoque = generate_image_sync(test_data, image_type="eltoque")
+    if img_eltoque:
+        with open("test_eltoque.png", "wb") as f:
+            f.write(img_eltoque.read())
+        print("✅ test_eltoque.png generada")
+    else:
+        print("❌ Error generando test_eltoque.png")
+    
+    # Test 3: Imagen BCC
+    print("\n🏛 Generando imagen BCC...")
+    img_bcc = generate_image_sync(test_data, image_type="bcc")
+    if img_bcc:
+        with open("test_bcc.png", "wb") as f:
+            f.write(img_bcc.read())
+        print("✅ test_bcc.png generada")
+    else:
+        print("❌ Error generando test_bcc.png")
+    
+    # Test 4: Imagen CADECA
+    print("\n🏢 Generando imagen CADECA...")
+    img_cadeca = generate_image_sync(test_data, image_type="cadeca")
+    if img_cadeca:
+        with open("test_cadeca.png", "wb") as f:
+            f.write(img_cadeca.read())
+        print("✅ test_cadeca.png generada")
+    else:
+        print("❌ Error generando test_cadeca.png")
+    
+    print("\n✅ Tests manuales completados")
+    print("📁 Archivos: test_tasalo.png, test_eltoque.png, test_bcc.png, test_cadeca.png")

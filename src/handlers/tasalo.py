@@ -8,7 +8,7 @@ import asyncio
 import logging
 from typing import Optional
 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
 from telegram.ext import ContextTypes
 
 from src.api_client import TasaloApiClient
@@ -67,10 +67,10 @@ async def send_tasalo_response(
     # Formatear texto (siempre se necesita)
     text = build_full_message(api_data)
 
-    # Generar imagen en paralelo con timeout
+    # Generar imagen en paralelo con timeout (usar tipo "tasalo" para tabla triple)
     try:
         image_bytes = await asyncio.wait_for(
-            generate_image(api_data),
+            generate_image(api_data, image_type="tasalo"),
             timeout=IMAGE_GENERATION_TIMEOUT,
         )
     except asyncio.TimeoutError:
@@ -533,11 +533,43 @@ async def _handle_source_command(
         text = build_message_func(api_data)
         keyboard = _build_source_refresh_keyboard(source)
 
-        await loading_msg.edit_text(
-            text=text,
-            reply_markup=keyboard,
-            parse_mode="Markdown",
-        )
+        # Generar imagen para la fuente específica con timeout
+        image_type_map = {
+            "toque": "eltoque",
+            "bcc": "bcc",
+            "cadeca": "cadeca",
+        }
+        image_type = image_type_map.get(source, source)
+        
+        try:
+            image_bytes = await asyncio.wait_for(
+                generate_image(api_data, image_type=image_type),
+                timeout=IMAGE_GENERATION_TIMEOUT,
+            )
+        except asyncio.TimeoutError:
+            logger.warning(f"⚠️ Image generation timed out for /{source}, sending text only")
+            image_bytes = None
+        except Exception as e:
+            logger.error(f"❌ Error generando imagen para /{source}: {e}", exc_info=True)
+            image_bytes = None
+
+        # Enviar respuesta con o sin imagen
+        if image_bytes:
+            await loading_msg.edit_media(
+                media=telegram.InputMediaPhoto(
+                    media=image_bytes,
+                    caption=text,
+                    parse_mode="Markdown",
+                ),
+                reply_markup=keyboard,
+            )
+        else:
+            await loading_msg.edit_text(
+                text=text,
+                reply_markup=keyboard,
+                parse_mode="Markdown",
+            )
+        
         logger.info(f"✅ Comando /{source} ejecutado correctamente")
 
     except Exception as e:
