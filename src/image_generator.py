@@ -848,41 +848,34 @@ def draw_single_source_card(
         "bcc": ("🏛 BANCO CENTRAL", "BCC"),
         "cadeca": ("🏢 CADECA", "Exchange"),
     }
-    
+
     title, subtitle = source_titles.get(source, ("📊 TASALO", "TASALO"))
-    
+
     # Dibujar header personalizado
     y = PADDING
-    
+
     # Título principal
     draw.text((PADDING, y), title, fill=COLOR_TEXT_PRIMARY, font=fonts.title)
     y += int(H * FONT_SCALE["title"]) + 10
-    
+
     # Subtítulo con fecha
     date_str = datetime.now().strftime("%d/%m/%Y · Cuba")
     subtitle_text = f"{subtitle} · {date_str}"
     draw.text((PADDING, y), subtitle_text, fill=COLOR_TEXT_SECONDARY, font=fonts.subtitle)
-    
+
     y_content = y + int(H * FONT_SCALE["subtitle"]) + 40
     y_content = max(y_content, 120)
-    
-    # Dibujar superficie glass (tarjeta centrada)
-    card_rect = (
-        CARD_X_START,
-        y_content,
-        CARD_X_END,
-        H - 120,  # Antes del footer
-    )
-    
-    # Fondo glass con border
-    draw_rounded_rectangle(draw, card_rect, radius=16, fill=COLOR_SURFACE)
-    draw_rounded_rectangle(draw, card_rect, radius=16, outline=COLOR_SURFACE_BORDER, width=1)
-    
-    # Contenido de la tarjeta
+
+    # NO dibujar superficie glass - los datos van directo sobre fondo oscuro
+    # Solo dibujar línea separadora después del header
+    draw.line((CARD_X_START, y_content - 10, CARD_X_END, y_content - 10), 
+              fill=COLOR_SURFACE_BORDER, width=2)
+
+    # Contenido - dibujar directo sobre fondo oscuro
     inner_y = y_content + 20
     inner_x_start = CARD_X_START + 20
     inner_x_end = CARD_X_END - 20
-    
+
     # Dibujar columna según fuente
     if source == "eltoque":
         draw_eltoque_column(draw, data.get("eltoque", {}), inner_x_start, inner_x_end, inner_y, fonts)
@@ -998,15 +991,10 @@ async def generate_tasalo_image(data: Dict[str, Any]) -> Optional[io.BytesIO]:
         # 3. Dibujar fondo gradiente
         draw_gradient_background(draw, IMG_WIDTH_HORIZONTAL, IMG_HEIGHT_HORIZONTAL)
 
-        # 4. Dibujar superficie glass principal
-        surface_rect = (
-            PADDING - 10,
-            100,
-            IMG_WIDTH_HORIZONTAL - PADDING + 10,
-            IMG_HEIGHT_HORIZONTAL - 70,
-        )
-        draw_rounded_rectangle(draw, surface_rect, radius=16, fill=COLOR_SURFACE)
-        draw_rounded_rectangle(draw, surface_rect, radius=16, outline=COLOR_SURFACE_BORDER, width=1)
+        # 4. NO dibujar superficie glass - datos van directo sobre fondo oscuro
+        # Solo dibujar líneas separadoras sutiles
+        draw.line((PADDING, 95, IMG_WIDTH_HORIZONTAL - PADDING, 95), 
+                  fill=COLOR_SURFACE_BORDER, width=1)
 
         # 5. Dibujar header
         y_content = draw_header(draw, IMG_WIDTH_HORIZONTAL, IMG_HEIGHT_HORIZONTAL, fonts)
