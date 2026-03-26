@@ -556,7 +556,7 @@ async def _handle_source_command(
         # Enviar respuesta con o sin imagen
         if image_bytes:
             await loading_msg.edit_media(
-                media=telegram.InputMediaPhoto(
+                media=InputMediaPhoto(
                     media=image_bytes,
                     caption=text,
                     parse_mode="Markdown",
