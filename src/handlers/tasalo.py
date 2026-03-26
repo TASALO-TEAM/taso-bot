@@ -83,15 +83,15 @@ async def send_tasalo_response(
     if image_bytes:
         # Enviar con imagen
         if message_id:
-            # Editar mensaje existente con foto (usar context.bot)
-            await context.bot.edit_message_caption(
-                caption=text,
+            # Editar mensaje existente con texto + botones
+            await context.bot.edit_message_text(
+                text=text,
                 chat_id=update.effective_chat.id,
                 message_id=message_id,
                 reply_markup=keyboard,
                 parse_mode="Markdown",
             )
-            # Enviar foto como nuevo mensaje (no se puede editar a foto)
+            # Enviar foto como mensaje separado (no se puede editar texto a foto)
             await context.bot.send_photo(
                 chat_id=update.effective_chat.id,
                 photo=image_bytes,
