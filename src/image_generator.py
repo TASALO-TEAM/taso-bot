@@ -476,43 +476,32 @@ def draw_single_source_card(
     H: int,
     fonts: Fonts,
 ) -> None:
-    """Dibujar tarjeta vertical para fuente individual."""
-    source_titles = {
-        "eltoque": ("MERCADO INFORMAL", "ElToque"),
-        "bcc": ("BANCO CENTRAL", "BCC"),
-        "cadeca": ("CADECA", "Exchange"),
-    }
-
-    title, subtitle = source_titles.get(source, ("TASALO", "TASALO"))
+    """Dibujar tarjeta vertical para fuente individual.
+    
+    Título simplificado: "Tasa El Toque · 26/03/2026 · Cuba"
+    Sin subtítulos redundantes ("ElToque", "Oficial", "Exchange").
+    """
+    # Usar SOURCE_TITLES constante (definida al inicio del archivo)
+    title = SOURCE_TITLES.get(source, source.upper())
+    date_str = datetime.now().strftime("%d/%m/%Y · Cuba")
+    title_text = f"{title} · {date_str}"
 
     # Dibujar header personalizado
     y = PADDING
 
-    # Título principal centrado
-    title_bbox = draw.textbbox((0, 0), title, font=fonts.title)
+    # Título centrado
+    title_bbox = draw.textbbox((0, 0), title_text, font=fonts.title)
     title_width = title_bbox[2] - title_bbox[0]
     title_x = (W - title_width) // 2
 
-    draw.text((title_x, y), title, fill=COLOR_TEXT_PRIMARY, font=fonts.title)
-    y += int(H * FONT_SCALE["title"]) + 10
-
-    # Subtítulo con fecha centrado
-    date_str = datetime.now().strftime("%d/%m/%Y · Cuba")
-    subtitle_text = f"{subtitle} · {date_str}"
-    subtitle_bbox = draw.textbbox((0, 0), subtitle_text, font=fonts.subtitle)
-    subtitle_width = subtitle_bbox[2] - subtitle_bbox[0]
-    subtitle_x = (W - subtitle_width) // 2
-
-    draw.text((subtitle_x, y), subtitle_text, fill=COLOR_TEXT_SECONDARY, font=fonts.subtitle)
-
-    y_content = y + int(H * FONT_SCALE["subtitle"]) + 50
-    y_content = max(y_content, 120)
+    draw.text((title_x, y), title_text, fill=COLOR_TEXT_PRIMARY, font=fonts.title)
+    y += int(H * FONT_SCALE["title"]) + 50
 
     # Línea separadora
-    draw.line((CARD_X_START, y_content - 10, CARD_X_END, y_content - 10), fill=COLOR_ACCENT, width=2)
+    draw.line((CARD_X_START, y - 10, CARD_X_END, y - 10), fill=COLOR_ACCENT, width=2)
 
     # Contenido
-    inner_y = y_content + 30
+    inner_y = y + 20
     inner_x_start = CARD_X_START + 20
     inner_x_end = CARD_X_END - 20
 
