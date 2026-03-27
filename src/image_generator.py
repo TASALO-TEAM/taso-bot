@@ -1,7 +1,7 @@
 """Generador de imágenes v3 para el bot TASALO.
 
 Módulo responsable de generar imágenes visualmente atractivas con las tasas
-de cambio, usando diseño minimalista y limpio.
+de cambio, usando diseño minimalista y limpio sobre plantilla personalizada.
 
 Diseño v3:
 - Contenido simplificado: solo moneda + precio + indicador
@@ -10,7 +10,8 @@ Diseño v3:
 - Footer minimalista: solo "@tasalobot"
 - Color de texto: #EDFFF1 (blanco-azulado)
 - Sin emojis - solo texto limpio
-- Sin dependencia de plantilla - todo generado por código
+- Usa plantilla img.jpg como fondo (data/img.jpg)
+- Manejo de errores robusto con fallback graceful
 
 Inspirado en: plans/2026-03-26-taso-bot-image-redesign-v3.md
 """
@@ -30,6 +31,15 @@ logger = logging.getLogger(__name__)
 
 
 # =============================================================================
+# CONFIGURACIÓN DE PLANTILLA
+# =============================================================================
+
+# Ruta a la plantilla
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+TEMPLATE_PATH = os.path.join(BASE_DIR, "data", "img.jpg")
+
+
+# =============================================================================
 # TASALO DESIGN SYSTEM v3
 # =============================================================================
 
@@ -40,12 +50,6 @@ IMG_WIDTH_VERTICAL = 800      # Para comandos individuales
 IMG_HEIGHT_VERTICAL = 1000    # Ratio 4:5
 PADDING = 60                  # Aumentado de 40px → 60px
 COLUMN_GAP = 40               # Aumentado de 20px → 40px
-
-# Colores (v3 - más limpio)
-COLOR_BG = "#0D0D1A"                    # Fondo más oscuro
-COLOR_BG_GRADIENT_START = "#0D0D1A"     # Gradiente inicio
-COLOR_BG_GRADIENT_MID = "#15152A"       # Gradiente medio
-COLOR_BG_GRADIENT_END = "#0A0A15"       # Gradiente fin
 
 # Texto
 COLOR_TEXT_PRIMARY = "#EDFFF1"          # Blanco-azulado (pedido por usuario)
@@ -241,14 +245,51 @@ def parse_iso_datetime(iso_string: Optional[str]) -> str:
 # FUNCIONES DE DIBUJO
 # =============================================================================
 
+def load_template(image_type: str = "tasalo") -> Optional[Image.Image]:
+    """Cargar plantilla desde archivo.
+    
+    Args:
+        image_type: Tipo de imagen ("tasalo" u otro)
+    
+    Returns:
+        Imagen PIL o None si falla
+    """
+    try:
+        if not os.path.exists(TEMPLATE_PATH):
+            logger.warning(f"⚠️ Plantilla no encontrada: {TEMPLATE_PATH}")
+            return None
+        
+        img = Image.open(TEMPLATE_PATH)
+        
+        # Redimensionar según tipo
+        if image_type == "tasalo":
+            target_size = (IMG_WIDTH_HORIZONTAL, IMG_HEIGHT_HORIZONTAL)
+        else:
+            target_size = (IMG_WIDTH_VERTICAL, IMG_HEIGHT_VERTICAL)
+        
+        # Convertir a RGBA si es necesario
+        if img.mode != "RGBA":
+            img = img.convert("RGBA")
+        
+        # Redimensionar manteniendo aspect ratio
+        img = img.resize(target_size, Image.Resampling.LANCZOS)
+        
+        logger.info(f"✅ Plantilla cargada: {target_size[0]}x{target_size[1]}px")
+        return img
+        
+    except Exception as e:
+        logger.error(f"❌ Error cargando plantilla: {e}", exc_info=True)
+        return None
+
+
 def draw_gradient_background(draw: ImageDraw.ImageDraw, W: int, H: int) -> None:
-    """Dibujar fondo con gradiente oscuro."""
+    """Dibujar fondo con gradiente oscuro (fallback si no hay plantilla)."""
     h1 = H // 3
     h2 = H * 2 // 3
 
-    draw.rectangle((0, 0, W, h1), fill=COLOR_BG_GRADIENT_START)
-    draw.rectangle((0, h1, W, h2), fill=COLOR_BG_GRADIENT_MID)
-    draw.rectangle((0, h2, W, H), fill=COLOR_BG_GRADIENT_END)
+    draw.rectangle((0, 0, W, h1), fill="#0D0D1A")
+    draw.rectangle((0, h1, W, h2), fill="#15152A")
+    draw.rectangle((0, h2, W, H), fill="#0A0A15")
 
 
 def draw_header(draw: ImageDraw.ImageDraw, W: int, H: int, fonts: Fonts) -> int:
@@ -501,17 +542,29 @@ def draw_footer(draw: ImageDraw.ImageDraw, W: int, H: int, fonts: Fonts) -> None
 # =============================================================================
 
 async def generate_tasalo_image(data: Dict[str, Any]) -> Optional[io.BytesIO]:
-    """Generar imagen horizontal con tabla triple (ElToque | BCC | CADECA)."""
+    """Generar imagen horizontal con tabla triple (ElToque | BCC | CADECA).
+    
+    Usa la plantilla img.jpg si está disponible, sino usa fondo gradiente.
+    """
     try:
-        # 1. Crear imagen horizontal
-        img = Image.new("RGBA", (IMG_WIDTH_HORIZONTAL, IMG_HEIGHT_HORIZONTAL), COLOR_BG)
+        # 1. Cargar plantilla o crear fallback
+        template = load_template("tasalo")
+        
+        if template:
+            # Usar plantilla
+            img = template.convert("RGBA")
+        else:
+            # Fallback: crear imagen con fondo gradiente
+            img = Image.new("RGBA", (IMG_WIDTH_HORIZONTAL, IMG_HEIGHT_HORIZONTAL), (13, 13, 26, 255))
+        
         draw = ImageDraw.Draw(img)
 
         # 2. Cargar fuentes
         fonts = load_fonts()
 
-        # 3. Dibujar fondo gradiente
-        draw_gradient_background(draw, IMG_WIDTH_HORIZONTAL, IMG_HEIGHT_HORIZONTAL)
+        # 3. Si no hay plantilla, dibujar fondo gradiente
+        if not template:
+            draw_gradient_background(draw, IMG_WIDTH_HORIZONTAL, IMG_HEIGHT_HORIZONTAL)
 
         # 4. Dibujar header
         y_content = draw_header(draw, IMG_WIDTH_HORIZONTAL, IMG_HEIGHT_HORIZONTAL, fonts)
@@ -561,17 +614,29 @@ async def generate_tasalo_image(data: Dict[str, Any]) -> Optional[io.BytesIO]:
 
 
 async def generate_single_source_image(data: Dict[str, Any], source: str) -> Optional[io.BytesIO]:
-    """Generar imagen vertical individual para una fuente específica."""
+    """Generar imagen vertical individual para una fuente específica.
+    
+    Usa la plantilla img.jpg si está disponible, sino usa fondo gradiente.
+    """
     try:
-        # 1. Crear imagen vertical
-        img = Image.new("RGBA", (IMG_WIDTH_VERTICAL, IMG_HEIGHT_VERTICAL), COLOR_BG)
+        # 1. Cargar plantilla o crear fallback
+        template = load_template(source)
+        
+        if template:
+            # Usar plantilla
+            img = template.convert("RGBA")
+        else:
+            # Fallback: crear imagen con fondo gradiente
+            img = Image.new("RGBA", (IMG_WIDTH_VERTICAL, IMG_HEIGHT_VERTICAL), (13, 13, 26, 255))
+        
         draw = ImageDraw.Draw(img)
 
         # 2. Cargar fuentes
         fonts = load_fonts()
 
-        # 3. Dibujar fondo gradiente
-        draw_gradient_background(draw, IMG_WIDTH_VERTICAL, IMG_HEIGHT_VERTICAL)
+        # 3. Si no hay plantilla, dibujar fondo gradiente
+        if not template:
+            draw_gradient_background(draw, IMG_WIDTH_VERTICAL, IMG_HEIGHT_VERTICAL)
 
         # 4. Dibujar tarjeta vertical
         draw_single_source_card(draw, data, source, IMG_WIDTH_VERTICAL, IMG_HEIGHT_VERTICAL, fonts)
@@ -593,7 +658,15 @@ async def generate_single_source_image(data: Dict[str, Any], source: str) -> Opt
 
 
 async def generate_image(data: Dict[str, Any], image_type: str = "tasalo") -> Optional[io.BytesIO]:
-    """Generar imagen con tasas de cambio."""
+    """Generar imagen con tasas de cambio.
+    
+    Args:
+        data: Datos de la API (campo 'data' del response)
+        image_type: Tipo de imagen ("tasalo", "eltoque", "bcc", "cadeca")
+
+    Returns:
+        BytesIO con PNG optimizado, o None si hay error
+    """
     if image_type == "tasalo":
         return await generate_tasalo_image(data)
     elif image_type in ("eltoque", "bcc", "cadeca"):
@@ -604,7 +677,15 @@ async def generate_image(data: Dict[str, Any], image_type: str = "tasalo") -> Op
 
 
 def generate_image_sync(data: Dict[str, Any], image_type: str = "tasalo") -> Optional[io.BytesIO]:
-    """Versión síncrona para testing."""
+    """Versión síncrona para testing.
+    
+    Args:
+        data: Datos de la API
+        image_type: Tipo de imagen
+
+    Returns:
+        BytesIO con la imagen
+    """
     try:
         loop = asyncio.get_event_loop()
     except RuntimeError:

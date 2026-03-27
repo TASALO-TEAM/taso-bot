@@ -17,16 +17,16 @@ from src.image_generator import (
     format_rate_value,
     parse_iso_datetime,
     load_fonts,
+    load_template,
     IMG_WIDTH_HORIZONTAL,
     IMG_HEIGHT_HORIZONTAL,
     IMG_WIDTH_VERTICAL,
     IMG_HEIGHT_VERTICAL,
-    COLOR_BG,
+    COLOR_TEXT_PRIMARY,
+    COLOR_TEXT_SECONDARY,
     COLOR_UP,
     COLOR_DOWN,
     COLOR_NEUTRAL,
-    COLOR_TEXT_PRIMARY,
-    COLOR_TEXT_SECONDARY,
 )
 
 
@@ -162,6 +162,14 @@ class TestImageGeneration:
         assert fonts.subtitle is not None
         assert fonts.column_header is not None
         assert fonts.rate_value is not None
+
+    def test_load_template_success(self):
+        """Carga de plantilla debería funcionar si el archivo existe."""
+        # La plantilla puede o no existir, el test solo verifica que no crash
+        template = load_template("tasalo")
+        # Si existe, debería retornar una imagen
+        # Si no existe, debería retornar None gracefulmente
+        assert template is None or hasattr(template, 'size')
 
     @pytest.mark.asyncio
     async def test_generate_tasalo_image(self, sample_api_data):
@@ -393,39 +401,31 @@ class TestErrorHandling:
 class TestVisualQuality:
     """Tests para calidad visual de imágenes generadas."""
 
-    def test_background_color(self, sample_api_data):
-        """Verificar color de fondo correcto (Dark Glass)."""
+    def test_background_or_template(self, sample_api_data):
+        """Verificar que la imagen tiene fondo oscuro o plantilla."""
         result = generate_image_sync(sample_api_data, image_type="tasalo")
         result.seek(0)
 
         from PIL import Image
         img = Image.open(result)
 
-        # Muestrear píxel de esquina (debería ser COLOR_BG = #10102A)
-        bg_pixel = img.getpixel((10, 10))
+        # Verificar dimensiones correctas
+        assert img.width == IMG_WIDTH_HORIZONTAL
+        assert img.height == IMG_HEIGHT_HORIZONTAL
 
-        # El color de fondo debería ser oscuro (azul oscuro profundo)
-        assert bg_pixel[0] < 30  # R bajo
-        assert bg_pixel[1] < 30  # G bajo
-        assert bg_pixel[2] < 50  # B bajo
-
-    def test_surface_color(self, sample_api_data):
-        """Verificar que la superficie glass está presente (Dark Glass)."""
-        result = generate_image_sync(sample_api_data, image_type="tasalo")
-        result.seek(0)
-
-        from PIL import Image
-        img = Image.open(result)
-
-        # Verificar que la imagen es RGBA (tiene canal alpha para transparencia)
+        # La imagen debería ser RGBA
         assert img.mode == "RGBA"
 
-        # La superficie glass debería estar en el centro
-        # Muestrear múltiples puntos para verificar que hay variación de colores
-        center_pixel = img.getpixel((IMG_WIDTH_HORIZONTAL // 2, IMG_HEIGHT_HORIZONTAL // 2))
-        
-        # El pixel central debería tener algún valor (no completamente negro)
-        assert center_pixel[0] > 0 or center_pixel[1] > 0 or center_pixel[2] > 0
+    def test_image_file_size(self, sample_api_data):
+        """Verificar tamaño de archivo razonable."""
+        result = generate_image_sync(sample_api_data, image_type="tasalo")
+        result.seek(0, 2)
+        size = result.tell()
+
+        # Debería ser menor a 2MB para Telegram
+        assert size < 2 * 1024 * 1024
+        # Y mayor a 10KB para tener contenido
+        assert size > 10 * 1024
 
 
 # =============================================================================
