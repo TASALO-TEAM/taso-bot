@@ -360,16 +360,16 @@ def draw_currency_column(
     draw.line((x_start, y, x_end, y), fill=COLOR_ACCENT, width=2)
     y += 15
 
-    # Headers de columnas: "Moneda" (izquierda) y "Tasa" (derecha) - anchor="mm" para centrar verticalmente
+    # Headers de columnas: "Moneda" (izquierda) y "Tasa" (derecha) - alineados con datos, anchor="mm"
     draw.text(
-        (x_start + 20, y),
+        (x_start + 30, y),
         "Moneda",
         fill=COLOR_TEXT_SECONDARY,
         font=fonts.column_header,
         anchor="mm",
     )
     draw.text(
-        (x_end - 20, y),
+        (x_end - 30, y),
         "Tasa",
         fill=COLOR_TEXT_SECONDARY,
         font=fonts.column_header,
@@ -404,9 +404,9 @@ def draw_currency_column(
         key=lambda x: priority.index(x.upper()) if x.upper() in priority else 99,
     )
 
-    # Posiciones
-    currency_x = x_start + 20
-    value_x = x_end - 20
+    # Posiciones - alineadas con headers
+    currency_x = x_start + 30
+    value_x = x_end - 30
 
     # Dibujar filas (máximo 8)
     for currency in sorted_currencies[:8]:
@@ -496,13 +496,13 @@ def draw_cadeca_column(
     col3_width = int(total_width * 0.35)  # Venta
 
     # Posiciones X para cada columna (usando layout proporcional 30/35/35%)
-    # anchor="mm" = texto centrado horizontal y verticalmente
-    # Moneda: sección 30%, comienza al inicio
-    # Compra: sección 35%, centro de la sección
-    # Venta: sección 35%, centro de la sección
-    moneda_x = x_start + 10
+    # Headers más hacia adentro, datos alineados con headers
+    moneda_x = x_start + 40  # Header "Moneda" más hacia adentro
     compra_x = x_start + col1_width + (col2_width // 2)
     venta_x = x_start + col1_width + col2_width + (col3_width // 2)
+
+    # Datos de moneda alineados con header (centrado en moneda_x)
+    data_moneda_x = x_start + 30
 
     # Dibujar headers - anchor="mm" para centrar verticalmente
     draw.text(
@@ -553,9 +553,9 @@ def draw_cadeca_column(
             buy = None
             sell = None
 
-        # Dibujar moneda (izquierda)
+        # Dibujar moneda (izquierda) - alineado con header
         draw.text(
-            (moneda_x, y),
+            (data_moneda_x, y),
             currency.upper(),
             fill=COLOR_TEXT_PRIMARY,
             font=fonts.currency,
