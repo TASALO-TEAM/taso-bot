@@ -492,14 +492,15 @@ def draw_cadeca_column(
     col3_width = int(total_width * 0.35)  # Venta
 
     # Posiciones X para cada columna (usando layout proporcional 30/35/35%)
-    # Moneda: 30% del ancho, starts left
-    # Compra: 35% del ancho, starts after Moneda
-    # Venta: 35% del ancho, starts after Compra
-    moneda_x = x_start + 15
-    compra_x = x_start + col1_width + 15
-    venta_x = x_start + col1_width + col2_width + 15
+    # anchor="lm" = texto crece hacia derecha desde la posición
+    # Moneda: sección 30%, comienza al inicio
+    # Compra: sección 35%, centro de la sección
+    # Venta: sección 35%, centro de la sección
+    moneda_x = x_start + 10
+    compra_x = x_start + col1_width + (col2_width // 2)
+    venta_x = x_start + col1_width + col2_width + (col3_width // 2)
 
-    # Dibujar headers
+    # Dibujar headers - anchor="lm" para alinear con datos
     draw.text(
         (moneda_x, y), "Moneda", fill=COLOR_TEXT_SECONDARY, font=fonts.column_header
     )
@@ -508,14 +509,14 @@ def draw_cadeca_column(
         "Compra",
         fill=COLOR_TEXT_SECONDARY,
         font=fonts.column_header,
-        anchor="rm",
+        anchor="lm",
     )
     draw.text(
         (venta_x, y),
         "Venta",
         fill=COLOR_TEXT_SECONDARY,
         font=fonts.column_header,
-        anchor="rm",
+        anchor="lm",
     )
     y += int(IMG_HEIGHT_VERTICAL * FONT_SCALE["column_header"]) + 10
 
@@ -552,14 +553,14 @@ def draw_cadeca_column(
             font=fonts.currency,
         )
 
-        # Dibujar compra (centro)
+        # Dibujar compra (centro) - anchor="lm" para que creza hacia derecha
         if buy is not None:
             buy_str = format_rate_value(buy)
             draw.text(
                 (compra_x, y),
                 buy_str,
                 fill=COLOR_TEXT_PRIMARY,
-                anchor="rm",
+                anchor="lm",
                 font=fonts.rate_value,
             )
         else:
@@ -567,18 +568,18 @@ def draw_cadeca_column(
                 (compra_x, y),
                 "---",
                 fill=COLOR_TEXT_SECONDARY,
-                anchor="rm",
+                anchor="lm",
                 font=fonts.rate_value,
             )
 
-        # Dibujar venta (derecha)
+        # Dibujar venta (derecha) - anchor="lm" para que creza hacia derecha
         if sell is not None:
             sell_str = format_rate_value(sell)
             draw.text(
                 (venta_x, y),
                 sell_str,
                 fill=COLOR_TEXT_PRIMARY,
-                anchor="rm",
+                anchor="lm",
                 font=fonts.rate_value,
             )
         else:
@@ -586,7 +587,7 @@ def draw_cadeca_column(
                 (venta_x, y),
                 "---",
                 fill=COLOR_TEXT_SECONDARY,
-                anchor="rm",
+                anchor="lm",
                 font=fonts.rate_value,
             )
 
