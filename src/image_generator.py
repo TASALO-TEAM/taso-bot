@@ -98,7 +98,7 @@ FONT_SCALE = {
 # Altura de fila - AUMENTADA
 ROW_HEIGHT = 56  # Aumentado de 48px → 56px
 
-# Encabezados por fuente
+# Encabezados por fuente (solo título principal, sin subtítulos redundantes)
 SOURCE_TITLES = {
     "eltoque": "Tasa El Toque",
     "bcc": "Tasa BCC",
@@ -325,21 +325,31 @@ def draw_currency_column(
     y_start: int,
     fonts: Fonts,
 ) -> int:
-    """Dibujar columna de tasas para una fuente específica."""
+    """Dibujar columna de tasas para una fuente específica (ElToque/BCC).
+    
+    Layout:
+        Tasa El Toque · 26/03/2026 · Cuba
+        ——————————————————————————————
+        Moneda              Tasa
+        ——————————————————————————————
+        EUR              580.00 🔺
+        USD              515.00 🔺
+        ...
+    """
     y = y_start
 
-    # Encabezado centrado en la columna
-    title = SOURCE_TITLES.get(source, source.upper())
-    title_bbox = draw.textbbox((0, 0), title, font=fonts.column_header)
-    title_width = title_bbox[2] - title_bbox[0]
-    title_x = x_start + (x_end - x_start - title_width) // 2
-
-    draw.text((title_x, y), title, fill=COLOR_ACCENT, font=fonts.column_header)
-    y += int(IMG_HEIGHT_VERTICAL * FONT_SCALE["column_header"]) + 20
-
-    # Línea separadora
+    # Línea separadora después del título
     draw.line((x_start, y, x_end, y), fill=COLOR_ACCENT, width=2)
-    y += 20
+    y += 15
+
+    # Headers de columnas: "Moneda" (izquierda) y "Tasa" (derecha)
+    draw.text((x_start + 20, y), "Moneda", fill=COLOR_TEXT_SECONDARY, font=fonts.column_header)
+    draw.text((x_end - 20, y), "Tasa", fill=COLOR_TEXT_SECONDARY, font=fonts.column_header, anchor="rm")
+    y += int(IMG_HEIGHT_VERTICAL * FONT_SCALE["column_header"]) + 10
+
+    # Línea separadora después de headers
+    draw.line((x_start, y, x_end, y), fill=COLOR_ACCENT, width=1)
+    y += 15
 
     # Ordenar monedas por prioridad
     priority = ["EUR", "USD", "MLC", "USDT", "BTC", "TRX", "BNB", "ETH", "CAD", "MXN", "GBP", "CHF", "RUB", "AUD", "JPY"]
@@ -397,31 +407,44 @@ def draw_cadeca_column(
     y_start: int,
     fonts: Fonts,
 ) -> int:
-    """Dibujar columna de CADECA con tasas (buy/sell)."""
+    """Dibujar columna de CADECA con tasas (buy/sell).
+    
+    Layout mejorado con 3 columnas bien espaciadas:
+        Tasa CADECA · 26/03/2026 · Cuba
+        ——————————————————————————————
+        Moneda        Compra       Venta
+        ——————————————————————————————
+        EUR          544.49       566.71
+        USD          470.40       489.60
+        ...
+    """
     y = y_start
 
-    # Encabezado centrado
-    title = SOURCE_TITLES.get("cadeca", "Tasa CADECA")
-    title_bbox = draw.textbbox((0, 0), title, font=fonts.column_header)
-    title_width = title_bbox[2] - title_bbox[0]
-    title_x = x_start + (x_end - x_start - title_width) // 2
-
-    draw.text((title_x, y), title, fill=COLOR_ACCENT, font=fonts.column_header)
-    y += int(IMG_HEIGHT_VERTICAL * FONT_SCALE["column_header"]) + 20
-
-    # Línea separadora
+    # Línea separadora después del título
     draw.line((x_start, y, x_end, y), fill=COLOR_ACCENT, width=2)
-    y += 20
+    y += 15
 
-    # Headers de columnas
-    col_width = (x_end - x_start) // 3
+    # Headers de columnas - mejor espaciados
+    # Columna 1: Moneda (izquierda) - 30% del ancho
+    # Columna 2: Compra (centro) - 35% del ancho  
+    # Columna 3: Venta (derecha) - 35% del ancho
+    total_width = x_end - x_start
+    col1_width = int(total_width * 0.30)  # Moneda
+    col2_width = int(total_width * 0.35)  # Compra
+    col3_width = int(total_width * 0.35)  # Venta
+    
+    # Posiciones X para cada columna
+    moneda_x = x_start + 20
+    compra_x = x_start + col1_width + 10
+    venta_x = x_end - 20
 
-    draw.text((x_start + 20, y), "Moneda", fill=COLOR_TEXT_SECONDARY, font=fonts.column_header)
-    draw.text((x_start + col_width, y), "Compra", fill=COLOR_TEXT_SECONDARY, font=fonts.column_header, anchor="rm")
-    draw.text((x_end - 20, y), "Venta", fill=COLOR_TEXT_SECONDARY, font=fonts.column_header, anchor="rm")
+    # Dibujar headers
+    draw.text((moneda_x, y), "Moneda", fill=COLOR_TEXT_SECONDARY, font=fonts.column_header)
+    draw.text((compra_x, y), "Compra", fill=COLOR_TEXT_SECONDARY, font=fonts.column_header, anchor="rm")
+    draw.text((venta_x, y), "Venta", fill=COLOR_TEXT_SECONDARY, font=fonts.column_header, anchor="rm")
     y += int(IMG_HEIGHT_VERTICAL * FONT_SCALE["column_header"]) + 10
 
-    # Línea separadora
+    # Línea separadora después de headers
     draw.line((x_start, y, x_end, y), fill=COLOR_ACCENT, width=1)
     y += 15
 
@@ -432,8 +455,8 @@ def draw_cadeca_column(
         key=lambda x: priority.index(x.upper()) if x.upper() in priority else 99,
     )
 
-    # Dibujar filas (máximo 6 para CADECA)
-    for currency in sorted_currencies[:6]:
+    # Dibujar filas (máximo 8 para CADECA)
+    for currency in sorted_currencies[:8]:
         if not isinstance(data, dict):
             break
 
@@ -447,21 +470,21 @@ def draw_cadeca_column(
             sell = None
 
         # Dibujar moneda (izquierda)
-        draw.text((x_start + 20, y), currency.upper(), fill=COLOR_TEXT_PRIMARY, font=fonts.currency)
+        draw.text((moneda_x, y), currency.upper(), fill=COLOR_TEXT_PRIMARY, font=fonts.currency)
 
         # Dibujar compra (centro)
         if buy is not None:
             buy_str = format_rate_value(buy)
-            draw.text((x_start + col_width, y), buy_str, fill=COLOR_TEXT_PRIMARY, anchor="rm", font=fonts.rate_value)
+            draw.text((compra_x, y), buy_str, fill=COLOR_TEXT_PRIMARY, anchor="rm", font=fonts.rate_value)
         else:
-            draw.text((x_start + col_width, y), "---", fill=COLOR_TEXT_SECONDARY, anchor="rm", font=fonts.rate_value)
+            draw.text((compra_x, y), "---", fill=COLOR_TEXT_SECONDARY, anchor="rm", font=fonts.rate_value)
 
         # Dibujar venta (derecha)
         if sell is not None:
             sell_str = format_rate_value(sell)
-            draw.text((x_end - 20, y), sell_str, fill=COLOR_TEXT_PRIMARY, anchor="rm", font=fonts.rate_value)
+            draw.text((venta_x, y), sell_str, fill=COLOR_TEXT_PRIMARY, anchor="rm", font=fonts.rate_value)
         else:
-            draw.text((x_end - 20, y), "---", fill=COLOR_TEXT_SECONDARY, anchor="rm", font=fonts.rate_value)
+            draw.text((venta_x, y), "---", fill=COLOR_TEXT_SECONDARY, anchor="rm", font=fonts.rate_value)
 
         y += ROW_HEIGHT
 
@@ -477,14 +500,14 @@ def draw_single_source_card(
     fonts: Fonts,
 ) -> None:
     """Dibujar tarjeta vertical para fuente individual.
-    
+
     Título simplificado: "Tasa El Toque · 26/03/2026 · Cuba"
     Sin subtítulos redundantes ("ElToque", "Oficial", "Exchange").
     """
-    # Usar SOURCE_TITLES constante (definida al inicio del archivo)
-    title = SOURCE_TITLES.get(source, source.upper())
+    # Título simplificado: solo "Tasa <Fuente> · fecha · Cuba"
+    source_title = SOURCE_TITLES.get(source, source.upper())
     date_str = datetime.now().strftime("%d/%m/%Y · Cuba")
-    title_text = f"{title} · {date_str}"
+    title_text = f"{source_title} · {date_str}"
 
     # Dibujar header personalizado
     y = PADDING
@@ -495,10 +518,7 @@ def draw_single_source_card(
     title_x = (W - title_width) // 2
 
     draw.text((title_x, y), title_text, fill=COLOR_TEXT_PRIMARY, font=fonts.title)
-    y += int(H * FONT_SCALE["title"]) + 50
-
-    # Línea separadora
-    draw.line((CARD_X_START, y - 10, CARD_X_END, y - 10), fill=COLOR_ACCENT, width=2)
+    y += int(H * FONT_SCALE["title"]) + 20
 
     # Contenido
     inner_y = y + 20

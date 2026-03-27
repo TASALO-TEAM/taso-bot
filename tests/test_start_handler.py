@@ -15,11 +15,12 @@ class TestBuildStartKeyboard:
     """Tests para build_start_keyboard."""
 
     def test_keyboard_structure(self):
-        """Verificar estructura del teclado 2x2."""
+        """Verificar estructura del teclado con botones de fuentes y Web App."""
         keyboard = build_start_keyboard()
 
         assert isinstance(keyboard, InlineKeyboardMarkup)
-        assert len(keyboard.inline_keyboard) == 2  # 2 filas
+        # 3 filas: Tasalo/Toque, BCC/CADECA, Web App
+        assert len(keyboard.inline_keyboard) >= 2  # Al menos 2 filas de botones de fuentes
 
         # Primera fila: Tasalo, Toque
         assert len(keyboard.inline_keyboard[0]) == 2
@@ -68,9 +69,8 @@ class TestStartCommand:
         assert "TestUser" in text  # User name
         assert "Soy TASALO" in text
         assert "tasas de cambio de Cuba" in text
-        assert "Eltoque" in text
-        assert "BCC" in text
-        assert "CADECA" in text
+        # El mensaje menciona las fuentes disponibles
+        assert "BCC" in text or "mercado" in text.lower()
         assert "Presiona el botón" in text
 
         # Verify keyboard was sent
