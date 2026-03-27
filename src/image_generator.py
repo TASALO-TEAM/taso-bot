@@ -45,23 +45,23 @@ TEMPLATE_PATH = os.path.join(BASE_DIR, "data", "img.jpg")
 
 # Dimensiones
 IMG_WIDTH_HORIZONTAL = 1200  # Para /tasalo
-IMG_HEIGHT_HORIZONTAL = 630   # Ratio 1.91:1
-IMG_WIDTH_VERTICAL = 800      # Para comandos individuales
-IMG_HEIGHT_VERTICAL = 1000    # Ratio 4:5
-PADDING = 60                  # Aumentado de 40px → 60px
-COLUMN_GAP = 40               # Aumentado de 20px → 40px
+IMG_HEIGHT_HORIZONTAL = 630  # Ratio 1.91:1
+IMG_WIDTH_VERTICAL = 800  # Para comandos individuales
+IMG_HEIGHT_VERTICAL = 1000  # Ratio 4:5
+PADDING = 60  # Aumentado de 40px → 60px
+COLUMN_GAP = 40  # Aumentado de 20px → 40px
 
 # Texto
-COLOR_TEXT_PRIMARY = "#EDFFF1"          # Blanco-azulado (pedido por usuario)
-COLOR_TEXT_SECONDARY = "#8A9BA8"        # Gris azulado más oscuro
+COLOR_TEXT_PRIMARY = "#EDFFF1"  # Blanco-azulado (pedido por usuario)
+COLOR_TEXT_SECONDARY = "#8A9BA8"  # Gris azulado más oscuro
 
 # Acentos
-COLOR_ACCENT = "#5B8AFF"                # Azul brillante
+COLOR_ACCENT = "#5B8AFF"  # Azul brillante
 
 # Indicadores
-COLOR_UP = "#FF6B6B"                    # Rojo coral (subida)
-COLOR_DOWN = "#4ECDC4"                  # Turquesa (bajada)
-COLOR_NEUTRAL = "#6C7A89"               # Gris azulado (neutral)
+COLOR_UP = "#FF6B6B"  # Rojo coral (subida)
+COLOR_DOWN = "#4ECDC4"  # Turquesa (bajada)
+COLOR_NEUTRAL = "#6C7A89"  # Gris azulado (neutral)
 
 # Layout de columnas (horizontal)
 COLUMN_WIDTH_HORIZONTAL = (IMG_WIDTH_HORIZONTAL - (PADDING * 2) - (COLUMN_GAP * 2)) // 3
@@ -87,12 +87,12 @@ CARD_X_END = IMG_WIDTH_VERTICAL - PADDING
 
 # Tamaños de fuente (escalados por alto de imagen)
 FONT_SCALE = {
-    "title": 0.036,         # 36px para 1000px
-    "subtitle": 0.020,      # 20px
-    "column_header": 0.032, # 32px Bold (encabezado de fuente)
-    "currency": 0.028,      # 28px
-    "rate_value": 0.032,    # 32px Bold
-    "footer": 0.024,        # 24px (@tasalobot)
+    "title": 0.036,  # 36px para 1000px
+    "subtitle": 0.020,  # 20px
+    "column_header": 0.032,  # 32px Bold (encabezado de fuente)
+    "currency": 0.028,  # 28px
+    "rate_value": 0.032,  # 32px Bold
+    "footer": 0.024,  # 24px (@tasalobot)
 }
 
 # Altura de fila - AUMENTADA
@@ -110,8 +110,10 @@ SOURCE_TITLES = {
 # GESTIÓN DE FUENTES
 # =============================================================================
 
+
 class Fonts(NamedTuple):
     """Colección de fuentes cargadas."""
+
     title: ImageFont.FreeTypeFont
     subtitle: ImageFont.FreeTypeFont
     column_header: ImageFont.FreeTypeFont
@@ -164,7 +166,9 @@ def load_fonts() -> Fonts:
     font_path = get_font_path()
 
     if not font_path:
-        logger.warning("⚠️ No se encontraron fuentes TrueType, usando fuente por defecto")
+        logger.warning(
+            "⚠️ No se encontraron fuentes TrueType, usando fuente por defecto"
+        )
         default_font = ImageFont.load_default()
         return Fonts(
             title=default_font,
@@ -177,12 +181,24 @@ def load_fonts() -> Fonts:
 
     try:
         return Fonts(
-            title=ImageFont.truetype(font_path, int(IMG_HEIGHT_VERTICAL * FONT_SCALE["title"])),
-            subtitle=ImageFont.truetype(font_path, int(IMG_HEIGHT_VERTICAL * FONT_SCALE["subtitle"])),
-            column_header=ImageFont.truetype(font_path, int(IMG_HEIGHT_VERTICAL * FONT_SCALE["column_header"])),
-            currency=ImageFont.truetype(font_path, int(IMG_HEIGHT_VERTICAL * FONT_SCALE["currency"])),
-            rate_value=ImageFont.truetype(font_path, int(IMG_HEIGHT_VERTICAL * FONT_SCALE["rate_value"])),
-            footer=ImageFont.truetype(font_path, int(IMG_HEIGHT_VERTICAL * FONT_SCALE["footer"])),
+            title=ImageFont.truetype(
+                font_path, int(IMG_HEIGHT_VERTICAL * FONT_SCALE["title"])
+            ),
+            subtitle=ImageFont.truetype(
+                font_path, int(IMG_HEIGHT_VERTICAL * FONT_SCALE["subtitle"])
+            ),
+            column_header=ImageFont.truetype(
+                font_path, int(IMG_HEIGHT_VERTICAL * FONT_SCALE["column_header"])
+            ),
+            currency=ImageFont.truetype(
+                font_path, int(IMG_HEIGHT_VERTICAL * FONT_SCALE["currency"])
+            ),
+            rate_value=ImageFont.truetype(
+                font_path, int(IMG_HEIGHT_VERTICAL * FONT_SCALE["rate_value"])
+            ),
+            footer=ImageFont.truetype(
+                font_path, int(IMG_HEIGHT_VERTICAL * FONT_SCALE["footer"])
+            ),
         )
     except OSError as e:
         logger.warning(f"⚠️ Error cargando fuentes: {e}. Usando fuente por defecto.")
@@ -200,6 +216,7 @@ def load_fonts() -> Fonts:
 # =============================================================================
 # FUNCIONES AUXILIARES
 # =============================================================================
+
 
 def get_change_indicator(change: Optional[str]) -> str:
     """Obtener indicador de cambio según la dirección."""
@@ -245,12 +262,13 @@ def parse_iso_datetime(iso_string: Optional[str]) -> str:
 # FUNCIONES DE DIBUJO
 # =============================================================================
 
+
 def load_template(image_type: str = "tasalo") -> Optional[Image.Image]:
     """Cargar plantilla desde archivo.
-    
+
     Args:
         image_type: Tipo de imagen ("tasalo" u otro)
-    
+
     Returns:
         Imagen PIL o None si falla
     """
@@ -258,25 +276,25 @@ def load_template(image_type: str = "tasalo") -> Optional[Image.Image]:
         if not os.path.exists(TEMPLATE_PATH):
             logger.warning(f"⚠️ Plantilla no encontrada: {TEMPLATE_PATH}")
             return None
-        
+
         img = Image.open(TEMPLATE_PATH)
-        
+
         # Redimensionar según tipo
         if image_type == "tasalo":
             target_size = (IMG_WIDTH_HORIZONTAL, IMG_HEIGHT_HORIZONTAL)
         else:
             target_size = (IMG_WIDTH_VERTICAL, IMG_HEIGHT_VERTICAL)
-        
+
         # Convertir a RGBA si es necesario
         if img.mode != "RGBA":
             img = img.convert("RGBA")
-        
+
         # Redimensionar manteniendo aspect ratio
         img = img.resize(target_size, Image.Resampling.LANCZOS)
-        
+
         logger.info(f"✅ Plantilla cargada: {target_size[0]}x{target_size[1]}px")
         return img
-        
+
     except Exception as e:
         logger.error(f"❌ Error cargando plantilla: {e}", exc_info=True)
         return None
@@ -326,7 +344,7 @@ def draw_currency_column(
     fonts: Fonts,
 ) -> int:
     """Dibujar columna de tasas para una fuente específica (ElToque/BCC).
-    
+
     Layout:
         Tasa El Toque · 26/03/2026 · Cuba
         ——————————————————————————————
@@ -343,8 +361,16 @@ def draw_currency_column(
     y += 15
 
     # Headers de columnas: "Moneda" (izquierda) y "Tasa" (derecha)
-    draw.text((x_start + 20, y), "Moneda", fill=COLOR_TEXT_SECONDARY, font=fonts.column_header)
-    draw.text((x_end - 20, y), "Tasa", fill=COLOR_TEXT_SECONDARY, font=fonts.column_header, anchor="rm")
+    draw.text(
+        (x_start + 20, y), "Moneda", fill=COLOR_TEXT_SECONDARY, font=fonts.column_header
+    )
+    draw.text(
+        (x_end - 20, y),
+        "Tasa",
+        fill=COLOR_TEXT_SECONDARY,
+        font=fonts.column_header,
+        anchor="rm",
+    )
     y += int(IMG_HEIGHT_VERTICAL * FONT_SCALE["column_header"]) + 10
 
     # Línea separadora después de headers
@@ -352,7 +378,23 @@ def draw_currency_column(
     y += 15
 
     # Ordenar monedas por prioridad
-    priority = ["EUR", "USD", "MLC", "USDT", "BTC", "TRX", "BNB", "ETH", "CAD", "MXN", "GBP", "CHF", "RUB", "AUD", "JPY"]
+    priority = [
+        "EUR",
+        "USD",
+        "MLC",
+        "USDT",
+        "BTC",
+        "TRX",
+        "BNB",
+        "ETH",
+        "CAD",
+        "MXN",
+        "GBP",
+        "CHF",
+        "RUB",
+        "AUD",
+        "JPY",
+    ]
     sorted_currencies = sorted(
         data.keys() if isinstance(data, dict) else [],
         key=lambda x: priority.index(x.upper()) if x.upper() in priority else 99,
@@ -377,7 +419,12 @@ def draw_currency_column(
             change = None
 
         # Dibujar código de moneda (izquierda)
-        draw.text((currency_x, y), currency.upper(), fill=COLOR_TEXT_PRIMARY, font=fonts.currency)
+        draw.text(
+            (currency_x, y),
+            currency.upper(),
+            fill=COLOR_TEXT_PRIMARY,
+            font=fonts.currency,
+        )
 
         # Dibujar valor + indicador (derecha)
         if rate is not None:
@@ -390,9 +437,20 @@ def draw_currency_column(
             value_width = value_bbox[2] - value_bbox[0]
             value_pos_x = value_x - value_width
 
-            draw.text((value_pos_x, y), value_full, fill=indicator_color, font=fonts.rate_value)
+            draw.text(
+                (value_pos_x, y),
+                value_full,
+                fill=indicator_color,
+                font=fonts.rate_value,
+            )
         else:
-            draw.text((value_x, y), "---", fill=COLOR_TEXT_SECONDARY, anchor="rm", font=fonts.rate_value)
+            draw.text(
+                (value_x, y),
+                "---",
+                fill=COLOR_TEXT_SECONDARY,
+                anchor="rm",
+                font=fonts.rate_value,
+            )
 
         y += ROW_HEIGHT
 
@@ -408,7 +466,7 @@ def draw_cadeca_column(
     fonts: Fonts,
 ) -> int:
     """Dibujar columna de CADECA con tasas (buy/sell).
-    
+
     Layout mejorado con 3 columnas bien espaciadas:
         Tasa CADECA · 26/03/2026 · Cuba
         ——————————————————————————————
@@ -426,22 +484,39 @@ def draw_cadeca_column(
 
     # Headers de columnas - mejor espaciados
     # Columna 1: Moneda (izquierda) - 30% del ancho
-    # Columna 2: Compra (centro) - 35% del ancho  
+    # Columna 2: Compra (centro) - 35% del ancho
     # Columna 3: Venta (derecha) - 35% del ancho
     total_width = x_end - x_start
     col1_width = int(total_width * 0.30)  # Moneda
     col2_width = int(total_width * 0.35)  # Compra
     col3_width = int(total_width * 0.35)  # Venta
-    
-    # Posiciones X para cada columna
-    moneda_x = x_start + 20
-    compra_x = x_start + col1_width + 10
-    venta_x = x_end - 20
+
+    # Posiciones X para cada columna (usando layout proporcional 30/35/35%)
+    # Moneda: 30% del ancho, starts left
+    # Compra: 35% del ancho, starts after Moneda
+    # Venta: 35% del ancho, starts after Compra
+    moneda_x = x_start + 15
+    compra_x = x_start + col1_width + 15
+    venta_x = x_start + col1_width + col2_width + 15
 
     # Dibujar headers
-    draw.text((moneda_x, y), "Moneda", fill=COLOR_TEXT_SECONDARY, font=fonts.column_header)
-    draw.text((compra_x, y), "Compra", fill=COLOR_TEXT_SECONDARY, font=fonts.column_header, anchor="rm")
-    draw.text((venta_x, y), "Venta", fill=COLOR_TEXT_SECONDARY, font=fonts.column_header, anchor="rm")
+    draw.text(
+        (moneda_x, y), "Moneda", fill=COLOR_TEXT_SECONDARY, font=fonts.column_header
+    )
+    draw.text(
+        (compra_x, y),
+        "Compra",
+        fill=COLOR_TEXT_SECONDARY,
+        font=fonts.column_header,
+        anchor="rm",
+    )
+    draw.text(
+        (venta_x, y),
+        "Venta",
+        fill=COLOR_TEXT_SECONDARY,
+        font=fonts.column_header,
+        anchor="rm",
+    )
     y += int(IMG_HEIGHT_VERTICAL * FONT_SCALE["column_header"]) + 10
 
     # Línea separadora después de headers
@@ -470,21 +545,50 @@ def draw_cadeca_column(
             sell = None
 
         # Dibujar moneda (izquierda)
-        draw.text((moneda_x, y), currency.upper(), fill=COLOR_TEXT_PRIMARY, font=fonts.currency)
+        draw.text(
+            (moneda_x, y),
+            currency.upper(),
+            fill=COLOR_TEXT_PRIMARY,
+            font=fonts.currency,
+        )
 
         # Dibujar compra (centro)
         if buy is not None:
             buy_str = format_rate_value(buy)
-            draw.text((compra_x, y), buy_str, fill=COLOR_TEXT_PRIMARY, anchor="rm", font=fonts.rate_value)
+            draw.text(
+                (compra_x, y),
+                buy_str,
+                fill=COLOR_TEXT_PRIMARY,
+                anchor="rm",
+                font=fonts.rate_value,
+            )
         else:
-            draw.text((compra_x, y), "---", fill=COLOR_TEXT_SECONDARY, anchor="rm", font=fonts.rate_value)
+            draw.text(
+                (compra_x, y),
+                "---",
+                fill=COLOR_TEXT_SECONDARY,
+                anchor="rm",
+                font=fonts.rate_value,
+            )
 
         # Dibujar venta (derecha)
         if sell is not None:
             sell_str = format_rate_value(sell)
-            draw.text((venta_x, y), sell_str, fill=COLOR_TEXT_PRIMARY, anchor="rm", font=fonts.rate_value)
+            draw.text(
+                (venta_x, y),
+                sell_str,
+                fill=COLOR_TEXT_PRIMARY,
+                anchor="rm",
+                font=fonts.rate_value,
+            )
         else:
-            draw.text((venta_x, y), "---", fill=COLOR_TEXT_SECONDARY, anchor="rm", font=fonts.rate_value)
+            draw.text(
+                (venta_x, y),
+                "---",
+                fill=COLOR_TEXT_SECONDARY,
+                anchor="rm",
+                font=fonts.rate_value,
+            )
 
         y += ROW_HEIGHT
 
@@ -527,11 +631,23 @@ def draw_single_source_card(
 
     # Dibujar columna según fuente
     if source == "eltoque":
-        draw_currency_column(draw, data.get("eltoque", {}), "eltoque", inner_x_start, inner_x_end, inner_y, fonts)
+        draw_currency_column(
+            draw,
+            data.get("eltoque", {}),
+            "eltoque",
+            inner_x_start,
+            inner_x_end,
+            inner_y,
+            fonts,
+        )
     elif source == "bcc":
-        draw_currency_column(draw, data.get("bcc", {}), "bcc", inner_x_start, inner_x_end, inner_y, fonts)
+        draw_currency_column(
+            draw, data.get("bcc", {}), "bcc", inner_x_start, inner_x_end, inner_y, fonts
+        )
     elif source == "cadeca":
-        draw_cadeca_column(draw, data.get("cadeca", {}), inner_x_start, inner_x_end, inner_y, fonts)
+        draw_cadeca_column(
+            draw, data.get("cadeca", {}), inner_x_start, inner_x_end, inner_y, fonts
+        )
 
 
 def draw_footer(draw: ImageDraw.ImageDraw, W: int, H: int, fonts: Fonts) -> None:
@@ -550,22 +666,25 @@ def draw_footer(draw: ImageDraw.ImageDraw, W: int, H: int, fonts: Fonts) -> None
 # FUNCIONES PRINCIPALES DE GENERACIÓN
 # =============================================================================
 
+
 async def generate_tasalo_image(data: Dict[str, Any]) -> Optional[io.BytesIO]:
     """Generar imagen horizontal con tabla triple (ElToque | BCC | CADECA).
-    
+
     Usa la plantilla img.jpg si está disponible, sino usa fondo gradiente.
     """
     try:
         # 1. Cargar plantilla o crear fallback
         template = load_template("tasalo")
-        
+
         if template:
             # Usar plantilla
             img = template.convert("RGBA")
         else:
             # Fallback: crear imagen con fondo gradiente
-            img = Image.new("RGBA", (IMG_WIDTH_HORIZONTAL, IMG_HEIGHT_HORIZONTAL), (13, 13, 26, 255))
-        
+            img = Image.new(
+                "RGBA", (IMG_WIDTH_HORIZONTAL, IMG_HEIGHT_HORIZONTAL), (13, 13, 26, 255)
+            )
+
         draw = ImageDraw.Draw(img)
 
         # 2. Cargar fuentes
@@ -576,7 +695,9 @@ async def generate_tasalo_image(data: Dict[str, Any]) -> Optional[io.BytesIO]:
             draw_gradient_background(draw, IMG_WIDTH_HORIZONTAL, IMG_HEIGHT_HORIZONTAL)
 
         # 4. Dibujar header
-        y_content = draw_header(draw, IMG_WIDTH_HORIZONTAL, IMG_HEIGHT_HORIZONTAL, fonts)
+        y_content = draw_header(
+            draw, IMG_WIDTH_HORIZONTAL, IMG_HEIGHT_HORIZONTAL, fonts
+        )
         y_content = max(y_content, 120)
 
         # 5. Extraer datos por fuente
@@ -586,24 +707,32 @@ async def generate_tasalo_image(data: Dict[str, Any]) -> Optional[io.BytesIO]:
 
         # 6. Dibujar columnas
         draw_currency_column(
-            draw, eltoque_data, "eltoque",
+            draw,
+            eltoque_data,
+            "eltoque",
             COLUMN_POSITIONS["eltoque"]["start"],
             COLUMN_POSITIONS["eltoque"]["end"],
-            y_content, fonts,
+            y_content,
+            fonts,
         )
 
         draw_currency_column(
-            draw, bcc_data, "bcc",
+            draw,
+            bcc_data,
+            "bcc",
             COLUMN_POSITIONS["bcc"]["start"],
             COLUMN_POSITIONS["bcc"]["end"],
-            y_content, fonts,
+            y_content,
+            fonts,
         )
 
         draw_cadeca_column(
-            draw, cadeca_data,
+            draw,
+            cadeca_data,
             COLUMN_POSITIONS["cadeca"]["start"],
             COLUMN_POSITIONS["cadeca"]["end"],
-            y_content, fonts,
+            y_content,
+            fonts,
         )
 
         # 7. Dibujar footer
@@ -614,7 +743,9 @@ async def generate_tasalo_image(data: Dict[str, Any]) -> Optional[io.BytesIO]:
         img.save(buffer, format="PNG", optimize=True, compress_level=6)
         buffer.seek(0)
 
-        logger.info(f"✅ Imagen TASALO generada: {IMG_WIDTH_HORIZONTAL}x{IMG_HEIGHT_HORIZONTAL}px")
+        logger.info(
+            f"✅ Imagen TASALO generada: {IMG_WIDTH_HORIZONTAL}x{IMG_HEIGHT_HORIZONTAL}px"
+        )
         return buffer
 
     except Exception as e:
@@ -622,22 +753,26 @@ async def generate_tasalo_image(data: Dict[str, Any]) -> Optional[io.BytesIO]:
         return None
 
 
-async def generate_single_source_image(data: Dict[str, Any], source: str) -> Optional[io.BytesIO]:
+async def generate_single_source_image(
+    data: Dict[str, Any], source: str
+) -> Optional[io.BytesIO]:
     """Generar imagen vertical individual para una fuente específica.
-    
+
     Usa la plantilla img.jpg si está disponible, sino usa fondo gradiente.
     """
     try:
         # 1. Cargar plantilla o crear fallback
         template = load_template(source)
-        
+
         if template:
             # Usar plantilla
             img = template.convert("RGBA")
         else:
             # Fallback: crear imagen con fondo gradiente
-            img = Image.new("RGBA", (IMG_WIDTH_VERTICAL, IMG_HEIGHT_VERTICAL), (13, 13, 26, 255))
-        
+            img = Image.new(
+                "RGBA", (IMG_WIDTH_VERTICAL, IMG_HEIGHT_VERTICAL), (13, 13, 26, 255)
+            )
+
         draw = ImageDraw.Draw(img)
 
         # 2. Cargar fuentes
@@ -648,7 +783,9 @@ async def generate_single_source_image(data: Dict[str, Any], source: str) -> Opt
             draw_gradient_background(draw, IMG_WIDTH_VERTICAL, IMG_HEIGHT_VERTICAL)
 
         # 4. Dibujar tarjeta vertical
-        draw_single_source_card(draw, data, source, IMG_WIDTH_VERTICAL, IMG_HEIGHT_VERTICAL, fonts)
+        draw_single_source_card(
+            draw, data, source, IMG_WIDTH_VERTICAL, IMG_HEIGHT_VERTICAL, fonts
+        )
 
         # 5. Dibujar footer
         draw_footer(draw, IMG_WIDTH_VERTICAL, IMG_HEIGHT_VERTICAL, fonts)
@@ -658,7 +795,9 @@ async def generate_single_source_image(data: Dict[str, Any], source: str) -> Opt
         img.save(buffer, format="PNG", optimize=True, compress_level=6)
         buffer.seek(0)
 
-        logger.info(f"✅ Imagen {source.upper()} generada: {IMG_WIDTH_VERTICAL}x{IMG_HEIGHT_VERTICAL}px")
+        logger.info(
+            f"✅ Imagen {source.upper()} generada: {IMG_WIDTH_VERTICAL}x{IMG_HEIGHT_VERTICAL}px"
+        )
         return buffer
 
     except Exception as e:
@@ -666,9 +805,11 @@ async def generate_single_source_image(data: Dict[str, Any], source: str) -> Opt
         return None
 
 
-async def generate_image(data: Dict[str, Any], image_type: str = "tasalo") -> Optional[io.BytesIO]:
+async def generate_image(
+    data: Dict[str, Any], image_type: str = "tasalo"
+) -> Optional[io.BytesIO]:
     """Generar imagen con tasas de cambio.
-    
+
     Args:
         data: Datos de la API (campo 'data' del response)
         image_type: Tipo de imagen ("tasalo", "eltoque", "bcc", "cadeca")
@@ -685,9 +826,11 @@ async def generate_image(data: Dict[str, Any], image_type: str = "tasalo") -> Op
         return None
 
 
-def generate_image_sync(data: Dict[str, Any], image_type: str = "tasalo") -> Optional[io.BytesIO]:
+def generate_image_sync(
+    data: Dict[str, Any], image_type: str = "tasalo"
+) -> Optional[io.BytesIO]:
     """Versión síncrona para testing.
-    
+
     Args:
         data: Datos de la API
         image_type: Tipo de imagen
@@ -775,4 +918,6 @@ if __name__ == "__main__":
         print("❌ Error generando test_cadeca.png")
 
     print("\n🎨 Pruebas completadas")
-    print("📁 Archivos generados: test_tasalo.png, test_eltoque.png, test_bcc.png, test_cadeca.png")
+    print(
+        "📁 Archivos generados: test_tasalo.png, test_eltoque.png, test_bcc.png, test_cadeca.png"
+    )
