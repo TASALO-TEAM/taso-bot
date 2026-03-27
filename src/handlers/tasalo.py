@@ -53,12 +53,10 @@ async def send_tasalo_response(
     api_data: dict,
     message_id: Optional[int] = None,
 ):
-    """Envía la respuesta del comando /tasalo con imagen + texto + botones.
-    
-    Manejo de errores robusto:
-    - Si la imagen falla, envía solo texto
-    - Si el envío de foto falla, reenvía como texto
-    - Timeout de 10s para generación de imagen
+    """Envía la respuesta del comando /tasalo solo con texto y botones.
+
+    Nota: /tasalo no genera imagen porque 3 columnas = información muy comprimida.
+    Para imágenes, usar comandos individuales: /toque, /bcc, /cadeca.
 
     Args:
         update: Update de Telegram
@@ -72,94 +70,25 @@ async def send_tasalo_response(
     # Formatear texto (siempre se necesita)
     text = build_full_message(api_data)
 
-    # Generar imagen con timeout y manejo de errores robusto
-    image_bytes = None
+    # Enviar solo texto (sin generación de imagen)
     try:
-        logger.debug("🎨 Generando imagen...")
-        image_bytes = await asyncio.wait_for(
-            generate_image(api_data, image_type="tasalo"),
-            timeout=IMAGE_GENERATION_TIMEOUT,
-        )
-        if image_bytes:
-            logger.info("✅ Imagen generada exitosamente")
+        if message_id:
+            await context.bot.edit_message_text(
+                text=text,
+                chat_id=update.effective_chat.id,
+                message_id=message_id,
+                reply_markup=keyboard,
+                parse_mode="Markdown",
+            )
         else:
-            logger.warning("⚠️ generate_image retornó None")
-    except asyncio.TimeoutError:
-        logger.warning(f"⚠️ Image generation timed out (>{IMAGE_GENERATION_TIMEOUT}s), sending text only")
+            await update.message.reply_text(
+                text=text,
+                reply_markup=keyboard,
+                parse_mode="Markdown",
+            )
+        logger.info("✅ /tasalo enviado (texto sin imagen)")
     except Exception as e:
-        logger.error(f"❌ Error generando imagen: {type(e).__name__}: {e}", exc_info=True)
-
-    # Enviar respuesta con manejo de errores
-    if image_bytes:
-        try:
-            # Intentar enviar con imagen
-            if message_id:
-                # Editar mensaje existente con texto + botones
-                await context.bot.edit_message_text(
-                    text=text,
-                    chat_id=update.effective_chat.id,
-                    message_id=message_id,
-                    reply_markup=keyboard,
-                    parse_mode="Markdown",
-                )
-                # Enviar foto como mensaje separado
-                await context.bot.send_photo(
-                    chat_id=update.effective_chat.id,
-                    photo=image_bytes,
-                    caption=text,
-                    reply_markup=keyboard,
-                    parse_mode="Markdown",
-                )
-            else:
-                await update.message.reply_photo(
-                    photo=image_bytes,
-                    caption=text,
-                    reply_markup=keyboard,
-                    parse_mode="Markdown",
-                )
-            logger.info("✅ Imagen + texto enviados correctamente")
-            
-        except Exception as send_error:
-            # Fallback si el envío de foto falla
-            logger.error(f"❌ Error enviando foto: {send_error}. Fallback a solo texto.")
-            try:
-                if message_id:
-                    await context.bot.edit_message_text(
-                        text=text,
-                        chat_id=update.effective_chat.id,
-                        message_id=message_id,
-                        reply_markup=keyboard,
-                        parse_mode="Markdown",
-                    )
-                else:
-                    await update.message.reply_text(
-                        text=text,
-                        reply_markup=keyboard,
-                        parse_mode="Markdown",
-                    )
-                logger.info("✅ Texto enviado (fallback por error en envío de foto)")
-            except Exception as fallback_error:
-                logger.error(f"❌ Error enviando fallback de texto: {fallback_error}")
-    else:
-        # Fallback: solo texto
-        try:
-            if message_id:
-                await context.bot.edit_message_text(
-                    text=text,
-                    chat_id=update.effective_chat.id,
-                    message_id=message_id,
-                    reply_markup=keyboard,
-                    parse_mode="Markdown",
-                )
-            else:
-                await update.message.reply_text(
-                    text=text,
-                    reply_markup=keyboard,
-                    parse_mode="Markdown",
-                )
-            logger.info("✅ Texto enviado (fallback sin imagen)")
-        except Exception as text_error:
-            logger.error(f"❌ Error enviando texto: {text_error}")
+        logger.error(f"❌ Error enviando /tasalo: {e}", exc_info=True)
 
 
 async def tasalo_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
