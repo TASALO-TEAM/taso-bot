@@ -360,16 +360,20 @@ def draw_currency_column(
     draw.line((x_start, y, x_end, y), fill=COLOR_ACCENT, width=2)
     y += 15
 
-    # Headers de columnas: "Moneda" (izquierda) y "Tasa" (derecha)
+    # Headers de columnas: "Moneda" (izquierda) y "Tasa" (derecha) - anchor="mm" para centrar verticalmente
     draw.text(
-        (x_start + 20, y), "Moneda", fill=COLOR_TEXT_SECONDARY, font=fonts.column_header
+        (x_start + 20, y),
+        "Moneda",
+        fill=COLOR_TEXT_SECONDARY,
+        font=fonts.column_header,
+        anchor="mm",
     )
     draw.text(
         (x_end - 20, y),
         "Tasa",
         fill=COLOR_TEXT_SECONDARY,
         font=fonts.column_header,
-        anchor="rm",
+        anchor="mm",
     )
     y += int(IMG_HEIGHT_VERTICAL * FONT_SCALE["column_header"]) + 10
 
@@ -448,7 +452,7 @@ def draw_currency_column(
                 (value_x, y),
                 "---",
                 fill=COLOR_TEXT_SECONDARY,
-                anchor="rm",
+                anchor="mm",
                 font=fonts.rate_value,
             )
 
