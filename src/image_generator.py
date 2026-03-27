@@ -362,14 +362,14 @@ def draw_currency_column(
 
     # Headers de columnas: "Moneda" (izquierda) y "Tasa" (derecha) - alineados con datos, anchor="mm"
     draw.text(
-        (x_start + 30, y),
+        (x_start + 50, y),
         "Moneda",
         fill=COLOR_TEXT_SECONDARY,
         font=fonts.column_header,
         anchor="mm",
     )
     draw.text(
-        (x_end - 30, y),
+        (x_end - 50, y),
         "Tasa",
         fill=COLOR_TEXT_SECONDARY,
         font=fonts.column_header,
@@ -405,8 +405,8 @@ def draw_currency_column(
     )
 
     # Posiciones - alineadas con headers
-    currency_x = x_start + 30
-    value_x = x_end - 30
+    currency_x = x_start + 50
+    value_x = x_end - 50
 
     # Dibujar filas (máximo 8)
     for currency in sorted_currencies[:8]:
@@ -496,13 +496,13 @@ def draw_cadeca_column(
     col3_width = int(total_width * 0.35)  # Venta
 
     # Posiciones X para cada columna (usando layout proporcional 30/35/35%)
-    # Headers más hacia adentro, datos alineados con headers
-    moneda_x = x_start + 40  # Header "Moneda" más hacia adentro
+    # Header "Moneda" más hacia adentro, datos alineados
+    moneda_x = x_start + 60  # Header Moneda
     compra_x = x_start + col1_width + (col2_width // 2)
     venta_x = x_start + col1_width + col2_width + (col3_width // 2)
 
-    # Datos de moneda alineados con header (centrado en moneda_x)
-    data_moneda_x = x_start + 30
+    # Datos de moneda alineados (más hacia adentro)
+    data_moneda_x = x_start + 50
 
     # Dibujar headers - anchor="mm" para centrar verticalmente
     draw.text(
