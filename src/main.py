@@ -12,6 +12,8 @@ from telegram.ext import (
     CommandHandler,
     ContextTypes,
     CallbackQueryHandler,
+    MessageHandler,
+    filters,
 )
 
 from src.config import settings
@@ -36,6 +38,22 @@ from src.handlers.admin import (
     refresh_command,
     status_command,
 )
+from src.handlers.toqueimg import (
+    toqueimg_command,
+    toqueimg_refresh_callback,
+)
+from src.handlers.image_alerts import (
+    alert_enable_default_callback,
+    alert_custom_time_callback,
+    alert_disable_callback,
+    alert_change_time_callback,
+    alert_change_format_callback,
+    alert_format_callback,
+    alert_status_callback,
+    alert_cancel_callback,
+    handle_time_input,
+)
+from src.services.daily_image_sender import start_daily_dispatcher, stop_daily_dispatcher
 
 # Configurar logging estructurado
 logging.basicConfig(
@@ -149,6 +167,7 @@ def create_application() -> Application:
     application.add_handler(CommandHandler("toque", toque_command))
     application.add_handler(CommandHandler("bcc", bcc_command))
     application.add_handler(CommandHandler("cadeca", cadeca_command))
+    application.add_handler(CommandHandler("toqueimg", toqueimg_command))
 
     # Registrar callback handlers para botones inline
     application.add_handler(
@@ -172,6 +191,40 @@ def create_application() -> Application:
     # Registrar callback handler para botones del /start
     application.add_handler(
         CallbackQueryHandler(start_button_callback, pattern="^start_(tasalo|toque|bcc|cadeca)$")
+    )
+    
+    # Registrar callbacks para /toqueimg y alertas
+    application.add_handler(
+        CallbackQueryHandler(toqueimg_refresh_callback, pattern="^toqueimg_refresh$")
+    )
+    application.add_handler(
+        CallbackQueryHandler(alert_enable_default_callback, pattern="^alert_enable_default$")
+    )
+    application.add_handler(
+        CallbackQueryHandler(alert_custom_time_callback, pattern="^alert_custom_time$")
+    )
+    application.add_handler(
+        CallbackQueryHandler(alert_disable_callback, pattern="^alert_disable$")
+    )
+    application.add_handler(
+        CallbackQueryHandler(alert_change_time_callback, pattern="^alert_change_time$")
+    )
+    application.add_handler(
+        CallbackQueryHandler(alert_change_format_callback, pattern="^alert_change_format$")
+    )
+    application.add_handler(
+        CallbackQueryHandler(alert_format_callback, pattern="^alert_format_(photo|document)$")
+    )
+    application.add_handler(
+        CallbackQueryHandler(alert_status_callback, pattern="^alert_status$")
+    )
+    application.add_handler(
+        CallbackQueryHandler(alert_cancel_callback, pattern="^alert_cancel$")
+    )
+    
+    # Registrar handler para input de hora (MessageHandler para texto)
+    application.add_handler(
+        MessageHandler(filters.TEXT & ~filters.COMMAND, handle_time_input)
     )
 
     # Registrar error handler global
@@ -203,6 +256,13 @@ async def post_init(application: Application):
             logger.warning("⚠️ Backend connection: API returned None")
     except Exception as e:
         logger.error(f"❌ Backend connection failed: {e}")
+
+    # Iniciar dispatcher de alertas diarias de imágenes
+    try:
+        start_daily_dispatcher(application.bot_data)
+        logger.info("✅ Daily image alert dispatcher started (7:15 AM Cuba / 11:15 UTC)")
+    except Exception as e:
+        logger.error(f"❌ Failed to start daily image dispatcher: {e}")
 
     # Obtener y cachear foto de perfil del bot
     try:
@@ -244,6 +304,9 @@ def main():
 
     # Configurar post_init
     app.post_init = post_init
+    
+    # Configurar shutdown para detener el dispatcher
+    app.post_shutdown = lambda ctx: stop_daily_dispatcher()
 
     # Iniciar polling
     logger.info("📡 Starting polling...")
