@@ -43,14 +43,13 @@ async def fetch_bot_profile_photo(bot: Bot, cache_dir: str = "data") -> Optional
         
         # Descargar foto
         file = await bot.get_file(photo_file.file_id)
-        
-        # Guardar localmente
-        buffer = io.BytesIO()
-        await file.download_to_custom(buffer)
-        buffer.seek(0)
-        
+
+        # Guardar localmente (telegram v21+: download() devuelve bytes)
+        file_bytes = await file.download_as_bytearray()
+        buffer = io.BytesIO(file_bytes)
+
         with open(cache_path, "wb") as f:
-            f.write(buffer.read())
+            f.write(buffer.getvalue())
         
         logger.info(f"✅ Foto de perfil descargada: {cache_path}")
         return cache_path
