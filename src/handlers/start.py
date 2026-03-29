@@ -24,11 +24,12 @@ MINIAPP_URL = "https://tasalo.duckdns.org/miniapp"
 
 
 def build_start_keyboard() -> InlineKeyboardMarkup:
-    """Construye el teclado inline con 4 botones para comandos + Web App.
+    """Construye el teclado inline con 5 botones para comandos + Web App.
 
     Distribución:
         [📊 Tasalo] [📈 Toque]
         [🏛 BCC    ] [🏢 CADECA]
+        [📸 ToqueImg]
         [🌐 Abrir TASALO Web]
 
     Returns:
@@ -42,6 +43,9 @@ def build_start_keyboard() -> InlineKeyboardMarkup:
         [
             InlineKeyboardButton("🏛 BCC", callback_data="start_bcc"),
             InlineKeyboardButton("🏢 CADECA", callback_data="start_cadeca"),
+        ],
+        [
+            InlineKeyboardButton("📸 ToqueImg", callback_data="start_toqueimg"),
         ],
         [
             InlineKeyboardButton("🌐 Abrir TASALO Web", web_app=WebAppInfo(url=MINIAPP_URL)),
@@ -130,11 +134,17 @@ async def start_button_callback(update: Update, context: ContextTypes.DEFAULT_TY
             "toque": build_toque_new_message,
             "bcc": build_bcc_only_message,
             "cadeca": build_cadeca_only_message,
+            "toqueimg": _handle_toqueimg_start,
         }
 
         build_func = build_funcs.get(command)
         if not build_func:
             logger.error(f"❌ Build function no encontrada para {command}")
+            return
+
+        # Manejar toqueimg diferente (envía imagen, no texto)
+        if command == "toqueimg":
+            await build_func(context, query)
             return
 
         # Construir mensaje
@@ -174,3 +184,43 @@ def _build_tasalo_start_message(full_message_func, api_data: dict) -> str:
     # Importar aquí para evitar circular imports
     from src.formatters import build_full_message
     return build_full_message(api_data)
+
+
+async def _handle_toqueimg_start(context: ContextTypes.DEFAULT_TYPE, query):
+    """Maneja el botón ToqueImg del start - reutiliza el handler de toqueimg.
+
+    Args:
+        context: Contexto del bot
+        query: Callback query de Telegram
+    """
+    from src.handlers.toqueimg import toqueimg_command
+    
+    # Crear un update falso para reutilizar el handler de toqueimg
+    # Simplemente redirigimos al usuario al comando /toqueimg
+    await query.answer("📸 Abriendo ToqueImg...")
+    
+    # Enviar mensaje indicando que use /toqueimg
+    await query.message.reply_text(
+        "📸 Para ver la imagen de la tasa diaria, usa el comando:\n\n"
+        "/toqueimg\n\n"
+        "O espera un momento que te la envío ahora..."
+    )
+    
+    # Llamar al handler de toqueimg directamente
+    # Necesitamos crear un update con un mensaje válido
+    fake_update = type('FakeUpdate', (), {
+        'message': type('FakeMessage', (), {
+            'reply_text': lambda self, text: query.message.reply_text(text)
+        })(),
+        'effective_user': query.from_user
+    })()
+    
+    # Mejor enfoque: simplemente ejecutar la lógica de toqueimg
+    from src.handlers.toqueimg import toqueimg_command
+    await toqueimg_command(
+        type('FakeUpdate', (), {
+            'message': query.message,
+            'effective_user': query.from_user
+        })(),
+        context
+    )
