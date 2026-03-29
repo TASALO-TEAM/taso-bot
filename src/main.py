@@ -306,7 +306,11 @@ def main():
     app.post_init = post_init
     
     # Configurar shutdown para detener el dispatcher
-    app.post_shutdown = lambda ctx: stop_daily_dispatcher()
+    async def post_shutdown(app: Application) -> None:
+        """Detener el dispatcher de alertas diarias."""
+        stop_daily_dispatcher()
+    
+    app.post_shutdown = post_shutdown
 
     # Iniciar polling
     logger.info("📡 Starting polling...")

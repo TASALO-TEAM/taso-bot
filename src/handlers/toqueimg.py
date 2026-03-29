@@ -62,12 +62,12 @@ async def toqueimg_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # 5. Construir keyboard interactivo
         keyboard = _build_toqueimg_keyboard(has_alert)
         
-        # 6. Construir caption simple
+        # 6. Construir caption simple (max 1024 chars para Telegram)
         caption = (
             "🇨🇺 *Tasa Diaria El Toque*\n"
             f"📅 {datetime.now().strftime('%d/%m/%Y')}\n\n"
             "Esta es la tasa diaria de El Toque."
-        )
+        )[:1024]  # Telegram caption limit
         
         # 7. Enviar imagen
         with open(image_path, "rb") as f:
