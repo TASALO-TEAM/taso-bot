@@ -8,7 +8,7 @@ from telegram.ext import ContextTypes
 from src.config import get_settings
 
 settings = get_settings()
-API_URL = settings.TASALO_API_URL
+API_URL = settings.tasalo_api_url
 
 
 async def alert_enable_default_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):

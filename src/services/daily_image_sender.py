@@ -12,7 +12,7 @@ from src.config import get_settings
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
-API_URL = settings.TASALO_API_URL
+API_URL = settings.tasalo_api_url
 
 # Global scheduler instance
 scheduler = AsyncIOScheduler()

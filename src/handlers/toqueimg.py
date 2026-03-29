@@ -8,7 +8,7 @@ from telegram.ext import ContextTypes
 from src.config import get_settings
 
 settings = get_settings()
-API_URL = settings.TASALO_API_URL  # http://localhost:8040 or production URL
+API_URL = settings.tasalo_api_url  # https://tasalo.duckdns.org
 
 
 async def toqueimg_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
