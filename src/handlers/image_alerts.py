@@ -65,6 +65,8 @@ async def alert_enable_default_callback(update: Update, context: ContextTypes.DE
                 timeout=5.0
             )
             data = response.json()
+            
+        logger.info(f"Alert API response: {data}")
 
         if data.get("ok"):
             await _safe_edit_message(
@@ -77,10 +79,15 @@ async def alert_enable_default_callback(update: Update, context: ContextTypes.DE
                 ]])
             )
         else:
-            raise Exception("API error")
+            error_msg = data.get("error", "Unknown API error")
+            logger.error(f"API returned ok=False: {error_msg}")
+            raise Exception(f"API error: {error_msg}")
 
+    except httpx.HTTPError as http_err:
+        logger.error(f"HTTP error calling alert API: {http_err}")
+        await _safe_edit_message(query, f"❌ Error de conexión: {str(http_err)}")
     except Exception as e:
-        logger.error(f"Error activating alert: {e}")
+        logger.error(f"Error activating alert: {e}", exc_info=True)
         await _safe_edit_message(query, f"❌ Error: {str(e)}")
 
 

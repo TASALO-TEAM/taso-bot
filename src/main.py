@@ -190,7 +190,7 @@ def create_application() -> Application:
     )
     # Registrar callback handler para botones del /start
     application.add_handler(
-        CallbackQueryHandler(start_button_callback, pattern="^start_(tasalo|toque|bcc|cadeca)$")
+        CallbackQueryHandler(start_button_callback, pattern="^start_(tasalo|toque|bcc|cadeca|toqueimg)$")
     )
     
     # Registrar callbacks para /toqueimg y alertas
