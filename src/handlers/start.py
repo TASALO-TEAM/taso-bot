@@ -195,32 +195,21 @@ async def _handle_toqueimg_start(context: ContextTypes.DEFAULT_TYPE, query):
     """
     from src.handlers.toqueimg import toqueimg_command
     
-    # Crear un update falso para reutilizar el handler de toqueimg
-    # Simplemente redirigimos al usuario al comando /toqueimg
+    # Responder al callback
     await query.answer("📸 Abriendo ToqueImg...")
     
-    # Enviar mensaje indicando que use /toqueimg
-    await query.message.reply_text(
-        "📸 Para ver la imagen de la tasa diaria, usa el comando:\n\n"
-        "/toqueimg\n\n"
-        "O espera un momento que te la envío ahora..."
-    )
+    # Crear un mensaje temporal para pasar al handler
+    # Usamos el mismo chat que el query
+    temp_message = await query.message.reply_text("📸 Capturando imagen...")
     
-    # Llamar al handler de toqueimg directamente
-    # Necesitamos crear un update con un mensaje válido
-    fake_update = type('FakeUpdate', (), {
-        'message': type('FakeMessage', (), {
-            'reply_text': lambda self, text: query.message.reply_text(text)
-        })(),
-        'effective_user': query.from_user
-    })()
+    # Crear update fake con la estructura correcta
+    class FakeUpdate:
+        def __init__(self, message, user):
+            self.message = message
+            self.effective_user = user
+            self.effective_chat = message.chat
     
-    # Mejor enfoque: simplemente ejecutar la lógica de toqueimg
-    from src.handlers.toqueimg import toqueimg_command
-    await toqueimg_command(
-        type('FakeUpdate', (), {
-            'message': query.message,
-            'effective_user': query.from_user
-        })(),
-        context
-    )
+    fake_update = FakeUpdate(temp_message, query.from_user)
+    
+    # Llamar al handler de toqueimg
+    await toqueimg_command(fake_update, context)
