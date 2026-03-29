@@ -1,9 +1,12 @@
 """Handler for /toqueimg command."""
 
 import httpx
+import logging
 from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
 from telegram.ext import ContextTypes
+
+logger = logging.getLogger(__name__)
 
 from src.config import get_settings
 
@@ -67,17 +70,28 @@ async def toqueimg_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "🇨🇺 *Tasa Diaria El Toque*\n"
             f"📅 {datetime.now().strftime('%d/%m/%Y')}\n\n"
             "Esta es la tasa diaria de El Toque."
-        )[:1024]  # Telegram caption limit
+        )
+        
+        # Debug: log caption length
+        logger.debug(f"Caption length: {len(caption)} chars")
         
         # 7. Enviar imagen
-        with open(image_path, "rb") as f:
-            await loading_msg.edit_media(
-                media=InputMediaPhoto(
-                    media=f,
-                    caption=caption,
-                    parse_mode="Markdown"
-                ),
-                reply_markup=InlineKeyboardMarkup(keyboard)
+        try:
+            with open(image_path, "rb") as f:
+                await loading_msg.edit_media(
+                    media=InputMediaPhoto(
+                        media=f,
+                        caption=caption,
+                        parse_mode="Markdown"
+                    ),
+                    reply_markup=InlineKeyboardMarkup(keyboard)
+                )
+        except Exception as media_error:
+            logger.error(f"Failed to edit media: {media_error}")
+            logger.error(f"Caption length: {len(caption)}, Image path: {image_path}")
+            # Fallback: enviar solo texto
+            await loading_msg.edit_text(
+                f"❌ Error al enviar imagen: {str(media_error)}\n\nIntenta de nuevo más tarde."
             )
     
     except Exception as e:
