@@ -3,14 +3,15 @@
 Bot de Telegram para consultar las tasas de cambio de Cuba (ElToque, CADECA, BCC).
 
 ![Estado](https://img.shields.io/badge/estado-completado-success)
-![Versión](https://img.shields.io/badge/versión-0.6.0-blue)
+![Versión](https://img.shields.io/badge/versión-0.9.0-blue)
 ![Python](https://img.shields.io/badge/python-3.12+-blue)
 ![Tests](https://img.shields.io/badge/tests-104%20passing-success)
 
 ## Estado
 
 **Fase 6:** ✅ Hardening y README — **COMPLETADA**
-**Tag:** `v0.6.0-fase6`
+**Feature:** /toqueimg con alertas diarias — **COMPLETADA**
+**Tag:** `v0.6.0-fase6`, `v0.9.0-toqueimg`
 
 ## Features
 
@@ -24,6 +25,10 @@ Bot de Telegram para consultar las tasas de cambio de Cuba (ElToque, CADECA, BCC
 - ✅ Timeouts configurables para todas las operaciones
 - ✅ Error handling global con notificación al usuario
 - ✅ Logging estructurado para debugging y producción
+- ✅ **NUEVO:** Comando `/toqueimg` con imagen de ElToque
+- ✅ **NUEVO:** Alertas diarias configurables (default 7:15 AM)
+- ✅ **NUEVO:** Hora personalizada para alertas
+- ✅ **NUEVO:** Formato configurable (foto/documento)
 
 ## Requisitos del Sistema
 
@@ -118,9 +123,10 @@ python src/main.py
 |---------|-------------|----------------|
 | `/start` | Mensaje de bienvenida | Todos los usuarios |
 | `/tasalo` | Ver tasas de cambio actuales | Todos los usuarios |
+| `/toqueimg` | Ver imagen de ElToque con alertas | Todos los usuarios **NUEVO** |
 | `/health` | Verificar conexión con el backend | Solo administradores |
 | `/refresh` | Forzar refresco inmediato en backend | Solo administradores |
-| `/status` | Ver estado del scheduler | Solo administradores |
+| `/status` | Ver estado del scheduler | Solo administradores | |
 
 ## Botones Inline
 
@@ -131,6 +137,53 @@ Cuando usas `/tasalo`, el bot envía una imagen con botones:
 | 🔄 Actualizar | Refresca datos y actualiza mensaje | `tasalo_refresh` |
 | 🗺 Ver provincias | Muestra tasas por provincia | `tasalo_provincias` |
 | 🔙 Volver | Vuelve a la vista principal | `tasalo_back` |
+
+## Comando /toqueimg 📸
+
+El comando `/toqueimg` muestra la imagen de la tasa diaria de ElToque con opciones para configurar alertas:
+
+### Flujo de Uso
+
+1. **Usuario envía `/toqueimg`**
+   - Bot captura imagen desde taso-api
+   - Muestra imagen con caption y botones
+
+2. **Botones disponibles (sin alerta):**
+   - 🔔 **Activar alerta (7:15 AM)** - Configura alerta default
+   - ⏰ **Elegir hora personalizada** - Usuario elige hora (HH:MM)
+   - 🔄 **Actualizar imagen** - Refresca imagen
+
+3. **Botones disponibles (con alerta activa):**
+   - ✅ **Alerta activa** - Muestra estado actual
+   - ⏰ **Cambiar hora** - Modifica hora de alerta
+   - 📄 **Cambiar formato** - Foto o Documento
+   - ❌ **Desactivar alerta** - Elimina alerta
+   - 🔄 **Actualizar imagen** - Refresca imagen
+
+### Alertas Diarias
+
+- **Hora default:** 7:15 AM (hora Cuba / UTC-4)
+- **Hora personalizada:** Usuario elige formato HH:MM
+- **Formato:** Foto (default) o Documento
+- **Envío automático:** Bot envía imagen a la hora configurada
+- **Gestión:** Activar/desactivar/modificar desde `/toqueimg`
+
+### Ejemplo de Configuración
+
+```
+Usuario: /toqueimg
+Bot: 📸 Capturando imagen...
+Bot: [Imagen con caption y botones]
+
+Usuario: [toca ⏰ Elegir hora personalizada]
+Bot: ⏰ Elegir Hora Personalizada
+     Envíame la hora en formato HH:MM (ej: 08:30, 22:00)
+     La hora es de Cuba (UTC-4).
+
+Usuario: 08:30
+Bot: ✅ Alerta configurada!
+     Recibirás la imagen diaria a las 08:30 (hora Cuba).
+```
 
 ## Testing
 
