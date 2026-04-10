@@ -6,6 +6,7 @@ y comandos de administración.
 
 import asyncio
 import logging
+import time
 from typing import Optional
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
@@ -15,9 +16,11 @@ from src.api_client import TasaloApiClient
 from src.cache import cache
 from src.formatters import (
     build_full_message,
+    build_full_message_with_datetime,
     build_history_message,
     SEPARATOR_THICK,
     parse_iso_datetime,
+    HAS_DATETIME_ENTITY,
     build_eltoque_only_message,
     build_bcc_only_message,
     build_cadeca_only_message,
@@ -63,6 +66,9 @@ async def send_tasalo_response(
 ):
     """Envía la respuesta del comando /tasalo solo con texto y botones.
 
+    Usa Bot API 9.5 DATE_TIME entities (PTB 22.7+) cuando están disponibles
+    para formateo automático del timestamp según la zona horaria del usuario.
+
     Nota: /tasalo no genera imagen porque 3 columnas = información muy comprimida.
     Para imágenes, usar comandos individuales: /toque, /bcc, /cadeca.
 
@@ -75,8 +81,29 @@ async def send_tasalo_response(
     # Construir teclado inline
     keyboard = build_inline_keyboard()
 
-    # Formatear texto (siempre se necesita)
-    text = build_full_message(api_data)
+    # Build message — use DATE_TIME entities if available (Bot API 9.5+)
+    if HAS_DATETIME_ENTITY:
+        # Extract timestamp from API response or use current time
+        updated_at_raw = api_data.get("updated_at")
+        if updated_at_raw:
+            try:
+                # Parse ISO datetime to Unix timestamp
+                from datetime import datetime as _dt
+                iso_str = updated_at_raw.replace("Z", "+00:00")
+                dt = _dt.fromisoformat(iso_str)
+                ts = int(dt.timestamp())
+            except (ValueError, AttributeError):
+                ts = int(time.time())
+        else:
+            ts = int(time.time())
+
+        text, entities = build_full_message_with_datetime(api_data, ts)
+        parse_mode = None  # Must be None when using entities
+    else:
+        # Fallback: standard Markdown
+        text = build_full_message(api_data)
+        entities = None
+        parse_mode = "Markdown"
 
     # Enviar solo texto (sin generación de imagen)
     try:
@@ -86,15 +113,17 @@ async def send_tasalo_response(
                 chat_id=update.effective_chat.id,
                 message_id=message_id,
                 reply_markup=keyboard,
-                parse_mode="Markdown",
+                parse_mode=parse_mode,
+                entities=entities,
             )
         else:
             await update.message.reply_text(
                 text=text,
                 reply_markup=keyboard,
-                parse_mode="Markdown",
+                parse_mode=parse_mode,
+                entities=entities,
             )
-        logger.info("✅ /tasalo enviado (texto sin imagen)")
+        logger.info("✅ /tasalo enviado (texto sin imagen, datetime_entity=%s)", HAS_DATETIME_ENTITY)
     except Exception as e:
         logger.error(f"❌ Error enviando /tasalo: {e}", exc_info=True)
 

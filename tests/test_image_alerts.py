@@ -20,27 +20,31 @@ class TestTimeInputValidation:
                 f"{time_str} should be valid"
     
     def test_invalid_time_formats(self):
-        """Test invalid time formats."""
+        """Test invalid time formats - regex OR range should reject these."""
         invalid_times = [
-            "7:15",    # Single digit hour
-            "07:5",    # Single digit minute
-            "7:5",     # Both single digit
-            "25:00",   # Invalid hour
-            "12:60",   # Invalid minute
-            "abc",     # Letters
-            "",        # Empty
-            "12-30",   # Wrong separator
-            "12:30:00" # Seconds included
+            "7:15",    # Single digit hour - regex rejects
+            "07:5",    # Single digit minute - regex rejects
+            "7:5",     # Both single digit - regex rejects
+            "25:00",   # Invalid hour - regex passes, range rejects
+            "12:60",   # Invalid minute - regex passes, range rejects
+            "abc",     # Letters - regex rejects
+            "",        # Empty - skipped below
+            "12-30",   # Wrong separator - regex rejects
+            "12:30:00" # Seconds included - regex rejects
         ]
-        
+
         for time_str in invalid_times:
             if time_str:  # Skip empty string
                 match = re.match(r"^\d{2}:\d{2}$", time_str)
                 if match:
-                    # If format matches, check if time is valid
+                    # Regex passed — now range validation should reject
                     hour, minute = map(int, time_str.split(":"))
-                    assert 0 <= hour <= 23 and 0 <= minute <= 59, \
-                        f"{time_str} should be invalid time"
+                    is_valid_time = 0 <= hour <= 23 and 0 <= minute <= 59
+                    assert not is_valid_time, \
+                        f"{time_str} should be invalid (regex passed but range should reject)"
+                else:
+                    # Regex rejected — this is the expected behavior for format errors
+                    pass  # Correctly rejected by regex
     
     def test_time_range_validation(self):
         """Test time range validation."""

@@ -2,13 +2,24 @@
 
 Módulo responsable de formatear las tasas de cambio con el diseño modernizado
 de TASALO, usando separadores unicode, emojis de banderas e indicadores de cambio.
+
+Soporta Bot API 9.5+ MessageEntity.DATE_TIME para formateo automático de
+timestamps según la zona horaria del usuario (PTB 22.7+).
 """
 
 import logging
+import time
 from datetime import datetime
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Tuple, List
+
+from telegram import MessageEntity
 
 logger = logging.getLogger(__name__)
+
+# ── Bot API 9.5 DATE_TIME entity support ──
+# PTB 22.7+ supports MessageEntity.DATE_TIME natively.
+# When used, Telegram formats the timestamp according to the user's timezone.
+HAS_DATETIME_ENTITY = hasattr(MessageEntity, "DATE_TIME")
 
 
 # =============================================================================
@@ -527,6 +538,130 @@ def build_full_message(data: Dict[str, Any]) -> str:
     blocks.append(footer)
 
     return "\n".join(blocks)
+
+
+# =============================================================================
+# BOT API 9.5 — DATE_TIME ENTITY SUPPORT
+# =============================================================================
+
+
+def build_full_message_with_datetime(
+    data: Dict[str, Any],
+    updated_at_timestamp: int,
+) -> Tuple[str, List[MessageEntity]]:
+    """Build full message with DATE_TIME entity for automatic timezone formatting.
+
+    Bot API 9.5 (Mar 2026) introduced MessageEntity.DATE_TIME — Telegram
+    automatically formats the date/time according to the user's timezone.
+
+    Returns:
+        Tuple of (text, entities) — use with parse_mode=None in edit_message_text
+
+    Fallback: If DATE_TIME entity is not supported, returns (text, []) and
+    the caller should use parse_mode="Markdown" as normal.
+    """
+    if not HAS_DATETIME_ENTITY:
+        # Fallback: use standard Markdown formatting
+        text = build_full_message(data)
+        return text, []
+
+    # Build blocks manually (mirroring build_full_message but with DATE_TIME entity)
+    blocks = []
+
+    # ── ElToque block with datetime entity ──
+    eltoque_lines = []
+    eltoque_lines.append("📊 *MERCADO INFORMAL (El Toque)*")
+    eltoque_lines.append(SEPARATOR_THICK)
+
+    # Calculate timestamp text position
+    header_prefix_len = sum(len(line) + 1 for line in ["📊 *MERCADO INFORMAL (El Toque)*", SEPARATOR_THICK])
+    timestamp_marker = "📆 "
+    ts_line_start = header_prefix_len
+    ts_content_start = ts_line_start + len(timestamp_marker)
+
+    eltoque_lines.append(f"📆 {updated_at_timestamp}")
+    eltoque_lines.append("")
+
+    eltoque_data = data.get("eltoque", {})
+    if eltoque_data:
+        priority = ["EUR", "USD", "MLC", "BTC", "TRX", "USDT"]
+        sorted_currencies = sorted(
+            eltoque_data.keys(),
+            key=lambda x: (priority.index(x.upper()) if x.upper() in priority else 99, x),
+        )
+        for currency in sorted_currencies:
+            currency_info = eltoque_data[currency]
+            if isinstance(currency_info, dict):
+                rate = currency_info.get("rate", 0)
+                change = currency_info.get("change", None)
+                prev_rate = currency_info.get("prev_rate")
+            else:
+                rate = currency_info
+                change = None
+                prev_rate = None
+
+            rate_str = format_rate_value(rate)
+            indicator = ""
+            change_str = ""
+            if change == "up" and prev_rate is not None:
+                diff = rate - prev_rate
+                indicator = " " + INDICATOR_UP
+                change_str = f" +{diff:,.2f}"
+            elif change == "down" and prev_rate is not None:
+                diff = rate - prev_rate
+                indicator = " " + INDICATOR_DOWN
+                change_str = f" {diff:,.2f}"
+
+            eltoque_lines.append(f" *{currency}:*   {rate_str}  CUP{indicator}{change_str}")
+    else:
+        eltoque_lines.append("Datos no disponibles")
+
+    eltoque_lines.append("")
+    blocks.append("\n".join(eltoque_lines))
+    blocks.append(SEPARATOR_THIN)
+
+    # ── CADECA block ──
+    cadeca_data = data.get("cadeca", {})
+    if cadeca_data:
+        blocks.append(build_cadeca_block(data))
+        blocks.append(SEPARATOR_THIN)
+
+    # ── BCC block ──
+    bcc_data = data.get("bcc", {})
+    if bcc_data:
+        blocks.append(build_bcc_block(data))
+        blocks.append(SEPARATOR_THIN)
+
+    # ── Footer (no duplicate timestamp) ──
+    footer_lines = [SEPARATOR_THICK, "Fuentes de consulta:"]
+    sources = []
+    if data.get("eltoque"):
+        sources.append("🔗 elToque.com")
+    if data.get("cadeca"):
+        sources.append("🔗 www.cadeca.cu")
+    if data.get("bcc"):
+        sources.append("🔗 www.bc.gob.cu")
+    if sources:
+        footer_lines.extend(sources)
+    else:
+        footer_lines.extend(["🔗 elToque.com", "🔗 www.cadeca.cu", "🔗 www.bc.gob.cu"])
+    blocks.append("\n".join(footer_lines))
+
+    full_text = "\n".join(blocks)
+
+    # Calculate entity offset — timestamp is after "📆 " in the third line
+    entity_offset = ts_content_start
+    entity_length = len(str(updated_at_timestamp))
+
+    entities = [
+        MessageEntity(
+            type=MessageEntity.DATE_TIME,
+            offset=entity_offset,
+            length=entity_length,
+        )
+    ]
+
+    return full_text, entities
 
 
 def build_history_message(
