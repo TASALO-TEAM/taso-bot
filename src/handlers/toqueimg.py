@@ -102,27 +102,52 @@ async def toqueimg_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def _build_toqueimg_keyboard(has_alert: bool) -> list:
     """Construir keyboard según estado de alerta."""
-    
+
     if has_alert:
         # Usuario YA tiene alerta activa
         keyboard = [
-            [InlineKeyboardButton("✅ Alerta activa", callback_data="alert_status")],
+            [InlineKeyboardButton(
+                "✅ Alerta activa",
+                callback_data="alert_status",
+                style="success",  # Verde - estado activo
+            )],
             [
-                InlineKeyboardButton("⏰ Cambiar hora", callback_data="alert_change_time"),
-                InlineKeyboardButton("📄 Cambiar formato", callback_data="alert_change_format")
+                InlineKeyboardButton(
+                    "⏰ Cambiar hora",
+                    callback_data="alert_change_time",
+                ),
+                InlineKeyboardButton(
+                    "📄 Cambiar formato",
+                    callback_data="alert_change_format",
+                ),
             ],
-            [InlineKeyboardButton("❌ Desactivar alerta", callback_data="alert_disable")],
+            [InlineKeyboardButton(
+                "❌ Desactivar alerta",
+                callback_data="alert_disable",
+                style="danger",  # Rojo - acción destructiva
+            )],
         ]
     else:
         # Usuario NO tiene alerta
         keyboard = [
-            [InlineKeyboardButton("🔔 Activar alerta (7:15 AM)", callback_data="alert_enable_default")],
-            [InlineKeyboardButton("⏰ Elegir hora personalizada", callback_data="alert_custom_time")],
+            [InlineKeyboardButton(
+                "🔔 Activar alerta (7:15 AM)",
+                callback_data="alert_enable_default",
+                style="success",  # Verde - acción positiva
+            )],
+            [InlineKeyboardButton(
+                "⏰ Elegir hora personalizada",
+                callback_data="alert_custom_time",
+            )],
         ]
-    
+
     # Botón común de refresh
-    keyboard.append([InlineKeyboardButton("🔄 Actualizar imagen", callback_data="toqueimg_refresh")])
-    
+    keyboard.append([InlineKeyboardButton(
+        "🔄 Actualizar imagen",
+        callback_data="toqueimg_refresh",
+        style="primary",  # Azul - acción principal
+    )])
+
     return keyboard
 
 

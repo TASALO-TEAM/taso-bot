@@ -37,7 +37,11 @@ def build_start_keyboard() -> InlineKeyboardMarkup:
     """
     keyboard = [
         [
-            InlineKeyboardButton("📊 Tasalo", callback_data="start_tasalo"),
+            InlineKeyboardButton(
+                "📊 Tasalo",
+                callback_data="start_tasalo",
+                style="primary",  # Azul - acción principal
+            ),
             InlineKeyboardButton("📈 Toque", callback_data="start_toque"),
         ],
         [
@@ -45,7 +49,11 @@ def build_start_keyboard() -> InlineKeyboardMarkup:
             InlineKeyboardButton("🏢 CADECA", callback_data="start_cadeca"),
         ],
         [
-            InlineKeyboardButton("📸 ToqueImg", callback_data="start_toqueimg"),
+            InlineKeyboardButton(
+                "📸 ToqueImg",
+                callback_data="start_toqueimg",
+                style="primary",  # Azul - feature destacada
+            ),
         ],
         [
             InlineKeyboardButton("🌐 Abrir TASALO Web", web_app=WebAppInfo(url=MINIAPP_URL)),

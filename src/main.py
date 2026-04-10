@@ -55,6 +55,14 @@ from src.handlers.image_alerts import (
 )
 from src.services.daily_image_sender import start_daily_dispatcher, stop_daily_dispatcher
 
+# Tipos de update que el bot realmente maneja (eficiencia)
+ALLOWED_UPDATE_TYPES = [
+    "message",           # comandos y texto
+    "callback_query",    # botones inline (alertas, refresh)
+    "my_chat_member",    # detectar cuando bot es bloqueado/añadido
+]
+# NO incluir: chat_member, message_reaction, poll, poll_answer, etc.
+
 # Configurar logging estructurado
 logging.basicConfig(
     format="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
@@ -304,20 +312,49 @@ def main():
 
     # Configurar post_init
     app.post_init = post_init
-    
-    # Configurar shutdown para detener el dispatcher
+
+    # Configurar shutdown para detener el dispatcher y cerrar cliente HTTP
     async def post_shutdown(app: Application) -> None:
-        """Detener el dispatcher de alertas diarias."""
+        """Detener el dispatcher de alertas diarias y limpiar recursos."""
         stop_daily_dispatcher()
-    
+        # Cerrar cliente HTTP para liberar conexiones
+        api_client: TasaloApiClient = app.bot_data.get("api_client")
+        if api_client:
+            await api_client.close()
+
     app.post_shutdown = post_shutdown
 
-    # Iniciar polling
-    logger.info("📡 Starting polling...")
-    app.run_polling(
-        allowed_updates=Update.ALL_TYPES,
-        drop_pending_updates=True,
-    )
+    # Check if webhook mode is enabled via environment variable
+    use_webhook = os.getenv("USE_WEBHOOK", "false").lower() == "true"
+
+    if use_webhook:
+        # Webhook mode (production)
+        webhook_url = os.getenv("WEBHOOK_URL", "")
+        webhook_secret = os.getenv("TELEGRAM_SECRET_TOKEN", "")
+        webhook_port = int(os.getenv("WEBHOOK_PORT", "8443"))
+
+        if not webhook_url or not webhook_secret:
+            logger.error("❌ WEBHOOK_URL and TELEGRAM_SECRET_TOKEN must be set when USE_WEBHOOK=true")
+            sys.exit(1)
+
+        logger.info(f"🌐 Starting webhook mode on port {webhook_port}...")
+        logger.info(f"🔗 Webhook URL: {webhook_url}")
+
+        app.run_webhook(
+            listen="0.0.0.0",
+            port=webhook_port,
+            url_path=settings.telegram_bot_token,
+            webhook_url=webhook_url,
+            secret_token=webhook_secret,
+            allowed_updates=ALLOWED_UPDATE_TYPES,
+        )
+    else:
+        # Polling mode (development default)
+        logger.info("📡 Starting polling mode...")
+        app.run_polling(
+            allowed_updates=ALLOWED_UPDATE_TYPES,
+            drop_pending_updates=True,
+        )
 
 
 if __name__ == "__main__":

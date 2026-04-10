@@ -233,9 +233,19 @@ async def alert_change_format_callback(update: Update, context: ContextTypes.DEF
     await query.answer()
 
     keyboard = [
-        [InlineKeyboardButton("📷 Foto", callback_data="alert_format_photo")],
-        [InlineKeyboardButton("📄 Documento", callback_data="alert_format_document")],
-        [InlineKeyboardButton("❌ Cancelar", callback_data="alert_cancel")],
+        [InlineKeyboardButton(
+            "📷 Foto",
+            callback_data="alert_format_photo",
+            style="primary",  # Azul - opción por defecto
+        )],
+        [InlineKeyboardButton(
+            "📄 Documento",
+            callback_data="alert_format_document",
+        )],
+        [InlineKeyboardButton(
+            "❌ Cancelar",
+            callback_data="alert_cancel",
+        )],
     ]
 
     await _safe_edit_message(

@@ -39,7 +39,11 @@ def build_inline_keyboard() -> InlineKeyboardMarkup:
     """
     keyboard = [
         [
-            InlineKeyboardButton("🔄 Actualizar", callback_data="tasalo_refresh"),
+            InlineKeyboardButton(
+                "🔄 Actualizar",
+                callback_data="tasalo_refresh",
+                style="primary",  # Azul - acción principal
+            ),
             # TODO: Habilitar cuando la API tenga datos de provincias
             # InlineKeyboardButton("🗺 Ver provincias", callback_data="tasalo_provincias"),
         ],
@@ -248,7 +252,10 @@ async def tasalo_provincias_callback(
     # Teclado con botón "Volver"
     keyboard = InlineKeyboardMarkup(
         [
-            [InlineKeyboardButton("🔙 Volver", callback_data="tasalo_back")],
+            [InlineKeyboardButton(
+                "🔙 Volver",
+                callback_data="tasalo_back",
+            )],
         ]
     )
 
@@ -412,7 +419,10 @@ async def history_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Teclado con botón "Volver"
     keyboard = InlineKeyboardMarkup(
         [
-            [InlineKeyboardButton("🔙 Volver", callback_data="tasalo_back")],
+            [InlineKeyboardButton(
+                "🔙 Volver",
+                callback_data="tasalo_back",
+            )],
         ]
     )
 
@@ -434,7 +444,11 @@ def _build_source_refresh_keyboard(source: str) -> InlineKeyboardMarkup:
     """Teclado simple con boton de refresh para comando individual."""
     return InlineKeyboardMarkup(
         [
-            [InlineKeyboardButton("🔄 Actualizar", callback_data=f"{source}_refresh")],
+            [InlineKeyboardButton(
+                "🔄 Actualizar",
+                callback_data=f"{source}_refresh",
+                style="primary",  # Azul - acción principal
+            )],
         ]
     )
 
