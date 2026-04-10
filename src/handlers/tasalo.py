@@ -12,6 +12,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMe
 from telegram.ext import ContextTypes
 
 from src.api_client import TasaloApiClient
+from src.cache import cache
 from src.formatters import (
     build_full_message,
     build_history_message,
@@ -26,6 +27,9 @@ from src.image_generator import generate_image
 from src.stats_tracker import track_command_usage
 
 logger = logging.getLogger(__name__)
+
+# Cache TTL para tasas (segundos)
+RATES_CACHE_TTL = 60  # 1 minuto
 
 # Timeout para generación de imagen (segundos)
 IMAGE_GENERATION_TIMEOUT = 10  # Aumentado de 5s a 10s para mayor tolerancia
@@ -133,7 +137,16 @@ async def tasalo_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # Llamar a la API
+    # Check cache first
+    cached_data = cache.get("rates:latest", ttl=RATES_CACHE_TTL)
+    if cached_data:
+        logger.info("📦 /tasalo: Using cached rates")
+        await send_tasalo_response(update, context, cached_data)
+        await status_msg.delete()
+        return
+
+    # Cache miss — fetch from API
+    logger.info("🌐 /tasalo: Fetching from API (cache miss)")
     data = await api_client.get_latest()
 
     if data is None:
@@ -161,6 +174,10 @@ async def tasalo_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Trackear como fallo
         asyncio.create_task(track_command_usage(update, context, "/tasalo", success=False))
         return
+
+    # Cache the successful response
+    cache.set("rates:latest", api_data)
+    logger.debug(f"📦 /tasalo: Cached rates (TTL={RATES_CACHE_TTL}s)")
 
     # Enviar respuesta con imagen + texto + botones
     await send_tasalo_response(update, context, api_data)
