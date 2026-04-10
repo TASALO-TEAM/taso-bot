@@ -11,7 +11,6 @@ from telegram.ext import (
     Application,
     CommandHandler,
     ContextTypes,
-    CallbackQueryHandler,
     MessageHandler,
     filters,
 )
@@ -21,18 +20,12 @@ from src.api_client import TasaloApiClient
 from src.bot_profile import ensure_bot_profile_photo, create_template_with_profile
 from src.handlers.tasalo import (
     tasalo_command,
-    tasalo_refresh_callback,
-    tasalo_provincias_callback,
-    tasalo_back_callback,
-    history_callback,
     toque_command,
     bcc_command,
     cadeca_command,
-    source_refresh_callback,
 )
 from src.handlers.start import (
     start_command,
-    start_button_callback,
 )
 from src.handlers.admin import (
     refresh_command,
@@ -40,17 +33,8 @@ from src.handlers.admin import (
 )
 from src.handlers.toqueimg import (
     toqueimg_command,
-    toqueimg_refresh_callback,
 )
 from src.handlers.image_alerts import (
-    alert_enable_default_callback,
-    alert_custom_time_callback,
-    alert_disable_callback,
-    alert_change_time_callback,
-    alert_change_format_callback,
-    alert_format_callback,
-    alert_status_callback,
-    alert_cancel_callback,
     handle_time_input,
 )
 from src.services.daily_image_sender import start_daily_dispatcher, stop_daily_dispatcher
@@ -177,59 +161,11 @@ def create_application() -> Application:
     application.add_handler(CommandHandler("cadeca", cadeca_command))
     application.add_handler(CommandHandler("toqueimg", toqueimg_command))
 
-    # Registrar callback handlers para botones inline
-    application.add_handler(
-        CallbackQueryHandler(tasalo_refresh_callback, pattern="^tasalo_refresh$")
-    )
-    # TODO: Habilitar cuando la API tenga datos de provincias
-    # application.add_handler(
-    #     CallbackQueryHandler(tasalo_provincias_callback, pattern="^tasalo_provincias$")
-    # )
-    application.add_handler(
-        CallbackQueryHandler(tasalo_back_callback, pattern="^tasalo_back$")
-    )
-    application.add_handler(
-        CallbackQueryHandler(history_callback, pattern="^tasalo_history:")
-    )
-    application.add_handler(
-        CallbackQueryHandler(
-            source_refresh_callback, pattern="^(toque|bcc|cadeca)_refresh$"
-        )
-    )
     # Registrar callback handler para botones del /start
-    application.add_handler(
-        CallbackQueryHandler(start_button_callback, pattern="^start_(tasalo|toque|bcc|cadeca|toqueimg)$")
-    )
-    
-    # Registrar callbacks para /toqueimg y alertas
-    application.add_handler(
-        CallbackQueryHandler(toqueimg_refresh_callback, pattern="^toqueimg_refresh$")
-    )
-    application.add_handler(
-        CallbackQueryHandler(alert_enable_default_callback, pattern="^alert_enable_default$")
-    )
-    application.add_handler(
-        CallbackQueryHandler(alert_custom_time_callback, pattern="^alert_custom_time$")
-    )
-    application.add_handler(
-        CallbackQueryHandler(alert_disable_callback, pattern="^alert_disable$")
-    )
-    application.add_handler(
-        CallbackQueryHandler(alert_change_time_callback, pattern="^alert_change_time$")
-    )
-    application.add_handler(
-        CallbackQueryHandler(alert_change_format_callback, pattern="^alert_change_format$")
-    )
-    application.add_handler(
-        CallbackQueryHandler(alert_format_callback, pattern="^alert_format_(photo|document)$")
-    )
-    application.add_handler(
-        CallbackQueryHandler(alert_status_callback, pattern="^alert_status$")
-    )
-    application.add_handler(
-        CallbackQueryHandler(alert_cancel_callback, pattern="^alert_cancel$")
-    )
-    
+    from src.handlers.callback_router import get_callback_handler
+    application.add_handler(get_callback_handler())
+    logger.info("✅ Callback router registered (consolidated 13+ handlers into 1)")
+
     # Registrar handler para input de hora (MessageHandler para texto)
     application.add_handler(
         MessageHandler(filters.TEXT & ~filters.COMMAND, handle_time_input)
@@ -243,7 +179,7 @@ def create_application() -> Application:
     application.bot_data["api_client"] = api_client
 
     logger.info(
-        "✅ Handlers registrados: start, tasalo, health, refresh, status, callbacks (refresh, provincias, back, history)"
+        "✅ Handlers registered: start, tasalo, health, refresh, status, callback_router (1 handler)"
     )
 
     return application
