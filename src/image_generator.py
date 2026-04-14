@@ -12,6 +12,7 @@ Diseño v3:
 - Sin emojis - solo texto limpio
 - Usa plantilla img.jpg como fondo (data/img.jpg)
 - Manejo de errores robusto con fallback graceful
+- Logging completo de todas las operaciones de generación
 
 Inspirado en: plans/2026-03-26-taso-bot-image-redesign-v3.md
 """
@@ -20,6 +21,7 @@ import asyncio
 import logging
 import os
 import io
+import time
 from datetime import datetime
 from typing import Dict, Any, Optional, NamedTuple
 
@@ -163,6 +165,7 @@ def get_font_path() -> Optional[str]:
 
 def load_fonts() -> Fonts:
     """Cargar todas las fuentes necesarias."""
+    step_start = time.time()
     font_path = get_font_path()
 
     if not font_path:
@@ -170,6 +173,8 @@ def load_fonts() -> Fonts:
             "⚠️ No se encontraron fuentes TrueType, usando fuente por defecto"
         )
         default_font = ImageFont.load_default()
+        font_duration_ms = (time.time() - step_start) * 1000
+        logger.debug("✅ Fonts loaded (default fallback, %.0fms)", font_duration_ms)
         return Fonts(
             title=default_font,
             subtitle=default_font,
@@ -180,7 +185,7 @@ def load_fonts() -> Fonts:
         )
 
     try:
-        return Fonts(
+        fonts = Fonts(
             title=ImageFont.truetype(
                 font_path, int(IMG_HEIGHT_VERTICAL * FONT_SCALE["title"])
             ),
@@ -200,8 +205,20 @@ def load_fonts() -> Fonts:
                 font_path, int(IMG_HEIGHT_VERTICAL * FONT_SCALE["footer"])
             ),
         )
+        font_duration_ms = (time.time() - step_start) * 1000
+        logger.debug(
+            "✅ Fonts loaded: %s (%.0fms)",
+            os.path.basename(font_path),
+            font_duration_ms,
+        )
+        return fonts
     except OSError as e:
-        logger.warning(f"⚠️ Error cargando fuentes: {e}. Usando fuente por defecto.")
+        font_duration_ms = (time.time() - step_start) * 1000
+        logger.warning(
+            "❌ Error cargando fuentes (%.0fms): %s. Usando fuente por defecto.",
+            font_duration_ms,
+            e,
+        )
         default_font = ImageFont.load_default()
         return Fonts(
             title=default_font,
@@ -272,9 +289,17 @@ def load_template(image_type: str = "tasalo") -> Optional[Image.Image]:
     Returns:
         Imagen PIL o None si falla
     """
+    step_start = time.time()
+    logger.debug("📄 Loading template: %s (type=%s)", TEMPLATE_PATH, image_type)
+
     try:
         if not os.path.exists(TEMPLATE_PATH):
-            logger.warning(f"⚠️ Plantilla no encontrada: {TEMPLATE_PATH}")
+            template_duration_ms = (time.time() - step_start) * 1000
+            logger.warning(
+                "⚠️ Plantilla no encontrada (%.0fms): %s",
+                template_duration_ms,
+                TEMPLATE_PATH,
+            )
             return None
 
         img = Image.open(TEMPLATE_PATH)
@@ -292,11 +317,24 @@ def load_template(image_type: str = "tasalo") -> Optional[Image.Image]:
         # Redimensionar manteniendo aspect ratio
         img = img.resize(target_size, Image.Resampling.LANCZOS)
 
-        logger.info(f"✅ Plantilla cargada: {target_size[0]}x{target_size[1]}px")
+        template_duration_ms = (time.time() - step_start) * 1000
+        logger.info(
+            "✅ Template loaded: %s → %dx%dpx (%.0fms)",
+            os.path.basename(TEMPLATE_PATH),
+            target_size[0],
+            target_size[1],
+            template_duration_ms,
+        )
         return img
 
     except Exception as e:
-        logger.error(f"❌ Error cargando plantilla: {e}", exc_info=True)
+        template_duration_ms = (time.time() - step_start) * 1000
+        logger.error(
+            "❌ Error cargando plantilla (%.0fms): %s",
+            template_duration_ms,
+            e,
+            exc_info=True,
+        )
         return None
 
 
@@ -681,15 +719,20 @@ async def generate_tasalo_image(data: Dict[str, Any]) -> Optional[io.BytesIO]:
 
     Usa la plantilla img.jpg si está disponible, sino usa fondo gradiente.
     """
+    gen_start = time.time()
+    logger.info("🖼️ Generating TASALO image (triple column)")
+
     try:
         # 1. Cargar plantilla o crear fallback
+        template_start = time.time()
         template = load_template("tasalo")
-
+        template_duration_ms = (time.time() - template_start) * 1000
+        
         if template:
-            # Usar plantilla
+            logger.debug("✅ Template loaded from file (%.0fms)", template_duration_ms)
             img = template.convert("RGBA")
         else:
-            # Fallback: crear imagen con fondo gradiente
+            logger.warning("⚠️ Template not found, using gradient fallback (%.0fms)", template_duration_ms)
             img = Image.new(
                 "RGBA", (IMG_WIDTH_HORIZONTAL, IMG_HEIGHT_HORIZONTAL), (13, 13, 26, 255)
             )
@@ -697,24 +740,38 @@ async def generate_tasalo_image(data: Dict[str, Any]) -> Optional[io.BytesIO]:
         draw = ImageDraw.Draw(img)
 
         # 2. Cargar fuentes
+        fonts_start = time.time()
         fonts = load_fonts()
+        fonts_duration_ms = (time.time() - fonts_start) * 1000
+        logger.debug("✅ Fonts loaded (%.0fms)", fonts_duration_ms)
 
         # 3. Si no hay plantilla, dibujar fondo gradiente
         if not template:
+            bg_start = time.time()
             draw_gradient_background(draw, IMG_WIDTH_HORIZONTAL, IMG_HEIGHT_HORIZONTAL)
+            bg_duration_ms = (time.time() - bg_start) * 1000
+            logger.debug("✅ Gradient background drawn (%.0fms)", bg_duration_ms)
 
         # 4. Dibujar header
+        header_start = time.time()
         y_content = draw_header(
             draw, IMG_WIDTH_HORIZONTAL, IMG_HEIGHT_HORIZONTAL, fonts
         )
         y_content = max(y_content, 120)
+        header_duration_ms = (time.time() - header_start) * 1000
+        logger.debug("✅ Header drawn (%.0fms)", header_duration_ms)
 
         # 5. Extraer datos por fuente
         eltoque_data = data.get("eltoque", {})
         bcc_data = data.get("bcc", {})
         cadeca_data = data.get("cadeca", {})
+        logger.debug(
+            "📊 Data extracted: ElToque=%d currencies, BCC=%d, CADECA=%d",
+            len(eltoque_data), len(bcc_data), len(cadeca_data)
+        )
 
         # 6. Dibujar columnas
+        col_start = time.time()
         draw_currency_column(
             draw,
             eltoque_data,
@@ -743,22 +800,37 @@ async def generate_tasalo_image(data: Dict[str, Any]) -> Optional[io.BytesIO]:
             y_content,
             fonts,
         )
+        col_duration_ms = (time.time() - col_start) * 1000
+        logger.debug("✅ All 3 columns drawn (%.0fms)", col_duration_ms)
 
         # 7. Dibujar footer
+        footer_start = time.time()
         draw_footer(draw, IMG_WIDTH_HORIZONTAL, IMG_HEIGHT_HORIZONTAL, fonts)
+        footer_duration_ms = (time.time() - footer_start) * 1000
+        logger.debug("✅ Footer drawn (%.0fms)", footer_duration_ms)
 
         # 8. Guardar como PNG optimizado
+        save_start = time.time()
         buffer = io.BytesIO()
         img.save(buffer, format="PNG", optimize=True, compress_level=6)
         buffer.seek(0)
-
+        save_duration_ms = (time.time() - save_start) * 1000
+        
+        buffer_size = buffer.getbuffer().nbytes
+        total_duration_ms = (time.time() - gen_start) * 1000
+        
         logger.info(
-            f"✅ Imagen TASALO generada: {IMG_WIDTH_HORIZONTAL}x{IMG_HEIGHT_HORIZONTAL}px"
+            "✅ TASALO image generated: %dx%dpx (%.0fms, %d bytes)",
+            IMG_WIDTH_HORIZONTAL, IMG_HEIGHT_HORIZONTAL, total_duration_ms, buffer_size
         )
         return buffer
 
     except Exception as e:
-        logger.error(f"❌ Error generando imagen TASALO: {e}", exc_info=True)
+        total_duration_ms = (time.time() - gen_start) * 1000
+        logger.error(
+            "❌ Error generating TASALO image (%.0fms): %s",
+            total_duration_ms, e, exc_info=True
+        )
         return None
 
 
@@ -769,15 +841,20 @@ async def generate_single_source_image(
 
     Usa la plantilla img.jpg si está disponible, sino usa fondo gradiente.
     """
+    gen_start = time.time()
+    logger.info("🖼️ Generating %s image (single source vertical)", source.upper())
+
     try:
         # 1. Cargar plantilla o crear fallback
+        template_start = time.time()
         template = load_template(source)
-
+        template_duration_ms = (time.time() - template_start) * 1000
+        
         if template:
-            # Usar plantilla
+            logger.debug("✅ Template loaded for %s (%.0fms)", source, template_duration_ms)
             img = template.convert("RGBA")
         else:
-            # Fallback: crear imagen con fondo gradiente
+            logger.warning("⚠️ Template not found for %s, using fallback (%.0fms)", source, template_duration_ms)
             img = Image.new(
                 "RGBA", (IMG_WIDTH_VERTICAL, IMG_HEIGHT_VERTICAL), (13, 13, 26, 255)
             )
@@ -785,32 +862,54 @@ async def generate_single_source_image(
         draw = ImageDraw.Draw(img)
 
         # 2. Cargar fuentes
+        fonts_start = time.time()
         fonts = load_fonts()
+        fonts_duration_ms = (time.time() - fonts_start) * 1000
+        logger.debug("✅ Fonts loaded for %s (%.0fms)", source, fonts_duration_ms)
 
         # 3. Si no hay plantilla, dibujar fondo gradiente
         if not template:
+            bg_start = time.time()
             draw_gradient_background(draw, IMG_WIDTH_VERTICAL, IMG_HEIGHT_VERTICAL)
+            bg_duration_ms = (time.time() - bg_start) * 1000
+            logger.debug("✅ Gradient background drawn (%.0fms)", bg_duration_ms)
 
         # 4. Dibujar tarjeta vertical
+        card_start = time.time()
         draw_single_source_card(
             draw, data, source, IMG_WIDTH_VERTICAL, IMG_HEIGHT_VERTICAL, fonts
         )
+        card_duration_ms = (time.time() - card_start) * 1000
+        logger.debug("✅ Single source card drawn for %s (%.0fms)", source, card_duration_ms)
 
         # 5. Dibujar footer
+        footer_start = time.time()
         draw_footer(draw, IMG_WIDTH_VERTICAL, IMG_HEIGHT_VERTICAL, fonts)
+        footer_duration_ms = (time.time() - footer_start) * 1000
+        logger.debug("✅ Footer drawn (%.0fms)", footer_duration_ms)
 
         # 6. Guardar como PNG optimizado
+        save_start = time.time()
         buffer = io.BytesIO()
         img.save(buffer, format="PNG", optimize=True, compress_level=6)
         buffer.seek(0)
-
+        save_duration_ms = (time.time() - save_start) * 1000
+        
+        buffer_size = buffer.getbuffer().nbytes
+        total_duration_ms = (time.time() - gen_start) * 1000
+        
         logger.info(
-            f"✅ Imagen {source.upper()} generada: {IMG_WIDTH_VERTICAL}x{IMG_HEIGHT_VERTICAL}px"
+            "✅ %s image generated: %dx%dpx (%.0fms, %d bytes)",
+            source.upper(), IMG_WIDTH_VERTICAL, IMG_HEIGHT_VERTICAL, total_duration_ms, buffer_size
         )
         return buffer
 
     except Exception as e:
-        logger.error(f"❌ Error generando imagen {source.upper()}: {e}", exc_info=True)
+        total_duration_ms = (time.time() - gen_start) * 1000
+        logger.error(
+            "❌ Error generating %s image (%.0fms): %s",
+            source.upper(), total_duration_ms, e, exc_info=True
+        )
         return None
 
 

@@ -1,11 +1,12 @@
 """Sistema de logging profesional para TASALO-Bot.
 
 Características:
-- Logging a consola con colores
-- Logging a archivo con rotación (5 MB)
-- Logging de errores separado (retención 30 días)
+- Logging a consola con formato compacto y legible
+- Logging a archivo con rotación (5 MB, 5 backups)
+- Logging de errores separado (retención 10 backups)
 - Interceptación de excepciones no controladas
 - Métodos específicos para eventos del bot
+- Soporte para contexto de request (user_id, command, etc.)
 - Compatible con testing (sin archivos en tests)
 
 Basado en la referencia: /home/ersus/bot/test/utils/logger.py
@@ -16,7 +17,8 @@ import os
 import logging
 import traceback
 from pathlib import Path
-from typing import Optional, Union
+from typing import Optional, Union, Dict, Any
+from logging.handlers import RotatingFileHandler
 
 
 # --- Configuración de Rutas ---
@@ -25,8 +27,40 @@ LOG_FILE_PATH = os.path.join(LOGS_DIR, "taso-bot.log")
 ERROR_LOG_PATH = os.path.join(LOGS_DIR, "taso-bot-errors.log")
 
 # Asegurar que la carpeta logs exista
-if not os.path.exists(LOGS_DIR):
-    os.makedirs(LOGS_DIR, exist_ok=True)
+os.makedirs(LOGS_DIR, exist_ok=True)
+
+
+# --- Formatters ---
+
+class ContextFormatter(logging.Formatter):
+    """Formatter que enriquece logs con contexto del bot."""
+    
+    def format(self, record):
+        # Agregar contexto personalizado si existe
+        if hasattr(record, 'user_id'):
+            record.user_context = f"[U:{record.user_id}]"
+        elif hasattr(record, 'chat_id'):
+            record.user_context = f"[C:{record.chat_id}]"
+        else:
+            record.user_context = ""
+        
+        return super().format(record)
+
+
+def get_console_formatter() -> logging.Formatter:
+    """Formatter compacto para consola."""
+    return ContextFormatter(
+        "%(asctime)s | %(levelname)-8s | %(name)s %(user_context)s| %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+
+
+def get_file_formatter() -> logging.Formatter:
+    """Formatter detallado para archivos (con función y línea)."""
+    return ContextFormatter(
+        "%(asctime)s | %(levelname)-8s | %(name)s:%(funcName)s:%(lineno)d %(user_context)s| %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
 
 
 class BotLogger:
@@ -54,25 +88,14 @@ class BotLogger:
         # Nivel de logging (se puede sobrescribir desde main.py)
         self.logger.setLevel(logging.DEBUG)  # DEBUG para capturar todo; handlers filtran
 
-        # Formatter para consola (más compacto)
-        console_formatter = logging.Formatter(
-            "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
-            datefmt="%Y-%m-%d %H:%M:%S",
-        )
-
         # Handler de Consola
         console_handler = logging.StreamHandler(sys.stdout)
-        console_handler.setFormatter(console_formatter)
+        console_handler.setFormatter(get_console_formatter())
         console_handler.setLevel(logging.INFO)
         self.logger.addHandler(console_handler)
 
         # Handlers de Archivo (solo si están habilitados)
         if self.enable_file_logging:
-            # Asegurar que el directorio exista (double check)
-            os.makedirs(LOGS_DIR, exist_ok=True)
-
-            from logging.handlers import RotatingFileHandler
-
             # Log principal (rotación 5 MB, 5 backups)
             file_handler = RotatingFileHandler(
                 LOG_FILE_PATH,
@@ -80,12 +103,7 @@ class BotLogger:
                 backupCount=5,
                 encoding="utf-8",
             )
-            file_handler.setFormatter(
-                logging.Formatter(
-                    "%(asctime)s | %(levelname)-8s | %(name)s:%(funcName)s:%(lineno)d | %(message)s",
-                    datefmt="%Y-%m-%d %H:%M:%S",
-                )
-            )
+            file_handler.setFormatter(get_file_formatter())
             file_handler.setLevel(logging.DEBUG)
             self.logger.addHandler(file_handler)
 
@@ -96,12 +114,7 @@ class BotLogger:
                 backupCount=10,
                 encoding="utf-8",
             )
-            error_handler.setFormatter(
-                logging.Formatter(
-                    "%(asctime)s | %(levelname)-8s | %(name)s:%(funcName)s:%(lineno)d | %(message)s",
-                    datefmt="%Y-%m-%d %H:%M:%S",
-                )
-            )
+            error_handler.setFormatter(get_file_formatter())
             error_handler.setLevel(logging.ERROR)
             self.logger.addHandler(error_handler)
 
@@ -171,36 +184,80 @@ class BotLogger:
         log_method = getattr(self, level.lower(), self.info)
         extra_info = f"[User:{user_id}]" if user_id else ""
         full_msg = f"{extra_info} {message}".strip()
-        log_method(full_msg, **kwargs)
+        log_method(full_msg, extra={"user_id": user_id} if user_id else {}, **kwargs)
 
     def log_user_action(self, action: str, user_id: int, details: Optional[str] = None):
-        """Ej: logger.log_user_action('start_bot', 123456)"""
+        """Log action de usuario con contexto completo."""
         msg = f"User Action: {action}"
         if details:
-            msg += f" - {details}"
+            msg += f" | {details}"
         self.log_bot_event("INFO", msg, user_id)
 
     def log_command_execution(
-        self, command: str, user_id: int, success: bool, duration_ms: Optional[float] = None
+        self, command: str, user_id: int, success: bool, duration_ms: Optional[float] = None,
+        username: Optional[str] = None, error: Optional[str] = None
     ):
-        """Log especializado para ejecución de comandos."""
+        """Log completo de ejecución de comando con todo el contexto."""
         status = "✅" if success else "❌"
         msg = f"Command {command} {status}"
         if duration_ms is not None:
             msg += f" ({duration_ms:.0f}ms)"
+        if username:
+            msg += f" | @{username}"
+        if error:
+            msg += f" | Error: {error}"
+        
         level = "INFO" if success else "ERROR"
         self.log_bot_event(level, msg, user_id)
 
     def log_api_call(
-        self, endpoint: str, success: bool, status_code: Optional[int] = None
+        self, endpoint: str, success: bool, status_code: Optional[int] = None,
+        duration_ms: Optional[float] = None, error: Optional[str] = None,
+        retry_count: int = 0
     ):
-        """Log especializado para llamadas a la API."""
+        """Log completo de llamada a API con métricas."""
         status = "✅" if success else "❌"
         msg = f"API {endpoint} {status}"
         if status_code:
             msg += f" (HTTP {status_code})"
+        if duration_ms is not None:
+            msg += f" ({duration_ms:.0f}ms)"
+        if retry_count > 0:
+            msg += f" | {retry_count} retries"
+        if error:
+            msg += f" | Error: {error}"
+        
         level = "INFO" if success else "WARNING"
         self.log_bot_event(level, msg)
+
+    def log_callback_event(
+        self, callback_data: str, user_id: int, success: bool,
+        duration_ms: Optional[float] = None, handler: Optional[str] = None,
+        error: Optional[str] = None
+    ):
+        """Log de procesamiento de callback con contexto completo."""
+        status = "✅" if success else "❌"
+        msg = f"Callback {callback_data} {status}"
+        if handler:
+            msg += f" | Handler: {handler}"
+        if duration_ms is not None:
+            msg += f" ({duration_ms:.0f}ms)"
+        if error:
+            msg += f" | Error: {error}"
+        
+        level = "INFO" if success else "ERROR"
+        self.log_bot_event(level, msg, user_id)
+
+    def log_cache_event(
+        self, action: str, key: str, hit: bool, ttl: Optional[int] = None
+    ):
+        """Log de operaciones de cache."""
+        status = "HIT" if hit else "MISS"
+        msg = f"Cache {action} {key} [{status}]"
+        if ttl is not None:
+            msg += f" (TTL={ttl}s)"
+        level = "DEBUG" if hit else "INFO"
+        self.debug(msg) if level == "DEBUG" else self.info(msg)
 
     def get_last_logs(self, lines: int = 15) -> str:
         """Devuelve las últimas líneas del archivo de log."""
@@ -218,3 +275,29 @@ class BotLogger:
 # enable_file_logging=False por defecto para tests
 # main.py puede crear su propia instancia con file logging habilitado
 logger = BotLogger(enable_file_logging=False)
+
+
+def get_logger(name: str) -> logging.Logger:
+    """Obtiene un logger estándar para un módulo.
+    
+    Los handlers se configuran en main.py con BotLogger, así que
+    los loggers de módulos heredan esa configuración.
+    
+    Args:
+        name: Nombre del módulo (típicamente __name__)
+    
+    Returns:
+        Logger configurado para el módulo
+    """
+    return logging.getLogger(name)
+
+
+def get_bot_logger() -> BotLogger:
+    """Obtiene la instancia global de BotLogger con métodos especializados.
+    
+    Útil para llamar métodos como log_command_execution, log_api_call, etc.
+    
+    Returns:
+        Instancia global de BotLogger
+    """
+    return logger

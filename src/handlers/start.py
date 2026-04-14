@@ -5,6 +5,7 @@ de bienvenida y teclado inline con botones de acceso rápido.
 """
 
 import logging
+import time
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from telegram.ext import ContextTypes, CommandHandler, CallbackQueryHandler
@@ -73,25 +74,56 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         update: Update de Telegram con el mensaje del usuario
         context: Contexto del bot
     """
+    cmd_start = time.time()
     user = update.effective_user
+    user_id = user.id
+    username = user.username or "N/A"
 
-    # Construir mensaje de bienvenida
-    welcome_text = (
-        f"👋 ¡Hola {user.mention_html()}!\n\n"
-        f"Soy TASALO, un bot para consultar las tasas de cambio de Cuba.\n"
-        f"Puedes consultar tanto el mercado informal de ElToque como el mercado Oficial BCC y CADECA.\n\n"
-        f"Presiona el botón del tipo de tasas que desees consultar:"
+    logger.info(
+        "👋 /start command invoked by user %d (@%s)",
+        user_id,
+        username,
     )
 
-    # Construir teclado inline (ya incluye Web App en build_start_keyboard)
-    keyboard = build_start_keyboard()
+    try:
+        # Construir mensaje de bienvenida
+        welcome_text = (
+            f"👋 ¡Hola {user.mention_html()}!\n\n"
+            f"Soy TASALO, un bot para consultar las tasas de cambio de Cuba.\n"
+            f"Puedes consultar tanto el mercado informal de ElToque como el mercado Oficial BCC y CADECA.\n\n"
+            f"Presiona el botón del tipo de tasas que desees consultar:"
+        )
 
-    await update.message.reply_html(
-        text=welcome_text,
-        reply_markup=keyboard,
-    )
+        # Construir teclado inline (ya incluye Web App en build_start_keyboard)
+        keyboard = build_start_keyboard()
 
-    logger.info(f"✅ /start command executed for user {user.id}")
+        msg_send_start = time.time()
+        await update.message.reply_html(
+            text=welcome_text,
+            reply_markup=keyboard,
+        )
+        msg_send_ms = (time.time() - msg_send_start) * 1000
+
+        duration_ms = (time.time() - cmd_start) * 1000
+        logger.info(
+            "✅ /start completed for user %d (@%s) [msg_send=%.0fms, total=%.0fms]",
+            user_id,
+            username,
+            msg_send_ms,
+            duration_ms,
+        )
+
+    except Exception as e:
+        duration_ms = (time.time() - cmd_start) * 1000
+        logger.error(
+            "❌ /start failed for user %d (@%s) after %.0fms: %s",
+            user_id,
+            username,
+            duration_ms,
+            e,
+            exc_info=True,
+        )
+        raise
 
 
 async def start_button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -107,32 +139,61 @@ async def start_button_callback(update: Update, context: ContextTypes.DEFAULT_TY
         update: Update de Telegram con el callback query
         context: Contexto del bot
     """
+    cb_start = time.time()
     query = update.callback_query
-    await query.answer()
-
-    # Extraer comando del callback_data
+    user_id = query.from_user.id
+    username = query.from_user.username or "N/A"
     command = query.data.replace("start_", "")
-    logger.info(f"🔘 Start button '{command}' pressed by user {query.from_user.id}")
 
-    # Obtener cliente API
-    api_client: TasaloApiClient = context.bot_data.get("api_client")
-    if not api_client:
-        logger.error("❌ api_client no está disponible en bot_data")
-        await query.edit_message_text("❌ Error de configuración del bot.")
-        return
+    logger.info(
+        "🔘 Start button '%s' pressed by user %d (@%s)",
+        command,
+        user_id,
+        username,
+    )
 
     try:
+        # Answer callback immediately for responsiveness
+        answer_start = time.time()
+        await query.answer()
+        answer_ms = (time.time() - answer_start) * 1000
+        logger.debug("Callback answered for user %d (%.0fms)", user_id, answer_ms)
+
+        # Obtener cliente API
+        api_client: TasaloApiClient = context.bot_data.get("api_client")
+        if not api_client:
+            logger.error("❌ api_client no está disponible en bot_data for user %d", user_id)
+            await query.edit_message_text("❌ Error de configuración del bot.")
+            return
+
         # Obtener datos de la API
+        api_call_start = time.time()
         response = await api_client.get_latest()
+        api_call_ms = (time.time() - api_call_start) * 1000
+
+        logger.info(
+            "📡 API get_latest for button '%s', user %d (%.0fms)",
+            command,
+            user_id,
+            api_call_ms,
+        )
 
         if not response or not response.get("ok"):
-            logger.warning(f"⚠️ API respondió None o ok=False para {command}")
+            logger.warning(
+                "⚠️ API returned None or ok=False for button '%s', user %d",
+                command,
+                user_id,
+            )
             await query.answer("⚠️ Error obteniendo datos", show_alert=True)
             return
 
         api_data = response.get("data", {})
         if not api_data:
-            logger.warning(f"⚠️ API data está vacío para {command}")
+            logger.warning(
+                "⚠️ API data is empty for button '%s', user %d",
+                command,
+                user_id,
+            )
             await query.answer("⚠️ Datos no disponibles", show_alert=True)
             return
 
@@ -147,16 +208,33 @@ async def start_button_callback(update: Update, context: ContextTypes.DEFAULT_TY
 
         build_func = build_funcs.get(command)
         if not build_func:
-            logger.error(f"❌ Build function no encontrada para {command}")
+            logger.error(
+                "❌ Build function not found for button '%s', user %d",
+                command,
+                user_id,
+            )
             return
 
         # Manejar toqueimg diferente (envía imagen, no texto)
         if command == "toqueimg":
+            img_start = time.time()
             await build_func(context, query)
+            img_ms = (time.time() - img_start) * 1000
+
+            duration_ms = (time.time() - cb_start) * 1000
+            logger.info(
+                "✅ ToqueImg sent for user %d (@%s) [render=%.0fms, total=%.0fms]",
+                user_id,
+                username,
+                img_ms,
+                duration_ms,
+            )
             return
 
         # Construir mensaje
+        msg_build_start = time.time()
         text = build_func(api_data)
+        msg_build_ms = (time.time() - msg_build_start) * 1000
 
         # Construir teclado con botón refresh
         keyboard = InlineKeyboardMarkup(
@@ -166,17 +244,45 @@ async def start_button_callback(update: Update, context: ContextTypes.DEFAULT_TY
         )
 
         # Enviar como nuevo mensaje (no editar el existente)
+        reply_start = time.time()
         await query.message.reply_text(
             text=text,
             reply_markup=keyboard,
             parse_mode="Markdown",
         )
+        reply_ms = (time.time() - reply_start) * 1000
 
-        logger.info(f"✅ Start button '{command}' response sent")
+        duration_ms = (time.time() - cb_start) * 1000
+        logger.info(
+            "✅ Button '%s' response sent for user %d (@%s) "
+            "[build=%.0fms, reply=%.0fms, total=%.0fms]",
+            command,
+            user_id,
+            username,
+            msg_build_ms,
+            reply_ms,
+            duration_ms,
+        )
 
     except Exception as e:
-        logger.error(f"❌ Error en start button callback {command}: {e}", exc_info=True)
-        await query.answer("❌ Error obteniendo datos", show_alert=True)
+        duration_ms = (time.time() - cb_start) * 1000
+        logger.error(
+            "❌ Error in start button callback '%s' for user %d (@%s) after %.0fms: %s",
+            command,
+            user_id,
+            username,
+            duration_ms,
+            e,
+            exc_info=True,
+        )
+        try:
+            await query.answer("❌ Error obteniendo datos", show_alert=True)
+        except Exception:
+            logger.error(
+                "❌ Failed to send error alert to user %d after callback exception",
+                user_id,
+                exc_info=True,
+            )
 
 
 def _build_tasalo_start_message(full_message_func, api_data: dict) -> str:
@@ -201,23 +307,74 @@ async def _handle_toqueimg_start(context: ContextTypes.DEFAULT_TYPE, query):
         context: Contexto del bot
         query: Callback query de Telegram
     """
-    from src.handlers.toqueimg import toqueimg_command
-    
-    # Responder al callback
-    await query.answer("📸 Abriendo ToqueImg...")
-    
-    # Crear un mensaje temporal para pasar al handler
-    # Usamos el mismo chat que el query
-    temp_message = await query.message.reply_text("📸 Capturando imagen...")
-    
-    # Crear update fake con la estructura correcta
-    class FakeUpdate:
-        def __init__(self, message, user):
-            self.message = message
-            self.effective_user = user
-            self.effective_chat = message.chat
-    
-    fake_update = FakeUpdate(temp_message, query.from_user)
-    
-    # Llamar al handler de toqueimg
-    await toqueimg_command(fake_update, context)
+    handler_start = time.time()
+    user_id = query.from_user.id
+    username = query.from_user.username or "N/A"
+
+    logger.info(
+        "📸 ToqueImg handler invoked by user %d (@%s)",
+        user_id,
+        username,
+    )
+
+    try:
+        from src.handlers.toqueimg import toqueimg_command
+
+        # Responder al callback
+        await query.answer("📸 Abriendo ToqueImg...")
+
+        # Crear un mensaje temporal para pasar al handler
+        # Usamos el mismo chat que el query
+        temp_msg_start = time.time()
+        temp_message = await query.message.reply_text("📸 Capturando imagen...")
+        temp_msg_ms = (time.time() - temp_msg_start) * 1000
+
+        logger.debug(
+            "Temp message sent for ToqueImg, user %d (%.0fms)",
+            user_id,
+            temp_msg_ms,
+        )
+
+        # Crear update fake con la estructura correcta
+        class FakeUpdate:
+            def __init__(self, message, user):
+                self.message = message
+                self.effective_user = user
+                self.effective_chat = message.chat
+
+        fake_update = FakeUpdate(temp_message, query.from_user)
+
+        # Llamar al handler de toqueimg
+        handler_call_start = time.time()
+        await toqueimg_command(fake_update, context)
+        handler_call_ms = (time.time() - handler_call_start) * 1000
+
+        duration_ms = (time.time() - handler_start) * 1000
+        logger.info(
+            "✅ ToqueImg handler completed for user %d (@%s) "
+            "[temp_msg=%.0fms, handler=%.0fms, total=%.0fms]",
+            user_id,
+            username,
+            temp_msg_ms,
+            handler_call_ms,
+            duration_ms,
+        )
+
+    except Exception as e:
+        duration_ms = (time.time() - handler_start) * 1000
+        logger.error(
+            "❌ ToqueImg handler failed for user %d (@%s) after %.0fms: %s",
+            user_id,
+            username,
+            duration_ms,
+            e,
+            exc_info=True,
+        )
+        try:
+            await query.answer("❌ Error capturando imagen", show_alert=True)
+        except Exception:
+            logger.error(
+                "❌ Failed to send error alert to user %d after ToqueImg exception",
+                user_id,
+                exc_info=True,
+            )

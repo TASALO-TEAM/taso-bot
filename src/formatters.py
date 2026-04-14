@@ -165,9 +165,12 @@ def build_eltoque_block(data: Dict[str, Any]) -> str:
     eltoque_data = data.get("eltoque", {})
 
     if not eltoque_data:
+        logger.warning("⚠️ ElToque data empty or missing")
         lines.append("Datos no disponibles")
         lines.append("")
         return "\n".join(lines)
+
+    logger.debug("📊 ElToque data: %d currencies", len(eltoque_data))
 
     # Ordenar monedas: legacy order - EUR, USD, MLC, BTC, TRX, USDT
     priority = ["EUR", "USD", "MLC", "BTC", "TRX", "USDT"]
@@ -199,10 +202,14 @@ def build_eltoque_block(data: Dict[str, Any]) -> str:
             diff = rate - prev_rate
             indicator = " " + INDICATOR_UP
             change_str = f" +{diff:,.2f}"
+            logger.debug("📈 %s change indicator: %s %.2f", currency, INDICATOR_UP, diff)
         elif change == "down" and prev_rate is not None:
             diff = rate - prev_rate
             indicator = " " + INDICATOR_DOWN
             change_str = f" {diff:,.2f}"
+            logger.debug("📉 %s change indicator: %s %.2f", currency, INDICATOR_DOWN, diff)
+        elif change in ("up", "down") and prev_rate is None:
+            logger.debug("⚠️ %s has change=%s but prev_rate is None", currency, change)
 
         # Formato legacy: " EUR:   580.00  CUP 🔺"
         line = f" *{currency}:*   {rate_str}  CUP{indicator}{change_str}"
@@ -237,14 +244,17 @@ def build_cadeca_block(data: Dict[str, Any]) -> str:
     lines.append(SEPARATOR_THICK)
 
     cadeca_data = data.get("cadeca", {})
-    
+
     # Debug logging
     logger.info(f"🔍 CADECA data received: {cadeca_data}")
 
     if not cadeca_data:
+        logger.warning("⚠️ CADECA data empty or missing")
         lines.append("⚠️ Not available")
         lines.append("")
         return "\n".join(lines)
+
+    logger.debug("📊 CADECA data: %d currencies", len(cadeca_data))
 
     # Header de columnas
     lines.append("_Currency_     _Buy_      _Sell_")
@@ -285,8 +295,10 @@ def build_cadeca_block(data: Dict[str, Any]) -> str:
         indicator = ""
         if change == "up":
             indicator = " " + INDICATOR_UP
+            logger.debug("📈 %s CADECA indicator: %s", currency, INDICATOR_UP)
         elif change == "down":
             indicator = " " + INDICATOR_DOWN
+            logger.debug("📉 %s CADECA indicator: %s", currency, INDICATOR_DOWN)
 
         # Formato legacy: columna alineada
         line = f" *{currency}*          {buy_str}       {sell_str}{indicator}"
@@ -321,9 +333,12 @@ def build_bcc_block(data: Dict[str, Any]) -> str:
     bcc_data = data.get("bcc", {})
 
     if not bcc_data:
+        logger.warning("⚠️ BCC data empty or missing")
         lines.append("⚠️ Not available")
         lines.append("")
         return "\n".join(lines)
+
+    logger.debug("📊 BCC data: %d currencies", len(bcc_data))
 
     # Ordenar monedas: legacy order - EUR, USD, MLC, CAD, MXN, GBP, CHF, RUB, AUD, JPY
     priority = ["EUR", "USD", "MLC", "CAD", "MXN", "GBP", "CHF", "RUB", "AUD", "JPY"]
@@ -354,10 +369,14 @@ def build_bcc_block(data: Dict[str, Any]) -> str:
             diff = rate - prev_rate
             indicator = "  " + INDICATOR_UP
             change_str = f" +{diff:,.2f}"
+            logger.debug("📈 %s BCC indicator: %s %.2f", currency, INDICATOR_UP, diff)
         elif change == "down" and prev_rate is not None:
             diff = rate - prev_rate
             indicator = "  " + INDICATOR_DOWN
             change_str = f" {diff:,.2f}"
+            logger.debug("📉 %s BCC indicator: %s %.2f", currency, INDICATOR_DOWN, diff)
+        elif change in ("up", "down") and prev_rate is None:
+            logger.debug("⚠️ %s BCC has change=%s but prev_rate is None", currency, change)
 
         # Formato legacy: " EUR:   551.23   CUP  🔺"
         line = f" *{currency}:*   {rate_str}   *CUP*{indicator}{change_str}"
@@ -407,9 +426,12 @@ def build_binance_block(data: Dict[str, Any]) -> str:
     binance_data = data.get("binance", {})
 
     if not binance_data:
+        logger.warning("⚠️ Binance data empty or missing")
         lines.append("_Datos no disponibles_")
         lines.append("")
         return "\n".join(lines)
+
+    logger.debug("📊 Binance data: %d pairs", len(binance_data))
 
     # Ordenar: USDT, BTC, ETH, BNB, luego el resto
     priority = ["USDT", "BTC", "ETH", "BNB"]
@@ -523,20 +545,31 @@ def build_full_message(data: Dict[str, Any]) -> str:
     # Bloque CADECA (si hay datos)
     cadeca_data = data.get("cadeca", {})
     if cadeca_data:
+        logger.debug("📊 CADECA block included: %d currencies", len(cadeca_data))
         cadeca_block = build_cadeca_block(data)
         blocks.append(cadeca_block)
         blocks.append(SEPARATOR_THIN)
+    else:
+        logger.debug("📊 CADECA block skipped: no data")
 
     # Bloque BCC (si hay datos)
     bcc_data = data.get("bcc", {})
     if bcc_data:
+        logger.debug("📊 BCC block included: %d currencies", len(bcc_data))
         bcc_block = build_bcc_block(data)
         blocks.append(bcc_block)
         blocks.append(SEPARATOR_THIN)
+    else:
+        logger.debug("📊 BCC block skipped: no data")
 
     # Footer
     footer = build_footer(data)
     blocks.append(footer)
+
+    logger.debug(
+        "📝 Built full message with %s",
+        "DATE_TIME entities" if HAS_DATETIME_ENTITY else "Markdown fallback",
+    )
 
     return "\n".join(blocks)
 
@@ -563,8 +596,11 @@ def build_full_message_with_datetime(
     """
     if not HAS_DATETIME_ENTITY:
         # Fallback: use standard Markdown formatting
+        logger.debug("📝 DATE_TIME not supported, using Markdown fallback")
         text = build_full_message(data)
         return text, []
+
+    logger.debug("📝 Building full message with DATE_TIME entities")
 
     # Build blocks manually (mirroring build_full_message but with DATE_TIME entity)
     blocks = []
@@ -695,11 +731,14 @@ def build_history_message(
     lines.append(SEPARATOR_THICK)
 
     if not history_data:
+        logger.debug("📜 No history data for %s/%s", currency, source)
         lines.append("_No hay datos históricos disponibles_")
         lines.append("")
         lines.append("Intenta con otro rango de días o fuente.")
         lines.append("")
         return "\n".join(lines)
+
+    logger.debug("📜 History data for %s/%s: %d records", currency, source, len(history_data))
 
     # Procesar datos (más reciente primero)
     prev_rate = None
@@ -752,8 +791,10 @@ def build_eltoque_only_message(api_data: Dict[str, Any]) -> str:
     eltoque_data = api_data.get("eltoque", {})
 
     if not eltoque_data:
+        logger.warning("⚠️ ElToque data empty for /toque command")
         lines.append("Datos no disponibles")
     else:
+        logger.debug("📊 /toque ElToque data: %d currencies", len(eltoque_data))
         # Ordenar monedas: legacy order - EUR, USD, MLC, BTC, TRX, USDT
         priority = ["EUR", "USD", "MLC", "BTC", "TRX", "USDT"]
         sorted_currencies = sorted(
@@ -811,10 +852,12 @@ def build_bcc_only_message(api_data: Dict[str, Any]) -> str:
     lines.append(SEPARATOR_THICK)
     
     bcc_data = api_data.get("bcc", {})
-    
+
     if not bcc_data:
+        logger.warning("⚠️ BCC data empty for /bcc command")
         lines.append("⚠️ Not available")
     else:
+        logger.debug("📊 /bcc BCC data: %d currencies", len(bcc_data))
         priority = ["EUR", "USD", "MLC", "CAD", "MXN", "GBP", "CHF", "RUB", "AUD", "JPY"]
         sorted_currencies = sorted(
             bcc_data.keys(),
@@ -870,10 +913,12 @@ def build_cadeca_only_message(api_data: Dict[str, Any]) -> str:
     lines.append(SEPARATOR_THICK)
     
     cadeca_data = api_data.get("cadeca", {})
-    
+
     if not cadeca_data:
+        logger.warning("⚠️ CADECA data empty for /cadeca command")
         lines.append("⚠️ Not available")
     else:
+        logger.debug("📊 /cadeca CADECA data: %d currencies", len(cadeca_data))
         lines.append("_Currency_     _Buy_      _Sell_")
         
         priority = ["EUR", "USD", "MLC", "CAD", "MXN", "GBP", "CHF", "RUB", "AUD", "JPY"]
@@ -970,6 +1015,7 @@ def build_toque_new_message(api_data: Dict[str, Any]) -> str:
     eltoque_data = api_data.get("eltoque", {})
 
     if not eltoque_data:
+        logger.warning("⚠️ ElToque data empty for /toque new format")
         lines.append("⚠️ Datos no disponibles")
         lines.append("")
         lines.append(SEPARATOR_THICK)
@@ -979,6 +1025,8 @@ def build_toque_new_message(api_data: Dict[str, Any]) -> str:
             lines.append(f"📆 {date_str}")
         lines.append("🔗 elToque.com")
         return "\n".join(lines)
+
+    logger.debug("📊 /toque new format: %d currencies", len(eltoque_data))
 
     # Sección 1: Valores actuales del mercado (Fiat - EUR, USD, MLC)
     lines.append("» Valores actuales del mercado:")

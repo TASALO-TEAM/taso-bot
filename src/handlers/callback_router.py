@@ -10,8 +10,10 @@ Benefits:
 - Central logging of all callbacks
 - Consistent error handling for unknown callbacks
 - query.answer() always called first (avoids Telegram warnings)
+- Comprehensive timing and user context tracking
 """
 import re
+import time
 import logging
 from telegram import Update
 from telegram.ext import ContextTypes, CallbackQueryHandler
@@ -26,9 +28,9 @@ logger = logging.getLogger(__name__)
 ROUTE_MAP = {
     "start": "_handle_start",
     "tasalo": "_handle_tasalo",
-    "toque": "_handle_tasalo",  # Reuses tasalo handler
-    "bcc": "_handle_tasalo",    # Reuses tasalo handler
-    "cadeca": "_handle_tasalo", # Reuses tasalo handler
+    "toque": "_handle_tasalo",
+    "bcc": "_handle_tasalo",
+    "cadeca": "_handle_tasalo",
     "toqueimg": "_handle_toqueimg",
     "alert": "_handle_alert",
 }
@@ -36,34 +38,59 @@ ROUTE_MAP = {
 
 async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Route callback queries to appropriate handlers based on namespace prefix."""
+    callback_start = time.time()
     query = update.callback_query
     if not query:
         return
+
+    user_id = query.from_user.id
+    callback_data = query.data
+    namespace = callback_data.split("_")[0]
+
+    logger.info("🔘 Callback '%s' from user %d (namespace: %s)", callback_data, user_id, namespace)
 
     # Answer immediately to remove loading state
     try:
         await query.answer()
     except BadRequest as e:
-        logger.warning(f"Failed to answer query: {e}")
+        logger.warning("Failed to answer query for user %d: %s", user_id, e)
         return
-
-    callback_data = query.data
-    namespace = callback_data.split("_")[0]
 
     handler_name = ROUTE_MAP.get(namespace)
     if handler_name:
         handler_func = globals().get(handler_name)
         if handler_func:
+            logger.debug("Routing '%s' to handler '%s' for user %d", callback_data, handler_name, user_id)
             try:
                 await handler_func(update, context, callback_data)
+                duration_ms = (time.time() - callback_start) * 1000
+                logger.info(
+                    "✅ Callback '%s' completed for user %d via '%s' (%.0fms)",
+                    callback_data, user_id, handler_name, duration_ms,
+                )
             except Exception as e:
-                logger.error(f"Error handling callback '{callback_data}': {e}", exc_info=True)
-                await query.answer("⚠️ Error procesando la acción", show_alert=True)
+                duration_ms = (time.time() - callback_start) * 1000
+                logger.error(
+                    "❌ Error handling callback '%s' for user %d via '%s' (%.0fms): %s",
+                    callback_data, user_id, handler_name, duration_ms, e, exc_info=True,
+                )
+                try:
+                    await query.answer("⚠️ Error procesando la acción", show_alert=True)
+                except BadRequest:
+                    pass
         else:
-            logger.error(f"Handler function '{handler_name}' not found")
+            duration_ms = (time.time() - callback_start) * 1000
+            logger.error(
+                "❌ Handler function '%s' not found for callback '%s' from user %d (%.0fms)",
+                handler_name, callback_data, user_id, duration_ms,
+            )
             await query.answer("⚠️ Acción no reconocida", show_alert=True)
     else:
-        logger.warning(f"Unknown callback namespace: {namespace} (data: {callback_data})")
+        duration_ms = (time.time() - callback_start) * 1000
+        logger.warning(
+            "⚠️ Unknown callback namespace: %s (data: %s) from user %d (%.0fms)",
+            namespace, callback_data, user_id, duration_ms,
+        )
         await query.answer("⚠️ Acción no reconocida", show_alert=True)
 
 
@@ -71,41 +98,95 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
 async def _handle_start(update: Update, context: ContextTypes.DEFAULT_TYPE, callback_data: str) -> None:
     """Handle start_* callbacks."""
-    # Extract command: start_tasalo → tasalo, start_toque → toque, etc.
+    handler_start = time.time()
+    query = update.callback_query
+    user_id = query.from_user.id
+
     command = callback_data.replace("start_", "")
+    logger.info("🚀 Handler _handle_start processing '%s' for user %d", command, user_id)
+
     await start.start_button_callback(update, context)
+
+    duration_ms = (time.time() - handler_start) * 1000
+    logger.info("✅ _handle_start completed for user %d command '%s' (%.0fms)", user_id, command, duration_ms)
 
 
 # ── Tasalo/source callbacks ──
 
 async def _handle_tasalo(update: Update, context: ContextTypes.DEFAULT_TYPE, callback_data: str) -> None:
     """Handle tasalo_*, toque_*, bcc_*, cadeca_* callbacks."""
-    if callback_data == "tasalo_refresh":
-        await tasalo.tasalo_refresh_callback(update, context)
-    elif callback_data == "tasalo_back":
-        await tasalo.tasalo_back_callback(update, context)
-    elif callback_data.startswith("tasalo_history:"):
-        await tasalo.history_callback(update, context)
-    elif callback_data.endswith("_refresh"):
-        await tasalo.source_refresh_callback(update, context)
-    else:
-        logger.warning("Unknown tasalo callback: %s", callback_data)
+    handler_start = time.time()
+    query = update.callback_query
+    user_id = query.from_user.id
+
+    logger.info("📊 Handler _handle_tasalo processing '%s' for user %d", callback_data, user_id)
+
+    try:
+        if callback_data == "tasalo_refresh":
+            await tasalo.tasalo_refresh_callback(update, context)
+        elif callback_data == "tasalo_back":
+            await tasalo.tasalo_back_callback(update, context)
+        elif callback_data.startswith("tasalo_history:"):
+            await tasalo.history_callback(update, context)
+        elif callback_data.endswith("_refresh"):
+            await tasalo.source_refresh_callback(update, context)
+        else:
+            logger.warning("Unknown tasalo callback: %s for user %d", callback_data, user_id)
+            duration_ms = (time.time() - handler_start) * 1000
+            logger.info("⚠️ _handle_tasalo unknown callback '%s' for user %d (%.0fms)", callback_data, user_id, duration_ms)
+            return
+
+        duration_ms = (time.time() - handler_start) * 1000
+        logger.info("✅ _handle_tasalo completed for user %d callback '%s' (%.0fms)", user_id, callback_data, duration_ms)
+    except Exception as e:
+        duration_ms = (time.time() - handler_start) * 1000
+        logger.error(
+            "❌ Error in _handle_tasalo for user %d callback '%s' (%.0fms): %s",
+            user_id, callback_data, duration_ms, e, exc_info=True,
+        )
+        raise
 
 
 # ── ToqueImg callbacks ──
 
 async def _handle_toqueimg(update: Update, context: ContextTypes.DEFAULT_TYPE, callback_data: str) -> None:
     """Handle toqueimg_* callbacks."""
-    if callback_data == "toqueimg_refresh":
-        await toqueimg.toqueimg_refresh_callback(update, context)
-    else:
-        logger.warning("Unknown toqueimg callback: %s", callback_data)
+    handler_start = time.time()
+    query = update.callback_query
+    user_id = query.from_user.id
+
+    logger.info("🖼️ Handler _handle_toqueimg processing '%s' for user %d", callback_data, user_id)
+
+    try:
+        if callback_data == "toqueimg_refresh":
+            await toqueimg.toqueimg_refresh_callback(update, context)
+        else:
+            logger.warning("Unknown toqueimg callback: %s for user %d", callback_data, user_id)
+            duration_ms = (time.time() - handler_start) * 1000
+            logger.info("⚠️ _handle_toqueimg unknown callback '%s' for user %d (%.0fms)", callback_data, user_id, duration_ms)
+            return
+
+        duration_ms = (time.time() - handler_start) * 1000
+        logger.info("✅ _handle_toqueimg completed for user %d callback '%s' (%.0fms)", user_id, callback_data, duration_ms)
+    except Exception as e:
+        duration_ms = (time.time() - handler_start) * 1000
+        logger.error(
+            "❌ Error in _handle_toqueimg for user %d callback '%s' (%.0fms): %s",
+            user_id, callback_data, duration_ms, e, exc_info=True,
+        )
+        raise
 
 
 # ── Alert callbacks ──
 
 async def _handle_alert(update: Update, context: ContextTypes.DEFAULT_TYPE, callback_data: str) -> None:
     """Handle alert_* callbacks."""
+    handler_start = time.time()
+    query = update.callback_query
+    user_id = query.from_user.id
+
+    logger.info("🔔 Handler _handle_alert processing '%s' for user %d", callback_data, user_id)
+
     alert_handlers = {
         "alert_enable_default": image_alerts.alert_enable_default_callback,
         "alert_custom_time": image_alerts.alert_custom_time_callback,
@@ -116,13 +197,32 @@ async def _handle_alert(update: Update, context: ContextTypes.DEFAULT_TYPE, call
         "alert_cancel": image_alerts.alert_cancel_callback,
     }
 
-    # Handle format sub-callbacks: alert_format_photo, alert_format_document
-    if callback_data.startswith("alert_format_"):
-        await image_alerts.alert_format_callback(update, context)
-    elif callback_data in alert_handlers:
-        await alert_handlers[callback_data](update, context)
-    else:
-        logger.warning("Unknown alert callback: %s", callback_data)
+    try:
+        # Handle format sub-callbacks: alert_format_photo, alert_format_document
+        if callback_data.startswith("alert_format_"):
+            logger.debug("Routing '%s' to alert_format_callback for user %d", callback_data, user_id)
+            await image_alerts.alert_format_callback(update, context)
+        elif callback_data in alert_handlers:
+            handler_name = alert_handlers[callback_data].__name__
+            logger.debug("Routing '%s' to '%s' for user %d", callback_data, handler_name, user_id)
+            await alert_handlers[callback_data](update, context)
+        else:
+            duration_ms = (time.time() - handler_start) * 1000
+            logger.warning(
+                "⚠️ Unknown alert callback: %s for user %d (%.0fms)",
+                callback_data, user_id, duration_ms,
+            )
+            return
+
+        duration_ms = (time.time() - handler_start) * 1000
+        logger.info("✅ _handle_alert completed for user %d callback '%s' (%.0fms)", user_id, callback_data, duration_ms)
+    except Exception as e:
+        duration_ms = (time.time() - handler_start) * 1000
+        logger.error(
+            "❌ Error in _handle_alert for user %d callback '%s' (%.0fms): %s",
+            user_id, callback_data, duration_ms, e, exc_info=True,
+        )
+        raise
 
 
 def get_callback_handler() -> CallbackQueryHandler:

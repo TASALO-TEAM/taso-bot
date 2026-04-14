@@ -1,8 +1,9 @@
 # src/api_client.py
-"""Cliente HTTP asíncrono para consumir taso-api con retry automático."""
+"""Cliente HTTP asíncrono para consumir taso-api con retry automático y logging detallado."""
 
 import httpx
 import logging
+import time
 from typing import Optional, Dict, Any
 
 from tenacity import (
@@ -126,72 +127,92 @@ class TasaloApiClient:
         Endpoint: GET /api/v1/tasas/latest
         """
         url = f"{self.api_url}/api/v1/tasas/latest"
+        start_time = time.time()
 
         try:
             data = await self._get_with_retry(url)
+            duration_ms = (time.time() - start_time) * 1000
+            
             if data and data.get('ok'):
-                logger.info("✅ Tasas obtenidas correctamente de taso-api")
+                logger.info("✅ Tasas obtenidas de taso-api (%.0fms)", duration_ms)
                 return data
             else:
-                logger.warning(f"⚠️ API respondió ok=False")
+                logger.warning("⚠️ API respondió ok=False (%.0fms)", duration_ms)
                 return None
 
         except httpx.TimeoutException as e:
-            logger.error(f"⏱️ Timeout tras 3 reintentos: {e}")
+            duration_ms = (time.time() - start_time) * 1000
+            logger.error("⏱️ Timeout tras 3 reintentos (%.0fms): %s", duration_ms, e)
             return None
         except httpx.ConnectError as e:
-            logger.error(f"🔌 Error de conexión tras 3 reintentos: {e}")
+            duration_ms = (time.time() - start_time) * 1000
+            logger.error("🔌 Error de conexión tras 3 reintentos (%.0fms): %s", duration_ms, e)
             return None
         except httpx.HTTPStatusError as e:
-            logger.error(f"❌ Error HTTP {e.response.status_code}: {e}")
+            duration_ms = (time.time() - start_time) * 1000
+            logger.error("❌ Error HTTP %d (%.0fms): %s", e.response.status_code, duration_ms, e)
             return None
         except Exception as e:
-            logger.error(f"❌ Error inesperado: {e}", exc_info=True)
+            duration_ms = (time.time() - start_time) * 1000
+            logger.error("❌ Error inesperado en get_latest (%.0fms): %s", duration_ms, e, exc_info=True)
             return None
 
     async def get_eltoque(self) -> Optional[Dict[str, Any]]:
         """Obtener solo tasas de ElToque."""
         url = f"{self.api_url}/api/v1/tasas/eltoque"
+        start_time = time.time()
 
         try:
             data = await self._get_with_retry(url)
+            duration_ms = (time.time() - start_time) * 1000
+            
             if data and data.get('ok'):
-                logger.info("✅ Tasas ElToque obtenidas")
+                logger.info("✅ Tasas ElToque obtenidas (%.0fms)", duration_ms)
                 return data
+            logger.warning("⚠️ ElToque respondió ok=False (%.0fms)", duration_ms)
             return None
 
         except Exception as e:
-            logger.error(f"❌ Error obteniendo ElToque: {e}")
+            duration_ms = (time.time() - start_time) * 1000
+            logger.error("❌ Error obteniendo ElToque (%.0fms): %s", duration_ms, e)
             return None
 
     async def get_cadeca(self) -> Optional[Dict[str, Any]]:
         """Obtener solo tasas de CADECA."""
         url = f"{self.api_url}/api/v1/tasas/cadeca"
+        start_time = time.time()
 
         try:
             data = await self._get_with_retry(url)
+            duration_ms = (time.time() - start_time) * 1000
+            
             if data and data.get('ok'):
-                logger.info("✅ Tasas CADECA obtenidas")
+                logger.info("✅ Tasas CADECA obtenidas (%.0fms)", duration_ms)
                 return data
             return None
 
         except Exception as e:
-            logger.error(f"❌ Error obteniendo CADECA: {e}")
+            duration_ms = (time.time() - start_time) * 1000
+            logger.error("❌ Error obteniendo CADECA (%.0fms): %s", duration_ms, e)
             return None
 
     async def get_bcc(self) -> Optional[Dict[str, Any]]:
         """Obtener solo tasas de BCC."""
         url = f"{self.api_url}/api/v1/tasas/bcc"
+        start_time = time.time()
 
         try:
             data = await self._get_with_retry(url)
+            duration_ms = (time.time() - start_time) * 1000
+            
             if data and data.get('ok'):
-                logger.info("✅ Tasas BCC obtenidas")
+                logger.info("✅ Tasas BCC obtenidas (%.0fms)", duration_ms)
                 return data
             return None
 
         except Exception as e:
-            logger.error(f"❌ Error obteniendo BCC: {e}")
+            duration_ms = (time.time() - start_time) * 1000
+            logger.error("❌ Error obteniendo BCC (%.0fms): %s", duration_ms, e)
             return None
 
     async def admin_refresh(self) -> Optional[Dict[str, Any]]:
@@ -201,24 +222,29 @@ class TasaloApiClient:
             return None
 
         url = f"{self.api_url}/api/v1/admin/refresh"
+        start_time = time.time()
 
         try:
             data = await self._post_with_retry(url, headers=self._admin_headers)
+            duration_ms = (time.time() - start_time) * 1000
+            
             if data and data.get('ok'):
-                logger.info("✅ Refresh admin ejecutado correctamente")
+                logger.info("✅ Refresh admin ejecutado (%.0fms)", duration_ms)
                 return data
             else:
-                logger.warning(f"⚠️ Refresh admin respondió ok=False")
+                logger.warning("⚠️ Refresh admin respondió ok=False (%.0fms)", duration_ms)
                 return None
 
         except httpx.HTTPStatusError as e:
+            duration_ms = (time.time() - start_time) * 1000
             if e.response.status_code == 401:
-                logger.error("🔑 Error 401: API key inválida o faltante")
+                logger.error("🔑 Error 401: API key inválida o faltante (%.0fms)", duration_ms)
             else:
-                logger.error(f"❌ Error HTTP {e.response.status_code}: {e}")
+                logger.error("❌ Error HTTP %d (%.0fms): %s", e.response.status_code, duration_ms, e)
             return None
         except Exception as e:
-            logger.error(f"❌ Error en admin_refresh: {e}")
+            duration_ms = (time.time() - start_time) * 1000
+            logger.error("❌ Error en admin_refresh (%.0fms): %s", duration_ms, e)
             return None
 
     async def admin_status(self) -> Optional[Dict[str, Any]]:
@@ -228,22 +254,27 @@ class TasaloApiClient:
             return None
 
         url = f"{self.api_url}/api/v1/admin/status"
+        start_time = time.time()
 
         try:
             data = await self._get_with_retry(url, headers=self._admin_headers)
+            duration_ms = (time.time() - start_time) * 1000
+            
             if data and data.get('ok'):
-                logger.info("✅ Status admin obtenido")
+                logger.info("✅ Status admin obtenido (%.0fms)", duration_ms)
                 return data
             return None
 
         except httpx.HTTPStatusError as e:
+            duration_ms = (time.time() - start_time) * 1000
             if e.response.status_code == 401:
-                logger.error("🔑 Error 401: API key inválida o faltante")
+                logger.error("🔑 Error 401: API key inválida o faltante (%.0fms)", duration_ms)
             else:
-                logger.error(f"❌ Error HTTP {e.response.status_code}: {e}")
+                logger.error("❌ Error HTTP %d (%.0fms): %s", e.response.status_code, duration_ms, e)
             return None
         except Exception as e:
-            logger.error(f"❌ Error en admin_status: {e}")
+            duration_ms = (time.time() - start_time) * 1000
+            logger.error("❌ Error en admin_status (%.0fms): %s", duration_ms, e)
             return None
 
     async def get_history(
@@ -259,27 +290,34 @@ class TasaloApiClient:
             "currency": currency,
             "days": days,
         }
+        start_time = time.time()
 
         try:
             data = await self._get_with_retry(url, params=params)
+            duration_ms = (time.time() - start_time) * 1000
+            
             if data and data.get('ok'):
-                logger.info(f"✅ Histórico obtenido: {days} días para {source}/{currency}")
+                logger.info("✅ Histórico obtenido: %d días %s/%s (%.0fms)", days, source, currency, duration_ms)
                 return data
             else:
-                logger.warning(f"⚠️ Histórico respondió ok=False")
+                logger.warning("⚠️ Histórico respondió ok=False (%.0fms)", duration_ms)
                 return None
 
         except httpx.TimeoutException as e:
-            logger.error(f"⏱️ Timeout tras 3 reintentos: {e}")
+            duration_ms = (time.time() - start_time) * 1000
+            logger.error("⏱️ Timeout tras 3 reintentos (%.0fms): %s", duration_ms, e)
             return None
         except httpx.ConnectError as e:
-            logger.error(f"🔌 Error de conexión tras 3 reintentos: {e}")
+            duration_ms = (time.time() - start_time) * 1000
+            logger.error("🔌 Error de conexión tras 3 reintentos (%.0fms): %s", duration_ms, e)
             return None
         except httpx.HTTPStatusError as e:
-            logger.error(f"❌ Error HTTP {e.response.status_code}: {e}")
+            duration_ms = (time.time() - start_time) * 1000
+            logger.error("❌ Error HTTP %d (%.0fms): %s", e.response.status_code, duration_ms, e)
             return None
         except Exception as e:
-            logger.error(f"❌ Error inesperado en histórico: {e}", exc_info=True)
+            duration_ms = (time.time() - start_time) * 1000
+            logger.error("❌ Error inesperado en histórico (%.0fms): %s", duration_ms, e, exc_info=True)
             return None
 
     async def track_command(
@@ -302,6 +340,7 @@ class TasaloApiClient:
             "source": source,
             "success": success,
         }
+        start_time = time.time()
 
         try:
             # Timeout corto para no bloquear, sin retry (fire-and-forget)
@@ -313,11 +352,12 @@ class TasaloApiClient:
                 timeout=httpx.Timeout(5.0, connect=2.0),
             )
             response.raise_for_status()
-            logger.debug(f"✅ Comando trackeado: {command} por user {user_id}")
+            duration_ms = (time.time() - start_time) * 1000
+            logger.debug("✅ Comando trackeado: %s por user %d (%.0fms)", command, user_id, duration_ms)
         except httpx.TimeoutException:
-            logger.debug(f"⏱️ Timeout trackeando comando {command}")
+            logger.debug("⏱️ Timeout trackeando comando %s", command)
         except Exception as e:
-            logger.debug(f"⚠️ Error trackeando comando {command}: {e}")
+            logger.debug("⚠️ Error trackeando comando %s: %s", command, e)
 
     async def get_stats_summary(self) -> Optional[Dict[str, Any]]:
         """Obtiene resumen de estadísticas del bot."""
@@ -326,20 +366,25 @@ class TasaloApiClient:
             return None
 
         url = f"{self.api_url}/api/v1/admin/stats/summary"
+        start_time = time.time()
 
         try:
             data = await self._get_with_retry(url, headers=self._admin_headers)
+            duration_ms = (time.time() - start_time) * 1000
+            
             if data and data.get('ok'):
-                logger.info("✅ Estadísticas obtenidas")
+                logger.info("✅ Estadísticas obtenidas (%.0fms)", duration_ms)
                 return data
             return None
 
         except httpx.HTTPStatusError as e:
+            duration_ms = (time.time() - start_time) * 1000
             if e.response.status_code == 401:
-                logger.error("🔑 Error 401: API key inválida o faltante")
+                logger.error("🔑 Error 401: API key inválida o faltante (%.0fms)", duration_ms)
             else:
-                logger.error(f"❌ Error HTTP {e.response.status_code}: {e}")
+                logger.error("❌ Error HTTP %d (%.0fms): %s", e.response.status_code, duration_ms, e)
             return None
         except Exception as e:
-            logger.error(f"❌ Error en get_stats_summary: {e}")
+            duration_ms = (time.time() - start_time) * 1000
+            logger.error("❌ Error en get_stats_summary (%.0fms): %s", duration_ms, e)
             return None

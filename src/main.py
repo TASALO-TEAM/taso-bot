@@ -5,6 +5,7 @@ import logging
 import sys
 import asyncio
 import os
+import time
 from typing import Any
 from telegram import Update
 from telegram.ext import (
@@ -62,7 +63,7 @@ logger = file_logger.logger
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Manejador global de errores.
 
-    Loguea errores y notifica al usuario si es posible.
+    Loguea errores con contexto completo y notifica al usuario si es posible.
 
     Args:
         update: El update que causó el error (puede ser None)
@@ -72,20 +73,27 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
     error = context.error
     error_type = type(error).__name__
 
-    # Loguear error con stack trace completo
+    # Extraer contexto de usuario si está disponible
+    user_id = None
+    chat_id = None
+    if isinstance(update, Update):
+        if update.effective_user:
+            user_id = update.effective_user.id
+        if update.effective_chat:
+            chat_id = update.effective_chat.id
+
+    # Loguear error con stack trace completo y contexto
+    user_context = f" | User:{user_id}" if user_id else ""
+    chat_context = f" | Chat:{chat_id}" if chat_id else ""
+
     logger.error(
-        "❌ Exception caused update %s to fail",
+        "❌ Exception in update%s%s: %s: %s",
         getattr(update, "update_id", "unknown"),
+        user_context,
+        error_type,
+        str(error),
         exc_info=error,
     )
-    logger.error("Error type: %s", error_type)
-    logger.error("Error message: %s", error)
-
-    # Context data para debugging
-    if isinstance(update, Update) and update.effective_chat:
-        logger.error("Chat ID: %s", update.effective_chat.id)
-    if isinstance(update, Update) and update.effective_user:
-        logger.error("User ID: %s", update.effective_user.id)
 
     # Notificar al usuario si es posible
     if isinstance(update, Update) and update.effective_message:
@@ -116,27 +124,35 @@ async def health_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
     Solo para administradores.
     """
     user_id = update.effective_user.id
+    logger.info("🔍 /health command invoked by user %s", user_id)
 
     # Verificar si es admin
     if user_id not in settings.get_admin_chat_ids_list():
+        logger.warning("⚠️ /health denied for non-admin user %s", user_id)
         await update.message.reply_text("🔑 Este comando es solo para administradores.")
         return
 
+    start_time = time.time()
     await update.message.reply_text("⏳ Verificando conexión con el backend...")
 
     data = await api_client.get_latest()
+    duration_ms = (time.time() - start_time) * 1000
 
     if data:
+        logger.info("✅ /health: Backend OK (%.0fms)", duration_ms)
         await update.message.reply_text(
             f"✅ *Backend Conectado*\n\n"
             f"*URL:* `{settings.tasalo_api_url}`\n"
-            f"*Updated:* `{data.get('updated_at', 'N/A')}`",
+            f"*Updated:* `{data.get('updated_at', 'N/A')}`\n"
+            f"*Response time:* `{duration_ms:.0f}ms`",
             parse_mode="Markdown",
         )
     else:
+        logger.error("❌ /health: Backend connection failed (%.0fms)", duration_ms)
         await update.message.reply_text(
             "❌ *Error de Conexión*\n\n"
             f"*URL:* `{settings.tasalo_api_url}`\n"
+            f"*Response time:* `{duration_ms:.0f}ms`\n"
             "El backend no responde.",
             parse_mode="Markdown",
         )
@@ -144,20 +160,30 @@ async def health_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def create_application() -> Application:
     """Crear y configurar la aplicación de python-telegram-bot."""
+    logger.info("🔧 Creating bot application instance...")
 
     # Crear aplicación
     application = Application.builder().token(settings.telegram_bot_token).build()
+    logger.debug("✅ Application instance created")
 
     # Registrar handlers
-    application.add_handler(CommandHandler("start", start_command))
-    application.add_handler(CommandHandler("tasalo", tasalo_command))
-    application.add_handler(CommandHandler("health", health_check))
-    application.add_handler(CommandHandler("refresh", refresh_command))
-    application.add_handler(CommandHandler("status", status_command))
-    application.add_handler(CommandHandler("toque", toque_command))
-    application.add_handler(CommandHandler("bcc", bcc_command))
-    application.add_handler(CommandHandler("cadeca", cadeca_command))
-    application.add_handler(CommandHandler("toqueimg", toqueimg_command))
+    command_handlers = [
+        ("start", start_command),
+        ("tasalo", tasalo_command),
+        ("health", health_check),
+        ("refresh", refresh_command),
+        ("status", status_command),
+        ("toque", toque_command),
+        ("bcc", bcc_command),
+        ("cadeca", cadeca_command),
+        ("toqueimg", toqueimg_command),
+    ]
+    
+    for cmd_name, handler in command_handlers:
+        application.add_handler(CommandHandler(cmd_name, handler))
+        logger.debug("  📌 CommandHandler registered: /%s", cmd_name)
+    
+    logger.info("✅ %d command handlers registered", len(command_handlers))
 
     # Registrar callback handler para botones del /start
     from src.handlers.callback_router import get_callback_handler
@@ -168,6 +194,7 @@ def create_application() -> Application:
     application.add_handler(
         MessageHandler(filters.TEXT & ~filters.COMMAND, handle_time_input)
     )
+    logger.debug("✅ MessageHandler registered for time input")
 
     # Registrar error handler global
     application.add_error_handler(error_handler)
@@ -175,10 +202,9 @@ def create_application() -> Application:
 
     # Guardar api_client en bot_data para acceso desde handlers
     application.bot_data["api_client"] = api_client
+    logger.debug("✅ API client stored in bot_data")
 
-    logger.info(
-        "✅ Handlers registered: start, tasalo, health, refresh, status, callback_router (1 handler)"
-    )
+    logger.info("✅ All handlers registered: start, tasalo, health, refresh, status, callback_router (1 handler)")
 
     return application
 
@@ -186,25 +212,31 @@ def create_application() -> Application:
 async def post_init(application: Application):
     """Callback después de inicializar el bot."""
     logger.info("🤖 Bot initialized. Verifying connection to taso-api...")
+    init_start = time.time()
 
     # Verificar conexión con el backend
     try:
+        api_start = time.time()
         data = await api_client.get_latest()
+        api_duration_ms = (time.time() - api_start) * 1000
+        
         if data:
             logger.info(
-                f"✅ Backend connection OK. Updated at: {data.get('updated_at')}"
+                "✅ Backend connection OK. Updated at: %s (%.0fms)",
+                data.get('updated_at'),
+                api_duration_ms
             )
         else:
-            logger.warning("⚠️ Backend connection: API returned None")
+            logger.warning("⚠️ Backend connection: API returned None (%.0fms)", api_duration_ms)
     except Exception as e:
-        logger.error(f"❌ Backend connection failed: {e}")
+        logger.error("❌ Backend connection failed: %s", e, exc_info=True)
 
     # Iniciar dispatcher de alertas diarias de imágenes
     try:
         start_daily_dispatcher(application.bot_data)
         logger.info("✅ Daily image alert dispatcher started (7:15 AM Cuba / 11:15 UTC)")
     except Exception as e:
-        logger.error(f"❌ Failed to start daily image dispatcher: {e}")
+        logger.error("❌ Failed to start daily image dispatcher: %s", e, exc_info=True)
 
     # Obtener y cachear foto de perfil del bot
     try:
@@ -212,6 +244,8 @@ async def post_init(application: Application):
         profile_path = await ensure_bot_profile_photo(application.bot, cache_dir="data")
 
         if profile_path:
+            logger.info("✅ Bot profile photo cached: %s", profile_path)
+            
             # Crear plantilla con marca de agua
             template_base = settings.template_full_path
             template_with_watermark = os.path.join("data", "template_watermark.png")
@@ -220,6 +254,7 @@ async def post_init(application: Application):
             os.makedirs("data", exist_ok=True)
 
             if os.path.exists(template_base):
+                watermark_start = time.time()
                 create_template_with_profile(
                     template_base,
                     profile_path,
@@ -228,20 +263,34 @@ async def post_init(application: Application):
                     size=(250, 250),
                     opacity=0.12,
                 )
+                watermark_duration_ms = (time.time() - watermark_start) * 1000
                 logger.info(
-                    f"✅ Plantilla con marca de agua creada: {template_with_watermark}"
+                    "✅ Watermark template created: %s (%.0fms)",
+                    template_with_watermark,
+                    watermark_duration_ms
                 )
+            else:
+                logger.warning("⚠️ Template base not found: %s", template_base)
     except Exception as e:
-        logger.error(f"⚠️ Error obteniendo foto de perfil: {e}")
+        logger.error("⚠️ Error obteniendo foto de perfil: %s", e, exc_info=True)
+
+    init_duration_ms = (time.time() - init_start) * 1000
+    logger.info("✅ Bot post-init completed in %.0fms", init_duration_ms)
 
 
 def main():
     """Entry point principal."""
+    logger.info("=" * 60)
     logger.info("🚀 Starting TASALO-Bot...")
+    logger.info("=" * 60)
     logger.info("📡 API URL: %s", settings.tasalo_api_url)
     logger.info("👥 Admin IDs: %s", settings.admin_chat_ids or "None configured")
     logger.info("📝 Log file: %s", LOG_FILE_PATH)
     logger.info("📂 Log directory: %s", LOGS_DIR)
+    logger.info("📋 Log level: %s", settings.log_level)
+    logger.info("🔄 API timeout: %ds", settings.api_timeout_seconds)
+    logger.info("🤖 Bot version: 0.11.1")
+    logger.info("=" * 60)
 
     # Crear aplicación
     app = create_application()
@@ -252,11 +301,17 @@ def main():
     # Configurar shutdown para detener el dispatcher y cerrar cliente HTTP
     async def post_shutdown(app: Application) -> None:
         """Detener el dispatcher de alertas diarias y limpiar recursos."""
+        logger.info("🛑 Bot shutting down...")
         stop_daily_dispatcher()
+        logger.info("✅ Daily dispatcher stopped")
+        
         # Cerrar cliente HTTP para liberar conexiones
         api_client: TasaloApiClient = app.bot_data.get("api_client")
         if api_client:
             await api_client.close()
+            logger.info("✅ API client closed")
+        
+        logger.info("✅ Shutdown complete")
 
     app.post_shutdown = post_shutdown
 
@@ -273,8 +328,9 @@ def main():
             logger.error("❌ WEBHOOK_URL and TELEGRAM_SECRET_TOKEN must be set when USE_WEBHOOK=true")
             sys.exit(1)
 
-        logger.info(f"🌐 Starting webhook mode on port {webhook_port}...")
-        logger.info(f"🔗 Webhook URL: {webhook_url}")
+        logger.info("🌐 Starting webhook mode on port %d...", webhook_port)
+        logger.info("🔗 Webhook URL: %s", webhook_url)
+        logger.info("🔐 Secret token configured: %s", "YES" if webhook_secret else "NO")
 
         app.run_webhook(
             listen="0.0.0.0",
@@ -287,6 +343,7 @@ def main():
     else:
         # Polling mode (development default)
         logger.info("📡 Starting polling mode...")
+        logger.info("🔄 Allowed updates: %s", ", ".join(ALLOWED_UPDATE_TYPES))
         app.run_polling(
             allowed_updates=ALLOWED_UPDATE_TYPES,
             drop_pending_updates=True,

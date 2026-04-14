@@ -1,7 +1,7 @@
 """Handlers para el comando /tasalo del bot TASALO.
 
 Módulo responsable de manejar el comando /tasalo, callbacks inline,
-y comandos de administración.
+y comandos de administración con logging detallado de todas las operaciones.
 """
 
 import asyncio
@@ -65,15 +65,16 @@ async def send_tasalo_response(
     Usa Bot API 9.5 DATE_TIME entities (PTB 22.7+) cuando están disponibles
     para formateo automático del timestamp según la zona horaria del usuario.
 
-    Nota: /tasalo no genera imagen porque 3 columnas = información muy comprimida.
-    Para imágenes, usar comandos individuales: /toque, /bcc, /cadeca.
-
     Args:
         update: Update de Telegram
         context: Contexto del bot (necesario para métodos de edición)
         api_data: Datos de la API
         message_id: ID del mensaje a editar (None para enviar nuevo desde comando)
     """
+    send_start = time.time()
+    user_id = update.effective_user.id if update.effective_user else None
+    chat_id = update.effective_chat.id if update.effective_chat else None
+    
     # Construir teclado inline
     keyboard = build_inline_keyboard()
 
@@ -119,29 +120,41 @@ async def send_tasalo_response(
                 parse_mode=parse_mode,
                 entities=entities,
             )
-        logger.info("✅ /tasalo enviado (texto sin imagen, datetime_entity=%s)", HAS_DATETIME_ENTITY)
+        send_duration_ms = (time.time() - send_start) * 1000
+        action = "edited" if message_id else "sent"
+        logger.info(
+            "✅ /tasalo %s to user %d (datetime=%s, %.0fms)",
+            action, user_id, HAS_DATETIME_ENTITY, send_duration_ms
+        )
     except Exception as e:
-        logger.error(f"❌ Error enviando /tasalo: {e}", exc_info=True)
+        send_duration_ms = (time.time() - send_start) * 1000
+        logger.error(
+            "❌ Error sending /tasalo to user %d (%.0fms): %s",
+            user_id, send_duration_ms, e, exc_info=True
+        )
+        raise
 
 
 async def tasalo_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler para el comando /tasalo.
 
     Comando principal que muestra las tasas de cambio actuales de todas
-    las fuentes (ElToque, CADECA, BCC) con imagen, texto formateado y botones.
+    las fuentes (ElToque, CADECA, BCC) con texto formateado y botones.
 
     Flujo:
         1. Envía mensaje "⏳ Consultando tasas..."
         2. Llama a taso-api para obtener datos
         3. Si error: muestra mensaje de error amigable
-        4. Si éxito: genera imagen, formatea texto y envía con botones inline
+        4. Si éxito: formatea texto y envía con botones inline
 
     Args:
         update: Update de Telegram con el mensaje del usuario
         context: Contexto del bot (incluye api_client)
     """
+    cmd_start = time.time()
     user_id = update.effective_user.id
-    logger.info(f"📊 /tasalo command invoked by user {user_id}")
+    username = update.effective_user.username
+    logger.info("📊 /tasalo command invoked by user %d (@%s)", user_id, username)
 
     # Trackear comando (fire-and-forget)
     asyncio.create_task(track_command_usage(update, context, "/tasalo"))
@@ -165,17 +178,21 @@ async def tasalo_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Check cache first
     cached_data = cache.get("rates:latest", ttl=RATES_CACHE_TTL)
     if cached_data:
-        logger.info("📦 /tasalo: Using cached rates")
+        cache_duration_ms = (time.time() - cmd_start) * 1000
+        logger.info("📦 /tasalo cache HIT for user %d (%.0fms)", user_id, cache_duration_ms)
         await send_tasalo_response(update, context, cached_data)
         await status_msg.delete()
         return
 
     # Cache miss — fetch from API
-    logger.info("🌐 /tasalo: Fetching from API (cache miss)")
+    logger.info("🌐 /tasalo cache MISS for user %d, fetching from API", user_id)
+    api_start = time.time()
     data = await api_client.get_latest()
+    api_duration_ms = (time.time() - api_start) * 1000
 
     if data is None:
-        logger.warning("⚠️ /tasalo: API returned None")
+        total_duration_ms = (time.time() - cmd_start) * 1000
+        logger.warning("⚠️ /tasalo: API returned None for user %d (%.0fms)", user_id, total_duration_ms)
         await status_msg.edit_text(
             "⚠️ *Error de Conexión*\n\n"
             "No se pudieron obtener datos del backend.\n"
@@ -189,7 +206,8 @@ async def tasalo_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Verificar estructura de datos
     api_data = data.get("data")
     if not api_data:
-        logger.warning("⚠️ /tasalo: API data is empty")
+        total_duration_ms = (time.time() - cmd_start) * 1000
+        logger.warning("⚠️ /tasalo: API data empty for user %d (%.0fms)", user_id, total_duration_ms)
         await status_msg.edit_text(
             "⚠️ *Datos No Disponibles*\n\n"
             "El backend no tiene datos actualizados.\n"
@@ -202,13 +220,17 @@ async def tasalo_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Cache the successful response
     cache.set("rates:latest", api_data)
-    logger.debug(f"📦 /tasalo: Cached rates (TTL={RATES_CACHE_TTL}s)")
+    logger.debug("📦 /tasalo: Cached rates for user %d (TTL=%ds)", user_id, RATES_CACHE_TTL)
 
-    # Enviar respuesta con imagen + texto + botones
+    # Enviar respuesta con texto + botones
     await send_tasalo_response(update, context, api_data)
 
     # Eliminar mensaje de estado
     await status_msg.delete()
+    
+    total_duration_ms = (time.time() - cmd_start) * 1000
+    logger.info("✅ /tasalo completed for user %d (API=%.0fms, total=%.0fms)", 
+                user_id, api_duration_ms, total_duration_ms)
 
 
 async def tasalo_refresh_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
