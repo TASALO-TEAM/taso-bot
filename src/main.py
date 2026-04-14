@@ -38,6 +38,7 @@ from src.handlers.image_alerts import (
     handle_time_input,
 )
 from src.services.daily_image_sender import start_daily_dispatcher, stop_daily_dispatcher
+from src.logger import BotLogger, LOGS_DIR, LOG_FILE_PATH
 
 # Tipos de update que el bot realmente maneja (eficiencia)
 ALLOWED_UPDATE_TYPES = [
@@ -47,18 +48,15 @@ ALLOWED_UPDATE_TYPES = [
 ]
 # NO incluir: chat_member, message_reaction, poll, poll_answer, etc.
 
-# Configurar logging estructurado
-logging.basicConfig(
-    format="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
-    level=getattr(logging, settings.log_level),
-    stream=sys.stdout,
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
+# Inicializar sistema de logging profesional con archivo
+file_logger = BotLogger(enable_file_logging=True)
+file_logger.logger.setLevel(getattr(logging, settings.log_level))
 
 # Silenciar logs verbosos de httpx (evita mostrar URLs con tokens)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
-logger = logging.getLogger(__name__)
+# Logger estándar para este módulo
+logger = file_logger.logger
 
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -74,20 +72,20 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
     error = context.error
     error_type = type(error).__name__
 
-    # Loguear error con stack trace
+    # Loguear error con stack trace completo
     logger.error(
         "❌ Exception caused update %s to fail",
         getattr(update, "update_id", "unknown"),
         exc_info=error,
     )
-    logger.error(f"Error type: {error_type}")
-    logger.error(f"Error message: {error}")
+    logger.error("Error type: %s", error_type)
+    logger.error("Error message: %s", error)
 
     # Context data para debugging
     if isinstance(update, Update) and update.effective_chat:
-        logger.error(f"Chat ID: {update.effective_chat.id}")
+        logger.error("Chat ID: %s", update.effective_chat.id)
     if isinstance(update, Update) and update.effective_user:
-        logger.error(f"User ID: {update.effective_user.id}")
+        logger.error("User ID: %s", update.effective_user.id)
 
     # Notificar al usuario si es posible
     if isinstance(update, Update) and update.effective_message:
@@ -100,7 +98,7 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
                 parse_mode="Markdown",
             )
         except Exception as e:
-            logger.error(f"❌ Failed to send error message to user: {e}")
+            logger.error("Failed to send error message to user: %s", e, exc_info=True)
 
 
 # Instanciar cliente API
@@ -240,8 +238,10 @@ async def post_init(application: Application):
 def main():
     """Entry point principal."""
     logger.info("🚀 Starting TASALO-Bot...")
-    logger.info(f"📡 API URL: {settings.tasalo_api_url}")
-    logger.info(f"👥 Admin IDs: {settings.admin_chat_ids or 'None configured'}")
+    logger.info("📡 API URL: %s", settings.tasalo_api_url)
+    logger.info("👥 Admin IDs: %s", settings.admin_chat_ids or "None configured")
+    logger.info("📝 Log file: %s", LOG_FILE_PATH)
+    logger.info("📂 Log directory: %s", LOGS_DIR)
 
     # Crear aplicación
     app = create_application()

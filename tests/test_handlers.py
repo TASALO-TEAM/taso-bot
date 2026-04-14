@@ -142,10 +142,9 @@ async def test_refresh_callback_shows_loading():
         )
     }
 
-    with patch('src.handlers.tasalo.generate_image', new_callable=AsyncMock) as mock_gen:
-        mock_gen.return_value = None  # Skip image generation for this test
+    # No image generation patch needed — tasalo.py is text-only now
 
-        await tasalo_refresh_callback(update, context)
+    await tasalo_refresh_callback(update, context)
 
     # Debe llamar answer con mensaje de actualización
     callback_query.answer.assert_called()
@@ -230,10 +229,9 @@ async def test_back_callback_returns_to_main():
         )
     }
 
-    with patch('src.handlers.tasalo.generate_image', new_callable=AsyncMock) as mock_gen:
-        mock_gen.return_value = None  # Skip image generation for this test
+    # No image generation patch needed — tasalo.py is text-only now
 
-        await tasalo_back_callback(update, context)
+    await tasalo_back_callback(update, context)
 
     # Debe volver a mostrar la vista principal
     callback_query.answer.assert_called()

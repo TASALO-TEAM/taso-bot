@@ -17,7 +17,7 @@ from telegram import Update
 from telegram.ext import ContextTypes, CallbackQueryHandler
 from telegram.error import BadRequest
 
-from src.handlers import image_alerts, tasalo, start
+from src.handlers import image_alerts, tasalo, start, toqueimg
 
 logger = logging.getLogger(__name__)
 
@@ -89,7 +89,7 @@ async def _handle_tasalo(update: Update, context: ContextTypes.DEFAULT_TYPE, cal
     elif callback_data.endswith("_refresh"):
         await tasalo.source_refresh_callback(update, context)
     else:
-        logger.warning(f"Unknown tasalo callback: {callback_data}")
+        logger.warning("Unknown tasalo callback: %s", callback_data)
 
 
 # ── ToqueImg callbacks ──
@@ -97,9 +97,9 @@ async def _handle_tasalo(update: Update, context: ContextTypes.DEFAULT_TYPE, cal
 async def _handle_toqueimg(update: Update, context: ContextTypes.DEFAULT_TYPE, callback_data: str) -> None:
     """Handle toqueimg_* callbacks."""
     if callback_data == "toqueimg_refresh":
-        await tasalo.toqueimg_refresh_callback(update, context)
+        await toqueimg.toqueimg_refresh_callback(update, context)
     else:
-        logger.warning(f"Unknown toqueimg callback: {callback_data}")
+        logger.warning("Unknown toqueimg callback: %s", callback_data)
 
 
 # ── Alert callbacks ──
@@ -122,7 +122,7 @@ async def _handle_alert(update: Update, context: ContextTypes.DEFAULT_TYPE, call
     elif callback_data in alert_handlers:
         await alert_handlers[callback_data](update, context)
     else:
-        logger.warning(f"Unknown alert callback: {callback_data}")
+        logger.warning("Unknown alert callback: %s", callback_data)
 
 
 def get_callback_handler() -> CallbackQueryHandler:

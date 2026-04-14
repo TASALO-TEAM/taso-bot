@@ -56,11 +56,10 @@ async def test_refresh_callback_uses_message_id():
         )
     }
 
-    with patch('src.handlers.tasalo.generate_image', new_callable=AsyncMock) as mock_gen:
-        mock_gen.return_value = None  # Skip image generation
+    # No image generation patch needed — tasalo.py is text-only now
 
-        # This should NOT raise AttributeError
-        await tasalo_refresh_callback(update, context)
+    # This should NOT raise AttributeError
+    await tasalo_refresh_callback(update, context)
 
     # Verify callback answer was called
     callback_query.answer.assert_called()
@@ -110,11 +109,10 @@ async def test_back_callback_uses_message_id():
         )
     }
 
-    with patch('src.handlers.tasalo.generate_image', new_callable=AsyncMock) as mock_gen:
-        mock_gen.return_value = None
+    # No image generation patch needed — tasalo.py is text-only now
 
-        # This should NOT raise AttributeError
-        await tasalo_back_callback(update, context)
+    # This should NOT raise AttributeError
+    await tasalo_back_callback(update, context)
 
     # Verify callback answer was called
     callback_query.answer.assert_called()
@@ -155,11 +153,10 @@ async def test_send_tasalo_response_with_message_id():
         "updated_at": "2026-03-22T14:30:00Z"
     }
 
-    with patch('src.handlers.tasalo.generate_image', new_callable=AsyncMock) as mock_gen:
-        mock_gen.return_value = None
+    # No image generation patch needed — tasalo.py is text-only now
 
-        # Call with message_id parameter (correct signature)
-        await send_tasalo_response(update, context, api_data, message_id=42)
+    # Call with message_id parameter (correct signature)
+    await send_tasalo_response(update, context, api_data, message_id=42)
 
     # Should use context.bot.edit_message_text, not update.message.reply_text
     assert context.bot.edit_message_text.called or context.bot.edit_message_caption.called

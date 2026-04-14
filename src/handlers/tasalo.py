@@ -9,7 +9,7 @@ import logging
 import time
 from typing import Optional
 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
 from src.api_client import TasaloApiClient
@@ -26,16 +26,12 @@ from src.formatters import (
     build_cadeca_only_message,
     build_toque_new_message,
 )
-from src.image_generator import generate_image
 from src.stats_tracker import track_command_usage
 
 logger = logging.getLogger(__name__)
 
 # Cache TTL para tasas (segundos)
 RATES_CACHE_TTL = 60  # 1 minuto
-
-# Timeout para generación de imagen (segundos)
-IMAGE_GENERATION_TIMEOUT = 10  # Aumentado de 5s a 10s para mayor tolerancia
 
 
 def build_inline_keyboard() -> InlineKeyboardMarkup:
@@ -505,7 +501,10 @@ async def _handle_source_command(
     source: str,
     build_message_func,
 ) -> None:
-    """Handler genérico para comandos individuales por fuente.
+    """Handler genérico para comandos individuales por fuente (TEXTO SOLAMENTE).
+
+    Estos comandos son SOLO TEXTO con botones inline. La generación de imágenes
+    está reservada exclusivamente para el comando /toqueimg.
 
     Args:
         update: Update de Telegram con el mensaje del usuario
@@ -513,9 +512,17 @@ async def _handle_source_command(
         source: Identificador de la fuente ("toque", "bcc", "cadeca")
         build_message_func: Función formatter específica para la fuente
     """
+    user_id = update.effective_user.id if update.effective_user else 0
+    logger.info("📊 /%s command invoked by user %s", source, user_id)
+    
     # Trackear comando (fire-and-forget)
     command_name = f"/{source}"
     asyncio.create_task(track_command_usage(update, context, command_name, source=source))
+
+    # Guardar contra update.message None
+    if not update.message:
+        logger.warning("⚠️ update.message es None para /%s", source)
+        return
 
     api_client: TasaloApiClient = context.bot_data.get("api_client")
     if not api_client:
@@ -523,6 +530,29 @@ async def _handle_source_command(
         await update.message.reply_text("❌ Error de configuración del bot.")
         return
 
+    # Check cache first (compartido con /tasalo)
+    cached_data = cache.get("rates:latest", ttl=RATES_CACHE_TTL)
+    if cached_data:
+        logger.info("📦 /%s: Using cached rates", source)
+        text = build_message_func(cached_data)
+        keyboard = _build_source_refresh_keyboard(source)
+        
+        try:
+            loading_msg = await update.message.reply_text(f"⏳ Consultando {source.upper()}...")
+            await loading_msg.edit_text(
+                text=text,
+                reply_markup=keyboard,
+                parse_mode="Markdown",
+            )
+            logger.info("✅ /%s enviado desde cache (texto)", source)
+        except Exception as e:
+            logger.error("❌ Error enviando /%s desde cache: %s", source, e, exc_info=True)
+            await update.message.reply_text(f"❌ Error consultando {source.upper()}.")
+        return
+
+    # Cache miss — obtener de API
+    logger.info("🌐 /%s: Fetching from API (cache miss)", source)
+    
     # Mensaje de carga
     loading_msg = await update.message.reply_text(f"⏳ Consultando {source.upper()}...")
 
@@ -532,93 +562,54 @@ async def _handle_source_command(
 
         # Validar respuesta
         if not response or not response.get("ok"):
-            logger.warning(f"⚠️ API respondió None o ok=False para /{source}")
+            logger.warning("⚠️ API respondió None o ok=False para /%s", source)
             await loading_msg.edit_text(
                 f"⚠️ No se pudieron obtener datos de {source.upper()}."
             )
-            # Trackear como fallo
             asyncio.create_task(track_command_usage(update, context, command_name, source=source, success=False))
             return
 
-        # Extraer 'data' del response para pasar al formatter
-        # Estructura: {"ok": true, "data": {"eltoque": {...}, "cadeca": {...}, ...}}
+        # Extraer 'data' del response
         api_data = response.get("data", {})
 
         if not api_data:
-            logger.warning(f"⚠️ API data está vacío para /{source}")
+            logger.warning("⚠️ API data está vacío para /%s", source)
             await loading_msg.edit_text(
                 f"⚠️ Datos no disponibles de {source.upper()}."
             )
-            # Trackear como fallo
             asyncio.create_task(track_command_usage(update, context, command_name, source=source, success=False))
             return
 
-        # Construir mensaje con el formatter específico
+        # Construir mensaje SOLO TEXTO (sin imagen)
         text = build_message_func(api_data)
         keyboard = _build_source_refresh_keyboard(source)
 
-        # Generar imagen para la fuente específica con timeout y manejo de errores
-        image_type_map = {
-            "toque": "eltoque",
-            "bcc": "bcc",
-            "cadeca": "cadeca",
-        }
-        image_type = image_type_map.get(source, source)
-
-        image_bytes = None
+        # Enviar respuesta SOLO TEXTO
         try:
-            logger.debug(f"🎨 Generando imagen para /{source}...")
-            image_bytes = await asyncio.wait_for(
-                generate_image(api_data, image_type=image_type),
-                timeout=IMAGE_GENERATION_TIMEOUT,
+            await loading_msg.edit_text(
+                text=text,
+                reply_markup=keyboard,
+                parse_mode="Markdown",
             )
-            if image_bytes:
-                logger.info(f"✅ Imagen generada para /{source}")
-            else:
-                logger.warning(f"⚠️ generate_image retornó None para /{source}")
-        except asyncio.TimeoutError:
-            logger.warning(f"⚠️ Image generation timed out for /{source}, sending text only")
-        except Exception as e:
-            logger.error(f"❌ Error generando imagen para /{source}: {type(e).__name__}: {e}", exc_info=True)
-
-        # Enviar respuesta con manejo de errores robusto
-        try:
-            if image_bytes:
-                await loading_msg.edit_media(
-                    media=InputMediaPhoto(
-                        media=image_bytes,
-                        caption=text,
-                        parse_mode="Markdown",
-                    ),
-                    reply_markup=keyboard,
-                )
-                logger.info(f"✅ Imagen + texto enviados para /{source}")
-            else:
-                await loading_msg.edit_text(
-                    text=text,
-                    reply_markup=keyboard,
-                    parse_mode="Markdown",
-                )
-                logger.info(f"✅ Texto enviado para /{source} (fallback sin imagen)")
+            logger.info("✅ /%s enviado (texto con botones)", source)
         except Exception as send_error:
             # Fallback si el envío falla
-            logger.error(f"❌ Error enviando respuesta para /{source}: {send_error}")
+            logger.error("❌ Error enviando texto para /%s: %s", source, send_error, exc_info=True)
             try:
-                await loading_msg.edit_text(
+                await update.message.reply_text(
                     text=text,
                     reply_markup=keyboard,
                     parse_mode="Markdown",
                 )
-                logger.info(f"✅ Texto enviado para /{source} (fallback por error en envío)")
-            except fallback_error:
-                logger.error(f"❌ Error en fallback final para /{source}: {fallback_error}")
+                logger.info("✅ Texto enviado para /%s (fallback)", source)
+            except Exception as fallback_error:
+                logger.error("❌ Error en fallback final para /%s: %s", source, fallback_error, exc_info=True)
 
-        logger.info(f"✅ Comando /{source} ejecutado correctamente")
+        logger.info("✅ Comando /%s ejecutado correctamente", source)
 
     except Exception as e:
-        logger.error(f"❌ Error en comando /{source}: {e}", exc_info=True)
+        logger.error("❌ Error en comando /%s: %s", source, e, exc_info=True)
         await loading_msg.edit_text(f"❌ Error consultando {source.upper()}.")
-        # Trackear como fallo
         asyncio.create_task(track_command_usage(update, context, command_name, source=source, success=False))
 
 
