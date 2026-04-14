@@ -17,9 +17,10 @@ from telegram import MessageEntity
 logger = logging.getLogger(__name__)
 
 # ── Bot API 9.5 DATE_TIME entity support ──
-# PTB 22.7+ supports MessageEntity.DATE_TIME natively.
-# When used, Telegram formats the timestamp according to the user's timezone.
-HAS_DATETIME_ENTITY = hasattr(MessageEntity, "DATE_TIME")
+# PTB 22.7+ has the constant MessageEntity.DATE_TIME, but Telegram's API
+# server may not fully support the unix_time field yet (returns parse error).
+# DISABLED until Telegram API support is confirmed working.
+HAS_DATETIME_ENTITY = False  # hasattr(MessageEntity, "DATE_TIME")
 
 
 # =============================================================================

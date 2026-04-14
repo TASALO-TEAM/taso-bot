@@ -48,12 +48,11 @@ class BotLogger:
 
     def _setup_logger(self):
         """Configura los handlers (Consola + Archivos)."""
-        # Evitar duplicar handlers si se inicializa múltiples veces
-        if self.logger.handlers:
-            return
+        # Limpiar handlers existentes para evitar duplicados
+        self.logger.handlers = []
 
         # Nivel de logging (se puede sobrescribir desde main.py)
-        self.logger.setLevel(logging.INFO)
+        self.logger.setLevel(logging.DEBUG)  # DEBUG para capturar todo; handlers filtran
 
         # Formatter para consola (más compacto)
         console_formatter = logging.Formatter(
@@ -69,7 +68,9 @@ class BotLogger:
 
         # Handlers de Archivo (solo si están habilitados)
         if self.enable_file_logging:
-            # Handler de archivo principal con rotación
+            # Asegurar que el directorio exista (double check)
+            os.makedirs(LOGS_DIR, exist_ok=True)
+
             from logging.handlers import RotatingFileHandler
 
             # Log principal (rotación 5 MB, 5 backups)
@@ -103,6 +104,10 @@ class BotLogger:
             )
             error_handler.setLevel(logging.ERROR)
             self.logger.addHandler(error_handler)
+
+            # Log de confirmación
+            self.logger.info("✅ File logging enabled: %s", LOG_FILE_PATH)
+            self.logger.info("✅ Error logging enabled: %s", ERROR_LOG_PATH)
 
     def _handle_unhandled_exception(self, exc_type, exc_value, exc_traceback):
         """Intercepta errores no controlados antes de que el bot muera."""
