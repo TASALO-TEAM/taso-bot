@@ -10,9 +10,12 @@ from telegram.ext import ContextTypes
 logger = logging.getLogger(__name__)
 
 from src.config import get_settings
+from src.api_client import TasaloApiClient
 
 settings = get_settings()
 API_URL = settings.tasalo_api_url  # https://tasalo.duckdns.org
+
+api_client = TasaloApiClient(api_url=API_URL)
 
 
 async def toqueimg_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -33,24 +36,22 @@ async def toqueimg_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     loading_msg = await update.message.reply_text("📸 Capturando imagen...")
 
     try:
-        # 2. Capturar imagen desde API
+        # 2. Capturar imagen desde API (con retry automático 3x)
         capture_start = time.time()
         logger.debug("User %d: Starting image capture from API", user_id)
         
-        async with httpx.AsyncClient() as client:
-            capture_response = await client.post(
-                f"{API_URL}/api/v1/images/eltoque/capture",
-                timeout=30.0
-            )
-            capture_data = capture_response.json()
+        capture_data = await api_client._post_with_retry(
+            f"{API_URL}/api/v1/images/eltoque/capture",
+            timeout=httpx.Timeout(30.0, connect=7.0)
+        )
 
         capture_duration_ms = (time.time() - capture_start) * 1000
         logger.info(
-            "User %d: Image capture completed (%.0fms, status=%d)",
-            user_id, capture_duration_ms, capture_response.status_code
+            "User %d: Image capture completed (%.0fms)",
+            user_id, capture_duration_ms
         )
 
-        if not capture_data.get("ok"):
+        if not capture_data or not capture_data.get("ok"):
             error_detail = capture_data.get('error')
             logger.error(
                 "User %d: API capture returned error: %s",
@@ -58,43 +59,40 @@ async def toqueimg_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             raise Exception(f"API error: {error_detail}")
 
-        # 3. Obtener última imagen (file path)
+        # 3. Obtener última imagen (file path) (con retry automático 3x)
         latest_start = time.time()
         logger.debug("User %d: Fetching latest image info", user_id)
         
-        async with httpx.AsyncClient() as client:
-            latest_response = await client.get(
-                f"{API_URL}/api/v1/images/eltoque/latest",
-                timeout=10.0
-            )
-            latest_data = latest_response.json()
+        latest_data = await api_client._get_with_retry(
+            f"{API_URL}/api/v1/images/eltoque/latest",
+            timeout=httpx.Timeout(10.0, connect=5.0)
+        )
 
         latest_duration_ms = (time.time() - latest_start) * 1000
         logger.info(
-            "User %d: Latest image fetch completed (%.0fms, status=%d)",
-            user_id, latest_duration_ms, latest_response.status_code
+            "User %d: Latest image fetch completed (%.0fms)",
+            user_id, latest_duration_ms
         )
 
-        if not latest_data.get("ok"):
+        if not latest_data or not latest_data.get("ok"):
             logger.error("User %d: Failed to get latest image - response: %s", user_id, latest_data)
             raise Exception("Failed to get latest image")
 
         image_path = latest_data["data"]["image_path"]
         logger.debug("User %d: Image path resolved to: %s", user_id, image_path)
 
-        # 4. Verificar si usuario tiene alerta activa
+        # 4. Verificar si usuario tiene alerta activa (con retry automático 3x)
         alert_start = time.time()
         logger.debug("User %d: Checking alert status", user_id)
         
-        async with httpx.AsyncClient() as client:
-            alert_response = await client.get(
-                f"{API_URL}/api/v1/images/alerts/{user_id}",
-                timeout=5.0
-            )
-            alert_data = alert_response.json()
+        alert_data = await api_client._get_with_retry(
+            f"{API_URL}/api/v1/images/alerts/{user_id}",
+            timeout=httpx.Timeout(5.0, connect=3.0)
+        )
 
         alert_duration_ms = (time.time() - alert_start) * 1000
         has_alert = (
+            alert_data and
             alert_data.get("ok") and
             alert_data.get("data") and
             alert_data["data"].get("enabled", False)
