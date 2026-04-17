@@ -185,22 +185,23 @@ async def send_daily_images_job(application: Application):
 def start_daily_dispatcher(application: Application) -> None:
     """
     Iniciar el dispatcher diario.
+    Corre cada 5 minutos para verificar alertas programadas de usuarios.
 
     Args:
         application: La aplicación de Telegram (para acceder al bot)
     """
-    # 8:15 AM hora Cuba = 12:15 UTC (Cuba es UTC-4)
+    # Ejecutar cada 5 minutos para verificar alertas de usuarios
     scheduler.add_job(
         send_daily_images_job,
-        trigger=CronTrigger(hour=12, minute=15, timezone="UTC"),
+        trigger=CronTrigger(minute="*/5", timezone="UTC"),
         id="daily_image_alert",
-        name="Daily Image Alert - 8:15 AM Cuba",
+        name="Daily Image Alert Dispatcher (every 5 min)",
         args=[application],
         replace_existing=True
     )
 
     scheduler.start()
-    logger.info("✅ Daily image dispatcher started (8:15 AM Cuba / 12:15 UTC)")
+    logger.info("✅ Daily image dispatcher started (every 5 minutes UTC)")
 
 
 def stop_daily_dispatcher() -> None:
