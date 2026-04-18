@@ -40,9 +40,10 @@ async def toqueimg_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         capture_start = time.time()
         logger.debug("User %d: Starting image capture from API", user_id)
         
-        capture_data = await api_client._post_with_retry(
-            f"{API_URL}/api/v1/images/eltoque/capture",
-            timeout=httpx.Timeout(30.0, connect=7.0)
+        # Create client instance with increased timeout for image capture operations
+        image_api_client = TasaloApiClient(api_url=API_URL, timeout=30)
+        capture_data = await image_api_client._post_with_retry(
+            f"{API_URL}/api/v1/images/eltoque/capture"
         )
 
         capture_duration_ms = (time.time() - capture_start) * 1000
@@ -63,9 +64,8 @@ async def toqueimg_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         latest_start = time.time()
         logger.debug("User %d: Fetching latest image info", user_id)
         
-        latest_data = await api_client._get_with_retry(
-            f"{API_URL}/api/v1/images/eltoque/latest",
-            timeout=httpx.Timeout(10.0, connect=5.0)
+        latest_data = await image_api_client._get_with_retry(
+            f"{API_URL}/api/v1/images/eltoque/latest"
         )
 
         latest_duration_ms = (time.time() - latest_start) * 1000
@@ -85,9 +85,8 @@ async def toqueimg_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         alert_start = time.time()
         logger.debug("User %d: Checking alert status", user_id)
         
-        alert_data = await api_client._get_with_retry(
-            f"{API_URL}/api/v1/images/alerts/{user_id}",
-            timeout=httpx.Timeout(5.0, connect=3.0)
+        alert_data = await image_api_client._get_with_retry(
+            f"{API_URL}/api/v1/images/alerts/{user_id}"
         )
 
         alert_duration_ms = (time.time() - alert_start) * 1000
