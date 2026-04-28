@@ -1,14 +1,18 @@
-"""Daily image sender service using APScheduler."""
+"""Daily image sender service - FIXED VERSION.
+
+Correctly uses user's alert_time and prevents duplicate sends.
+"""
 
 import asyncio
 import httpx
 import logging
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from telegram import InputMediaPhoto, InputMediaDocument
 from telegram.ext import Application
+from typing import Set
 
 from src.config import get_settings
 
@@ -19,192 +23,233 @@ API_URL = settings.tasalo_api_url
 # Global scheduler instance
 scheduler = AsyncIOScheduler()
 
+# Track sent alerts to prevent duplicates (reset daily)
+_sent_today: Set[str] = set()
+_last_reset_date = datetime.utcnow().date()
+
+
+def _get_sent_key(user_id: int, date_str: str) -> str:
+    """Generate unique key for tracking sent alerts."""
+    return f"{user_id}:{date_str}"
+
+
+def _reset_if_new_day():
+    """Reset sent tracking if we're on a new day."""
+    global _sent_today, _last_reset_date
+    today = datetime.utcnow().date()
+    if today != _last_reset_date:
+        _sent_today.clear()
+        _last_reset_date = today
+        logger.info("🔄 Daily sent tracking reset for %s", today)
+
 
 async def send_daily_images_job(application: Application):
     """
-    Job diario que envía imágenes a usuarios con alertas activas.
-    Se ejecuta a las 8:15 AM hora Cuba (UTC-4 = 12:15 UTC).
+    Job that sends images to users with alerts matching current time slot.
+    
+    Runs every 5 minutes, but only sends to users whose alert_time
+    matches the current time (within 5-minute window).
+    Prevents duplicate sends within the same day.
     """
+    _reset_if_new_day()
+    
     job_start = time.time()
     today_date = datetime.utcnow().date()
-    logger.info("📸 Daily image dispatch job started at %s UTC", datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"))
-
+    current_time = datetime.utcnow().strftime("%H:%M")
+    
+    logger.info("📸 Daily image dispatch job started at %s UTC", 
+                 datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"))
+    
+    # 1. Get all enabled alerts
     try:
-        # 1. Obtener todas las alertas activas desde API
-        alerts_fetch_start = time.time()
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{API_URL}/api/v1/images/alerts?enabled=true",
+                timeout=10.0
+            )
+            data = response.json()
+    except httpx.TimeoutException:
+        logger.error("❌ Timeout fetching active alerts (10s limit)")
+        return
+    except Exception:
+        logger.error("❌ Failed to fetch active alerts from API", exc_info=True)
+        return
+    
+    if not data.get("ok"):
+        logger.error("❌ API returned error: %s", data.get("error"))
+        return
+    
+    alerts = data.get("data", [])
+    
+    # 2. Filter alerts matching current time (within 5-minute window)
+    matching_alerts = []
+    for alert in alerts:
+        alert_time = alert.get("alert_time", "07:15")
+        try:
+            alert_hour, alert_min = map(int, alert_time.split(":"))
+            current_hour = datetime.utcnow().hour
+            current_min = datetime.utcnow().minute
+            
+            # Allow 5-minute window
+            time_diff = abs((current_hour * 60 + current_min) - (alert_hour * 60 + alert_min))
+            if time_diff <= 5:  # Within 5 minutes
+                matching_alerts.append(alert)
+        except (ValueError, AttributeError) as e:
+            logger.warning("⚠️ Invalid alert_time format: %s (alert: %s)", alert_time, alert.get("id"))
+            continue
+    
+    logger.info("📋 Found %d total alerts, %d match time=%s", 
+                 len(alerts), len(matching_alerts), current_time)
+    
+    if not matching_alerts:
+        logger.info("ℹ️ No alerts matching current time slot, skipping")
+        return
+    
+    # 3. Get current image with retry and date validation
+    img_data = None
+    for attempt in range(3):
+        logger.info("🔍 Getting image (attempt %d/3)", attempt + 1)
         try:
             async with httpx.AsyncClient() as client:
-                response = await client.get(
-                    f"{API_URL}/api/v1/images/alerts?enabled=true",
+                img_response = await client.get(
+                    f"{API_URL}/api/v1/images/eltoque/latest",
                     timeout=10.0
                 )
-                data = response.json()
-            alerts_fetch_ms = (time.time() - alerts_fetch_start) * 1000
-            logger.info("📋 Alerts API response received (%.0fms)", alerts_fetch_ms)
+                img_data = img_response.json()
         except httpx.TimeoutException:
-            logger.error("❌ Timeout fetching active alerts (10s limit)")
-            return
+            logger.warning("⏱️ Timeout getting image (attempt %d/3)", attempt + 1)
+            if attempt < 2:
+                await asyncio.sleep(60)  # Wait 1 minute before retry
+            continue
         except Exception:
-            logger.error("❌ Failed to fetch active alerts from API", exc_info=True)
-            return
-
-        if not data.get("ok"):
-            logger.error("❌ API returned error: %s", data.get("error"))
-            return
-
-        alerts = data.get("data", [])
-        logger.info("📋 Found %d active alerts to process", len(alerts))
-
-        if not alerts:
-            logger.info("ℹ️ No active alerts found, skipping")
-            return
-
-        # 2. Obtener imagen actual con retry y validación de fecha
-        img_data = None
-        for attempt in range(3):
-            logger.info("🔍 Intentando obtener imagen del día (intento %d/3)", attempt + 1)
-            try:
-                async with httpx.AsyncClient() as client:
-                    img_response = await client.get(
-                        f"{API_URL}/api/v1/images/eltoque/latest",
-                        timeout=10.0
-                    )
-                    img_data = img_response.json()
-            except httpx.TimeoutException:
-                logger.warning("⏱️ Timeout al obtener imagen (intento %d/3)", attempt + 1)
-                if attempt < 2:
-                    logger.info("⏳ Esperando 5 minutos antes del próximo intento...")
-                    await asyncio.sleep(300)
-                continue
-            except Exception:
-                logger.warning("⚠️ Error obteniendo imagen (intento %d/3)", attempt + 1, exc_info=True)
-                if attempt < 2:
-                    logger.info("⏳ Esperando 5 minutos antes del próximo intento...")
-                    await asyncio.sleep(300)
-                continue
-
-            if not img_data.get("ok"):
-                logger.warning("⚠️ API devolvió error en intento %d: %s", attempt + 1, img_data.get("error"))
-                if attempt < 2:
-                    logger.info("⏳ Esperando 5 minutos antes del próximo intento...")
-                    await asyncio.sleep(300)
-                continue
-
-            # Verificar que la imagen sea del día actual
-            image_date_str = img_data["data"]["date"]
-            image_date = datetime.strptime(image_date_str, "%Y-%m-%d").date()
-            
-            if image_date == today_date:
-                logger.info("✅ Imagen del día %s obtenida correctamente", today_date.strftime("%d/%m/%Y"))
-                break
+            logger.warning("⚠️ Error getting image (attempt %d/3)", attempt + 1, exc_info=True)
+            if attempt < 2:
+                await asyncio.sleep(60)
+            continue
+        
+        if not img_data.get("ok"):
+            logger.warning("⚠️ API error on attempt %d: %s", attempt + 1, img_data.get("error"))
+            if attempt < 2:
+                await asyncio.sleep(60)
+            continue
+        
+        # Verify image is from today
+        captured_at_str = img_data["data"]["captured_at"]
+        captured_at = datetime.fromisoformat(captured_at_str.replace('Z', '+00:00'))
+        image_date = captured_at.date()
+        
+        if image_date == today_date:
+            logger.info("✅ Image from today %s obtained", today_date.strftime("%d/%m/%Y"))
+            break
+        else:
+            logger.warning("⚠️ Image is from previous day (%s)", image_date.strftime("%Y-%m-%d"))
+            if attempt < 2:
+                await asyncio.sleep(60)
             else:
-                logger.warning("⚠️ Imagen recibida es del día anterior (%s), no es la actual", image_date_str)
-                if attempt < 2:
-                    logger.info("⏳ Esperando 5 minutos antes del próximo intento...")
-                    await asyncio.sleep(300)
-                else:
-                    logger.warning("⚠️ Máximo de intentos alcanzado, se usará imagen del día anterior como último recurso")
-
-        if not img_data or not img_data.get("ok"):
-            logger.error("❌ No se pudo obtener la imagen después de 3 intentos, abortando job")
-            return
-
-        image_path = img_data["data"]["image_path"]
-        logger.debug("📁 Image path: %s", image_path)
-
-        # 3. Para cada alerta, enviar imagen
-        sent_count = 0
-        fail_count = 0
-
-        for alert in alerts:
-            user_id = alert["user_id"]
-            alert_id = alert.get("id", "unknown")
-            format_type = alert["format_type"]
-
-            logger.info("📤 Processing alert %s for user %d (format=%s)", alert_id, user_id, format_type)
-            send_start = time.time()
-
-            try:
-
-                # 4. Construir caption
-                caption = (
-                    "🇨🇺 *Tasa Diaria El Toque*\n"
-                    f"📅 {datetime.now().strftime('%d/%m/%Y')} · {datetime.now().strftime('%H:%M')}\n\n"
-                    "Esta es la tasa diaria de El Toque."
-                )
-
-                # 5. Enviar imagen usando application.bot
-                send_msg_start = time.time()
-                try:
-                    with open(image_path, "rb") as f:
-                        if format_type == "photo":
-                            await application.bot.send_photo(
-                                chat_id=user_id,
-                                photo=f,
-                                caption=caption,
-                                parse_mode="Markdown"
-                            )
-                        else:  # document
-                            await application.bot.send_document(
-                                chat_id=user_id,
-                                document=f,
-                                caption=caption,
-                                parse_mode="Markdown"
-                            )
-                    send_msg_ms = (time.time() - send_msg_start) * 1000
-                    logger.info("📨 Image sent to user %d via Telegram (%.0fms)", user_id, send_msg_ms)
-                except httpx.TimeoutException:
-                    logger.error("❌ Timeout sending image to user %d (10s limit)", user_id)
-                    fail_count += 1
-                    continue
-                except Exception:
-                    logger.error("❌ Telegram send failed for user %d (alert_id=%s)", user_id, alert_id, exc_info=True)
-                    fail_count += 1
-                    continue
-
-                sent_count += 1
-                send_duration_ms = (time.time() - send_start) * 1000
-                logger.info("✅ Image sent to user %d (alert_id=%s, total=%.0fms)", user_id, alert_id, send_duration_ms)
-
-            except Exception:
-                logger.error("❌ Unexpected error processing alert for user %d (alert_id=%s)", user_id, alert_id, exc_info=True)
-                fail_count += 1
-
-        # Job completion summary
-        total_duration_ms = (time.time() - job_start) * 1000
-        logger.info(
-            "✅ Daily image dispatch completed: %d sent, %d failed (%.0fms total)",
-            sent_count, fail_count, total_duration_ms
-        )
-
-    except Exception:
-        total_duration_ms = (time.time() - job_start) * 1000
-        logger.error("❌ Daily image dispatch job failed after %.0fms", total_duration_ms, exc_info=True)
+                logger.warning("⚠️ Using previous day image as fallback")
+    
+    if not img_data or not img_data.get("ok"):
+        logger.error("❌ Failed to get image after 3 attempts, aborting job")
+        return
+    
+    image_path = img_data["data"]["image_path"]
+    logger.debug("📁 Image path: %s", image_path)
+    
+    # 4. Send to matching users (with deduplication)
+    sent_count = 0
+    fail_count = 0
+    
+    for alert in matching_alerts:
+        user_id = alert["user_id"]
+        alert_id = alert.get("id", "unknown")
+        format_type = alert["format_type"]
+        
+        # Deduplication check
+        sent_key = _get_sent_key(user_id, str(today_date))
+        if sent_key in _sent_today:
+            logger.info("ℹ️ User %d already received image today, skipping", user_id)
+            continue
+        
+        logger.info("📤 Processing alert %s for user %d (format=%s)", alert_id, user_id, format_type)
+        send_start = time.time()
+        
+        try:
+            # Build caption
+            caption = (
+                "🇨🇺 *Tasa Diaria El Toque*\n"
+                f"📅 {datetime.now().strftime('%d/%m/%Y')} · {datetime.now().strftime('%H:%M')}\n\n"
+                "Esta es la tasa diaria de El Toque."
+            )
+            
+            # Send image using application.bot
+            with open(image_path, "rb") as f:
+                if format_type == "photo":
+                    await application.bot.send_photo(
+                        chat_id=user_id,
+                        photo=f,
+                        caption=caption,
+                        parse_mode="Markdown"
+                    )
+                else:  # document
+                    await application.bot.send_document(
+                        chat_id=user_id,
+                        document=f,
+                        caption=caption,
+                        parse_mode="Markdown"
+                    )
+            
+            send_duration_ms = (time.time() - send_start) * 1000
+            logger.info("📨 Image sent to user %d via Telegram (%.0fms)", user_id, send_duration_ms)
+            
+        except httpx.TimeoutException:
+            logger.error("❌ Timeout sending image to user %d (10s limit)", user_id)
+            fail_count += 1
+            continue
+        except Exception:
+            logger.error("❌ Telegram send failed for user %d (alert_id=%s)", user_id, alert_id, exc_info=True)
+            fail_count += 1
+            continue
+        
+        # Mark as sent
+        _sent_today.add(sent_key)
+        sent_count += 1
+        send_duration_ms = (time.time() - send_start) * 1000
+        logger.info("✅ Image sent to user %d (alert_id=%s, total=%.0fms)", 
+                     user_id, alert_id, send_duration_ms)
+    
+    # Job completion summary
+    total_duration_ms = (time.time() - job_start) * 1000
+    logger.info(
+        "✅ Daily image dispatch completed: %d sent, %d failed (%.0fms total)",
+        sent_count, fail_count, total_duration_ms
+    )
 
 
 def start_daily_dispatcher(application: Application) -> None:
     """
-    Iniciar el dispatcher diario.
-    Corre cada 5 minutos para verificar alertas programadas de usuarios.
-
+    Start the daily image dispatcher.
+    
+    Runs every 5 minutes to check for users whose alert_time matches current time.
+    Only sends to users who haven't received the image today.
+    
     Args:
-        application: La aplicación de Telegram (para acceder al bot)
+        application: The Telegram application (to access the bot)
     """
-    # Ejecutar cada 5 minutos para verificar alertas de usuarios
+    # Run every 5 minutes to check for alerts matching current time
     scheduler.add_job(
         send_daily_images_job,
         trigger=CronTrigger(minute="*/5", timezone="UTC"),
         id="daily_image_alert",
-        name="Daily Image Alert Dispatcher (every 5 min)",
+        name="Daily Image Alert Dispatcher (every 5 min, time-aware)",
         args=[application],
         replace_existing=True
     )
-
+    
     scheduler.start()
-    logger.info("✅ Daily image dispatcher started (every 5 minutes UTC)")
+    logger.info("✅ Daily image dispatcher started (every 5 min, time-aware)")
 
 
 def stop_daily_dispatcher() -> None:
-    """Detener el dispatcher."""
+    """Stop the dispatcher."""
     scheduler.shutdown()
     logger.info("⏹️ Daily image dispatcher stopped")
