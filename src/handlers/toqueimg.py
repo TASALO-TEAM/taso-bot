@@ -203,7 +203,7 @@ def _build_toqueimg_keyboard(has_alert: bool) -> list:
         # Usuario NO tiene alerta
         keyboard = [
             [InlineKeyboardButton(
-                "🔔 Activar alerta (7:15 AM)",
+                "🔔 Activar alerta (7:30 AM)",
                 callback_data="alert_enable_default",
                 style="success",  # Verde - acción positiva
             )],

@@ -47,7 +47,7 @@ async def _safe_edit_message(query, text, reply_markup=None, parse_mode="Markdow
 
 
 async def alert_enable_default_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Activar alerta default (7:15 AM)."""
+    """Activar alerta default (7:30 AM Cuba)."""
     action_start = time.time()
     query = update.callback_query
     user_id = update.effective_user.id
@@ -64,7 +64,7 @@ async def alert_enable_default_callback(update: Update, context: ContextTypes.DE
                 f"{API_URL}/api/v1/images/alerts",
                 json={
                     "user_id": user_id,
-                    "alert_time": "07:15",
+                    "alert_time": "07:30",
                     "format_type": "photo",
                     "enabled": True
                 },
@@ -81,7 +81,7 @@ async def alert_enable_default_callback(update: Update, context: ContextTypes.DE
             await _safe_edit_message(
                 query,
                 "✅ *Alerta Activada!*\n\n"
-                "Recibirás la imagen diaria a las *7:15 AM* (hora Cuba).\n\n"
+                "Recibirás la imagen diaria a las *7:30 AM* (hora Cuba).\n\n"
                 "Usa /toqueimg para ver la imagen ahora.",
                 reply_markup=InlineKeyboardMarkup([[
                     InlineKeyboardButton("🔄 Ver imagen", callback_data="toqueimg_refresh")

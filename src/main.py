@@ -234,7 +234,7 @@ async def post_init(application: Application):
     # Iniciar dispatcher de alertas diarias de imágenes
     try:
         start_daily_dispatcher(application)
-        logger.info("✅ Daily image alert dispatcher started (7:15 AM Cuba / 11:15 UTC)")
+        logger.info("✅ Daily image alert dispatcher started (7:30 AM Cuba / 11:30-12:30 UTC)")
     except Exception as e:
         logger.error("❌ Failed to start daily image dispatcher: %s", e, exc_info=True)
 
