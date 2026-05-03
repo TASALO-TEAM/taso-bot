@@ -1,3 +1,4 @@
+# src/formatters.py
 """Formateo de texto para mensajes del bot TASALO.
 
 Módulo responsable de formatear las tasas de cambio con el diseño modernizado
@@ -35,6 +36,7 @@ SEPARATOR_THIN = "•••"  # Separador secundario estilo legacy
 INDICATOR_UP = "🔺"  # Precio sube
 INDICATOR_DOWN = "🔻"  # Precio baja
 INDICATOR_NEUTRAL = ""  # Sin cambio (legacy no usa indicador para neutral)
+
 
 # Fuentes
 SOURCES_LABELS = {
@@ -143,12 +145,12 @@ def build_eltoque_block(data: Dict[str, Any]) -> str:
     Formato legacy:
         📊 *MERCADO INFORMAL (El Toque)*
         —————————————————
-         EUR:   580.00  CUP 
-         USD:   515.00  CUP 
-         MLC:   420.00  CUP 
-         BTC:   516.00  CUP 
-         TRX:   185.00  CUP 
-         USDT:   560.00  CUP 
+         EUR:   580.00  CUP
+         USD:   515.00  CUP
+         MLC:   420.00  CUP
+         BTC:   516.00  CUP
+         TRX:   185.00  CUP
+         USDT:   560.00  CUP
 
     Args:
         data: Dict con datos de la API (campo 'data.eltoque')
@@ -194,7 +196,7 @@ def build_eltoque_block(data: Dict[str, Any]) -> str:
 
         # Formatear línea
         rate_str = format_rate_value(rate)
-        
+
         # Calcular indicador y cambio
         indicator = ""
         change_str = ""
@@ -285,7 +287,7 @@ def build_cadeca_block(data: Dict[str, Any]) -> str:
             buy_str = f"{buy:6.2f}"
         else:
             buy_str = "  ---"
-            
+
         if sell is not None:
             sell_str = f"{sell:6.2f}"
         else:
@@ -314,9 +316,9 @@ def build_bcc_block(data: Dict[str, Any]) -> str:
     Formato legacy:
         🏛 *OFFICIAL RATE (BCC)*
         —————————————————
-        *EUR:*   551.23   *CUP*  
-        *USD:*   478.00   *CUP*  
-        *CAD:*   348.17   *CUP*  
+        *EUR:*   551.23   *CUP*
+        *USD:*   478.00   *CUP*
+        *CAD:*   348.17   *CUP*
 
     Args:
         data: Dict con datos de la API (campo 'data.bcc')
@@ -361,7 +363,7 @@ def build_bcc_block(data: Dict[str, Any]) -> str:
             prev_rate = None
 
         rate_str = format_rate_value(rate)
-        
+
         # Indicador y cambio
         indicator = ""
         change_str = ""
@@ -375,8 +377,6 @@ def build_bcc_block(data: Dict[str, Any]) -> str:
             indicator = "  " + INDICATOR_DOWN
             change_str = f" {diff:,.2f}"
             logger.debug("📉 %s BCC indicator: %s %.2f", currency, INDICATOR_DOWN, diff)
-        elif change in ("up", "down") and prev_rate is None:
-            logger.debug("⚠️ %s BCC has change=%s but prev_rate is None", currency, change)
 
         # Formato legacy: " EUR:   551.23   CUP  🔺"
         line = f" *{currency}:*   {rate_str}   *CUP*{indicator}{change_str}"
@@ -440,7 +440,7 @@ def build_binance_block(data: Dict[str, Any]) -> str:
         key=lambda x: (priority.index(x.upper()) if x.upper() in priority else 99, x),
     )
 
-    for pair in sorted_currencies:
+    for pair in sorted_pairs:
         pair_info = binance_data[pair]
 
         if isinstance(pair_info, dict):
@@ -461,9 +461,14 @@ def build_binance_block(data: Dict[str, Any]) -> str:
         if change_value != 0 and change not in (None, "neutral"):
             change_str = format_rate_value(abs(change_value))
             sign = "+" if change_value > 0 else ""
-            line = f"{get_currency_flag(pair)} {pair}  {price_str} {quote_currency}  {indicator} {sign}{change_str}"
+            # NOTE: get_currency_flag() no está definida en el código base.
+            # Se mantiene comoplaceholder para futura implementación.
+            flag = ""  # get_currency_flag(pair)
+            line = f"{flag} {pair}  {price_str} {quote_currency}  {indicator} {sign}{change_str}"
         else:
-            line = f"{get_currency_flag(pair)} {pair}  {price_str} {quote_currency}  {indicator}"
+            # NOTE: get_currency_flag() no está definida en el código base.
+            flag = ""  # get_currency_flag(pair)
+            line = f"{flag} {pair}  {price_str} {quote_currency}  {indicator}"
 
         lines.append(line)
 
@@ -500,7 +505,7 @@ def build_footer(data: Dict[str, Any]) -> str:
 
     # Fuentes disponibles - estilo legacy
     lines.append("Fuentes de consulta:")
-    
+
     # Verificar qué fuentes tienen datos
     sources = []
     if data.get("eltoque"):
@@ -509,7 +514,7 @@ def build_footer(data: Dict[str, Any]) -> str:
         sources.append("🔗 www.cadeca.cu")
     if data.get("bcc"):
         sources.append("🔗 www.bc.gob.cu")
-    
+
     if sources:
         lines.extend(sources)
     else:
@@ -904,128 +909,14 @@ def build_bcc_only_message(api_data: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-# =============================================================================
-# CRIPTOMONEDAS — COMANDO /p
-# =============================================================================
-
-
-def format_change_crypto(change: Optional[float]) -> str:
-    """Formatea cambio porcentual con emoji indicador.
-
-    Emojis:
-
-    - > +0.5% → 😄
-    - -0.5% a +0.5% → 😕
-    - -5% a -0.5% → 😔
-    - ≤ -5% → 😢
-
-    Args:
-        change: Cambio porcentual (puede ser None)
-
-    Returns:
-        String con formato "+X.XX% 😄" o "0.00%"
-    """
-    if change is None:
-        return "0.00%"
-
-    sign = "+" if change > 0 else ""
-    icon = (
-        "😄" if change > 0.5
-        else "😕" if change > -0.5
-        else "😔" if change > -5.0
-        else "😢"
-    )
-    return f"{sign}{change:.2f}%  {icon}"
-
-
-def build_crypto_message(data: Dict[str, Any]) -> str:
-    """Construye mensaje de criptomoneda para comando /p.
-
-    Formato BBAlert (copiable):
-        *{SYMBOL}*
-        —————————————————
-        💰 *Precio:* ${price:,.4f}
-        📈 *High 24h:* ${high_24h:,.4f}
-        📉 *Low 24h:* ${low_24h:,.4f}
-        —————————————————
-        Ξ: {price_eth:.8f}
-        ₿: {price_btc:.8f}
-        1h  {format_change(percent_change_1h)}
-        24h {format_change(percent_change_24h)}
-        7d  {format_change(percent_change_7d)}
-        Cap: #{market_cap_rank} | ${market_cap:,.0f}
-        Vol: ${volume_24h:,.0f}
-
-    Args:
-        data: Diccionario con datos de criptomoneda (claves: symbol, price,
-              price_eth, price_btc, high_24h, low_24h,
-              percent_change_1h, percent_change_24h, percent_change_7d,
-              market_cap_rank, market_cap, volume_24h)
-
-    Returns:
-        Mensaje formateado listo para enviar (Markdown).
-    """
-    lines = []
-
-    symbol = data.get("symbol", "N/A")
-    price = data.get("price", 0)
-    high_24h = data.get("high_24h", 0)
-    low_24h = data.get("low_24h", 0)
-    price_eth = data.get("price_eth", 0)
-    price_btc = data.get("price_btc", 0)
-    pct_1h = data.get("percent_change_1h")
-    pct_24h = data.get("percent_change_24h", 0)
-    pct_7d = data.get("percent_change_7d")
-    rank = data.get("market_cap_rank", 0)
-    mcap = data.get("market_cap", 0)
-    volume = data.get("volume_24h", 0)
-
-    # Header — símbolo
-    lines.append(f"*{symbol}*")
-    lines.append(SEPARATOR_THICK)
-
-    # Precio principal
-    lines.append(f"💰 *Precio:* ${price:,.4f}")
-
-    # High/Low (mostrar N/A si son 0)
-    if high_24h > 0:
-        lines.append(f"📈 *High 24h:* ${high_24h:,.4f}")
-        lines.append(f"📉 *Low 24h:* ${low_24h:,.4f}")
-    else:
-        lines.append("📈 *High 24h:* N/A")
-        lines.append("📉 *Low 24h:* N/A")
-
-    lines.append(SEPARATOR_THICK)
-
-    # Precios en ETH y BTC
-    lines.append(f"Ξ: {price_eth:.8f}")
-    lines.append(f"₿: {price_btc:.8f}")
-
-    # Cambios porcentuales
-    lines.append(f"1h  {format_change_crypto(pct_1h)}")
-    lines.append(f"24h {format_change_crypto(pct_24h)}")
-    lines.append(f"7d  {format_change_crypto(pct_7d)}")
-
-    # Market cap y volumen
-    lines.append(f"Cap: #{rank} | ${mcap:,.0f}")
-    lines.append(f"Vol: ${volume:,.0f}")
-
-    return "\n".join(lines)
-
-
-# =============================================================================
-# FUNCIONES PARA COMANDOS INDIVIDUALES POR FUENTE
-# =============================================================================
-
-
-def build_eltoque_only_message(api_data: Dict[str, Any]) -> str:
+def build_cadeca_only_message(api_data: Dict[str, Any]) -> str:
     """Construye mensaje con solo CADECA para comando /cadeca."""
     lines = []
-    
+
     lines.append("🏢 *CADECA (Exchange Houses)*")
     lines.append("↳ _Airports, Ports & Hotels_")
     lines.append(SEPARATOR_THICK)
-    
+
     cadeca_data = api_data.get("cadeca", {})
 
     if not cadeca_data:
@@ -1034,13 +925,13 @@ def build_eltoque_only_message(api_data: Dict[str, Any]) -> str:
     else:
         logger.debug("📊 /cadeca CADECA data: %d currencies", len(cadeca_data))
         lines.append("_Currency_     _Buy_      _Sell_")
-        
+
         priority = ["EUR", "USD", "MLC", "CAD", "MXN", "GBP", "CHF", "RUB", "AUD", "JPY"]
         sorted_currencies = sorted(
             cadeca_data.keys(),
             key=lambda x: (priority.index(x.upper()) if x.upper() in priority else 99, x),
         )
-        
+
         for currency in sorted_currencies:
             currency_info = cadeca_data[currency]
             if isinstance(currency_info, dict):
@@ -1057,7 +948,7 @@ def build_eltoque_only_message(api_data: Dict[str, Any]) -> str:
                 buy_str = f"{buy:6.2f}"
             else:
                 buy_str = "  ---"
-                
+
             if sell is not None:
                 sell_str = f"{sell:6.2f}"
             else:
@@ -1071,10 +962,10 @@ def build_eltoque_only_message(api_data: Dict[str, Any]) -> str:
 
             line = f" *{currency}*          {buy_str}       {sell_str}{indicator}"
             lines.append(line)
-    
+
     lines.append("")
     lines.append(SEPARATOR_THICK)
-    
+
     # Footer
     updated_at = api_data.get("updated_at")
     if updated_at:
@@ -1085,11 +976,6 @@ def build_eltoque_only_message(api_data: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-# =============================================================================
-# NUEVO FORMATO PARA COMANDO /toque
-# =============================================================================
-
-
 def build_toque_new_message(api_data: Dict[str, Any]) -> str:
     """Construye mensaje con nuevo formato para comando /toque.
 
@@ -1098,16 +984,16 @@ def build_toque_new_message(api_data: Dict[str, Any]) -> str:
         💹 Tasa en tiempo real
         ————————————————————
 
-        » Valores actuales del mercado:  
+        » Valores actuales del mercado:
         🇪🇺 EUR ⇾ 580.00  CUP
-        🇺🇸 USD ⇾ 515.00  CUP 
-        💳 MLC ⇾ 400.00  CUP  
+        🇺🇸 USD ⇾ 515.00  CUP
+        💳 MLC ⇾ 400.00  CUP
 
-        » Mercado Criptomonedas  
+        » Mercado Criptomonedas
         🪙 BTC ⇾ 520.00 CUP
         ⚡ TRX ⇾ 185.00 CUP
-        💰 USDT ⇾ 560.00  CUP    
-   
+        💰 USDT ⇾ 560.00  CUP
+
         ————————————————————
         🔗 elToque.com
         ↳ 🕒 23/3/2026 20:32:44
@@ -1192,5 +1078,113 @@ def build_toque_new_message(api_data: Dict[str, Any]) -> str:
         lines.append(f"📆 {date_str}")
 
     lines.append("🔗 elToque.com")
+
+    return "\n".join(lines)
+
+
+# =============================================================================
+# CRIPTOMONEDAS — COMANDO /p
+# =============================================================================
+
+
+def format_change_crypto(change: Optional[float]) -> str:
+    """Formatea cambio porcentual con emoji indicador.
+
+    Emojis:
+    - > +0.5% → 😄
+    - -0.5% a +0.5% → 😕
+    - -5% a -0.5% → 😔
+    - ≤ -5% → 😢
+
+    Args:
+        change: Cambio porcentual (puede ser None)
+
+    Returns:
+        String con formato "+X.XX% 😄" o "0.00%"
+    """
+    if change is None:
+        return "0.00%"
+
+    sign = "+" if change > 0 else ""
+    icon = (
+        "😄" if change > 0.5
+        else "😕" if change > -0.5
+        else "😔" if change > -5.0
+        else "😢"
+    )
+    return f"{sign}{change:.2f}%  {icon}"
+
+
+def build_crypto_message(data: Dict[str, Any]) -> str:
+    """Construye mensaje de criptomoneda para comando /p.
+
+    Formato BBAlert:
+        *{SYMBOL}*
+        —————————————————
+        💰 *Precio:* ${price:,.4f}
+        📈 *High 24h:* ${high_24h:,.4f}
+        📉 *Low 24h:* ${low_24h:,.4f}
+        —————————————————
+        Ξ: {price_eth:.8f}
+        ₿: {price_btc:.8f}
+        1h  {format_change(percent_change_1h)}
+        24h {format_change(percent_change_24h)}
+        7d  {format_change(percent_change_7d)}
+        Cap: #{market_cap_rank} | ${market_cap:,.0f}
+        Vol: ${volume_24h:,.0f}
+
+    Args:
+        data: Diccionario con datos de criptomoneda (claves: symbol, price,
+              price_eth, price_btc, high_24h, low_24h,
+              percent_change_1h, percent_change_24h, percent_change_7d,
+              market_cap_rank, market_cap, volume_24h)
+
+    Returns:
+        Mensaje formateado listo para enviar (Markdown).
+    """
+    lines = []
+
+    symbol = data.get("symbol", "N/A")
+    price = data.get("price", 0)
+    high_24h = data.get("high_24h", 0)
+    low_24h = data.get("low_24h", 0)
+    price_eth = data.get("price_eth", 0)
+    price_btc = data.get("price_btc", 0)
+    pct_1h = data.get("percent_change_1h")
+    pct_24h = data.get("percent_change_24h", 0)
+    pct_7d = data.get("percent_change_7d")
+    rank = data.get("market_cap_rank", 0)
+    mcap = data.get("market_cap", 0)
+    volume = data.get("volume_24h", 0)
+
+    # Header — símbolo
+    lines.append(f"*{symbol}*")
+    lines.append(SEPARATOR_THICK)
+
+    # Precio principal
+    lines.append(f"💰 *Precio:* ${price:,.4f}")
+
+    # High/Low (mostrar N/A si son 0)
+    if high_24h > 0:
+        lines.append(f"📈 *High 24h:* ${high_24h:,.4f}")
+        lines.append(f"📉 *Low 24h:* ${low_24h:,.4f}")
+    else:
+        lines.append("📈 *High 24h:* N/A")
+        lines.append("📉 *Low 24h:* N/A")
+
+    lines.append(SEPARATOR_THICK)
+
+    # Precios en ETH y BTC
+    lines.append(f"Ξ: {price_eth:.8f}")
+    lines.append(f"₿: {price_btc:.8f}")
+
+    # Cambios porcentuales
+    lines.append(f"1h  {format_change_crypto(pct_1h)}")
+    lines.append(f"24h {format_change_crypto(pct_24h)}")
+    lines.append(f"7d  {format_change_crypto(pct_7d)}")
+
+    # Market cap y volumen
+    lines.append(f"Cap: #{rank} | ${mcap:,.0f}")
+    lines.append(f"Vol: ${volume:,.0f}")
 
     return "\n".join(lines)
