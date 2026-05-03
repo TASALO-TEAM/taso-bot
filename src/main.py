@@ -38,6 +38,9 @@ from src.handlers.toqueimg import (
 from src.handlers.image_alerts import (
     handle_time_input,
 )
+from src.handlers.p import (
+    p_command,
+)
 from src.services.daily_image_sender import start_daily_dispatcher, stop_daily_dispatcher
 from src.logger import BotLogger, LOGS_DIR, LOG_FILE_PATH
 
@@ -177,6 +180,7 @@ def create_application() -> Application:
         ("bcc", bcc_command),
         ("cadeca", cadeca_command),
         ("toqueimg", toqueimg_command),
+        ("p", p_command),
     ]
     
     for cmd_name, handler in command_handlers:

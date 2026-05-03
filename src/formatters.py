@@ -847,10 +847,10 @@ def build_eltoque_only_message(api_data: Dict[str, Any]) -> str:
 def build_bcc_only_message(api_data: Dict[str, Any]) -> str:
     """Construye mensaje con solo BCC para comando /bcc."""
     lines = []
-    
+
     lines.append("🏛 *OFFICIAL RATE (BCC)*")
     lines.append(SEPARATOR_THICK)
-    
+
     bcc_data = api_data.get("bcc", {})
 
     if not bcc_data:
@@ -863,7 +863,7 @@ def build_bcc_only_message(api_data: Dict[str, Any]) -> str:
             bcc_data.keys(),
             key=lambda x: (priority.index(x.upper()) if x.upper() in priority else 99, x),
         )
-        
+
         for currency in sorted_currencies:
             currency_info = bcc_data[currency]
             if isinstance(currency_info, dict):
@@ -874,9 +874,9 @@ def build_bcc_only_message(api_data: Dict[str, Any]) -> str:
                 rate = float(currency_info) if currency_info else 0
                 change = None
                 prev_rate = None
-            
+
             rate_str = format_rate_value(rate) if rate else "---"
-            
+
             indicator = ""
             change_str = ""
             if change == "up" and prev_rate is not None:
@@ -887,24 +887,138 @@ def build_bcc_only_message(api_data: Dict[str, Any]) -> str:
                 diff = rate - prev_rate
                 indicator = "  " + INDICATOR_DOWN
                 change_str = f" {diff:,.2f}"
-            
+
             line = f" *{currency}:*   {rate_str}   *CUP*{indicator}{change_str}"
             lines.append(line)
-    
+
     lines.append("")
     lines.append(SEPARATOR_THICK)
-    
+
     # Footer
     updated_at = api_data.get("updated_at")
     if updated_at:
         date_str = parse_iso_datetime(updated_at)
         lines.append(f"📆 {date_str}")
     lines.append("🔗 www.bc.gob.cu")
-    
+
     return "\n".join(lines)
 
 
-def build_cadeca_only_message(api_data: Dict[str, Any]) -> str:
+# =============================================================================
+# CRIPTOMONEDAS — COMANDO /p
+# =============================================================================
+
+
+def format_change_crypto(change: Optional[float]) -> str:
+    """Formatea cambio porcentual con emoji indicador.
+
+    Emojis:
+
+    - > +0.5% → 😄
+    - -0.5% a +0.5% → 😕
+    - -5% a -0.5% → 😔
+    - ≤ -5% → 😢
+
+    Args:
+        change: Cambio porcentual (puede ser None)
+
+    Returns:
+        String con formato "+X.XX% 😄" o "0.00%"
+    """
+    if change is None:
+        return "0.00%"
+
+    sign = "+" if change > 0 else ""
+    icon = (
+        "😄" if change > 0.5
+        else "😕" if change > -0.5
+        else "😔" if change > -5.0
+        else "😢"
+    )
+    return f"{sign}{change:.2f}%  {icon}"
+
+
+def build_crypto_message(data: Dict[str, Any]) -> str:
+    """Construye mensaje de criptomoneda para comando /p.
+
+    Formato BBAlert (copiable):
+        *{SYMBOL}*
+        —————————————————
+        💰 *Precio:* ${price:,.4f}
+        📈 *High 24h:* ${high_24h:,.4f}
+        📉 *Low 24h:* ${low_24h:,.4f}
+        —————————————————
+        Ξ: {price_eth:.8f}
+        ₿: {price_btc:.8f}
+        1h  {format_change(percent_change_1h)}
+        24h {format_change(percent_change_24h)}
+        7d  {format_change(percent_change_7d)}
+        Cap: #{market_cap_rank} | ${market_cap:,.0f}
+        Vol: ${volume_24h:,.0f}
+
+    Args:
+        data: Diccionario con datos de criptomoneda (claves: symbol, price,
+              price_eth, price_btc, high_24h, low_24h,
+              percent_change_1h, percent_change_24h, percent_change_7d,
+              market_cap_rank, market_cap, volume_24h)
+
+    Returns:
+        Mensaje formateado listo para enviar (Markdown).
+    """
+    lines = []
+
+    symbol = data.get("symbol", "N/A")
+    price = data.get("price", 0)
+    high_24h = data.get("high_24h", 0)
+    low_24h = data.get("low_24h", 0)
+    price_eth = data.get("price_eth", 0)
+    price_btc = data.get("price_btc", 0)
+    pct_1h = data.get("percent_change_1h")
+    pct_24h = data.get("percent_change_24h", 0)
+    pct_7d = data.get("percent_change_7d")
+    rank = data.get("market_cap_rank", 0)
+    mcap = data.get("market_cap", 0)
+    volume = data.get("volume_24h", 0)
+
+    # Header — símbolo
+    lines.append(f"*{symbol}*")
+    lines.append(SEPARATOR_THICK)
+
+    # Precio principal
+    lines.append(f"💰 *Precio:* ${price:,.4f}")
+
+    # High/Low (mostrar N/A si son 0)
+    if high_24h > 0:
+        lines.append(f"📈 *High 24h:* ${high_24h:,.4f}")
+        lines.append(f"📉 *Low 24h:* ${low_24h:,.4f}")
+    else:
+        lines.append("📈 *High 24h:* N/A")
+        lines.append("📉 *Low 24h:* N/A")
+
+    lines.append(SEPARATOR_THICK)
+
+    # Precios en ETH y BTC
+    lines.append(f"Ξ: {price_eth:.8f}")
+    lines.append(f"₿: {price_btc:.8f}")
+
+    # Cambios porcentuales
+    lines.append(f"1h  {format_change_crypto(pct_1h)}")
+    lines.append(f"24h {format_change_crypto(pct_24h)}")
+    lines.append(f"7d  {format_change_crypto(pct_7d)}")
+
+    # Market cap y volumen
+    lines.append(f"Cap: #{rank} | ${mcap:,.0f}")
+    lines.append(f"Vol: ${volume:,.0f}")
+
+    return "\n".join(lines)
+
+
+# =============================================================================
+# FUNCIONES PARA COMANDOS INDIVIDUALES POR FUENTE
+# =============================================================================
+
+
+def build_eltoque_only_message(api_data: Dict[str, Any]) -> str:
     """Construye mensaje con solo CADECA para comando /cadeca."""
     lines = []
     

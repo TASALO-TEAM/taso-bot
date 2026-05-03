@@ -56,6 +56,13 @@ class Settings(BaseSettings):
         pattern="^(DEBUG|INFO|WARNING|ERROR)$"
     )
 
+    # Cryptocurrency Prices (CoinMarketCap)
+    coinmarketcap_api_key: str = Field(
+        default="",
+        description="CoinMarketCap Pro API key for cryptocurrency price data (/p command)",
+        examples=["your_cmc_pro_api_key_here"]
+    )
+
     # Image Generation
     template_path: str = Field(
         default="data/template.png",
