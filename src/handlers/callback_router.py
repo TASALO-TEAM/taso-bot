@@ -35,8 +35,8 @@ ROUTE_MAP = {
     "alert": "_handle_alert",
     "p": "_handle_p",
     "ta": "_handle_ta",
+    "ai": "_handle_ta",
     "graf": "_handle_graf",
-    "ai": "_handle_ta",  # ai_analyze|... callback from /ta AI button
 }
 
 
@@ -230,32 +230,34 @@ async def _handle_alert(update: Update, context: ContextTypes.DEFAULT_TYPE, call
 
 
 
- async def _handle_p(update: Update, context: ContextTypes.DEFAULT_TYPE, callback_data: str) -> None:
-     """Handle refresh callbacks for /p command (prefix: p_refresh_...)."""
-     handler_start = time.time()
-     query = update.callback_query
-     user_id = query.from_user.id
- 
-     logger.info("💰 Handler _handle_p processing '%s' for user %d", callback_data, user_id)
- 
-     try:
-         if callback_data.startswith("p_refresh_"):
-             await p.p_refresh_callback(update, context)
-         else:
-             logger.warning("Unknown p callback: %s for user %d", callback_data, user_id)
-             duration_ms = (time.time() - handler_start) * 1000
-             logger.info("⚠️ _handle_p unknown callback '%s' for user %d (%.0fms)", callback_data, user_id, duration_ms)
-             return
- 
-         duration_ms = (time.time() - handler_start) * 1000
-         logger.info("✅ _handle_p completed for user %d callback '%s' (%.0fms)", user_id, callback_data, duration_ms)
-     except Exception as e:
-         duration_ms = (time.time() - handler_start) * 1000
-         logger.error(
-             "❌ Error in _handle_p for user %d callback '%s' (%.0fms): %s",
-             user_id, callback_data, duration_ms, e, exc_info=True,
-         )
-         raise
+# ── P callbacks ──
+
+async def _handle_p(update: Update, context: ContextTypes.DEFAULT_TYPE, callback_data: str) -> None:
+    """Handle refresh callbacks for /p command (prefix: p_refresh_...)."""
+    handler_start = time.time()
+    query = update.callback_query
+    user_id = query.from_user.id
+
+    logger.info("💰 Handler _handle_p processing '%s' for user %d", callback_data, user_id)
+
+    try:
+        if callback_data.startswith("p_refresh_"):
+            await p.p_refresh_callback(update, context)
+        else:
+            logger.warning("Unknown p callback: %s for user %d", callback_data, user_id)
+            duration_ms = (time.time() - handler_start) * 1000
+            logger.info("⚠️ _handle_p unknown callback '%s' for user %d (%.0fms)", callback_data, user_id, duration_ms)
+            return
+
+        duration_ms = (time.time() - handler_start) * 1000
+        logger.info("✅ _handle_p completed for user %d callback '%s' (%.0fms)", user_id, callback_data, duration_ms)
+    except Exception as e:
+        duration_ms = (time.time() - handler_start) * 1000
+        logger.error(
+            "❌ Error in _handle_p for user %d callback '%s' (%.0fms): %s",
+            user_id, callback_data, duration_ms, e, exc_info=True,
+        )
+        raise
 
 
 # ── TA callbacks ──
