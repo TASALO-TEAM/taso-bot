@@ -19,7 +19,7 @@ from telegram import Update
 from telegram.ext import ContextTypes, CallbackQueryHandler
 from telegram.error import BadRequest
 
-from src.handlers import image_alerts, tasalo, start, toqueimg, p
+from src.handlers import image_alerts, tasalo, start, toqueimg, p, ta, trading
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +34,8 @@ ROUTE_MAP = {
     "toqueimg": "_handle_toqueimg",
     "alert": "_handle_alert",
     "p": "_handle_p",
+    "ta": "_handle_ta",
+    "graf": "_handle_graf",
 }
 
 
@@ -227,6 +229,7 @@ async def _handle_alert(update: Update, context: ContextTypes.DEFAULT_TYPE, call
 
 
 
+async def _handle_p(update: Update, context: ContextTypes.DEFAULT_TYPE, callback_data: str) -> None:
     """Handle refresh callbacks for /p command (prefix: p_refresh_...)."""
     handler_start = time.time()
     query = update.callback_query
@@ -254,6 +257,61 @@ async def _handle_alert(update: Update, context: ContextTypes.DEFAULT_TYPE, call
             "❌ Error in _handle_p for user %d callback '%s' (%.0fms): %s",
             user_id, callback_data, duration_ms, e, exc_info=True,
         )
+        raise
+
+
+# ── TA callbacks ──
+
+async def _handle_ta(update: Update, context: ContextTypes.DEFAULT_TYPE, callback_data: str) -> None:
+    handler_start = time.time()
+    query = update.callback_query
+    user_id = query.from_user.id
+    logger.info("🔍 Handler _handle_ta processing '%s' for user %d", callback_data, user_id)
+    try:
+        if callback_data.startswith("ta_switch|"):
+            await ta.ta_switch_callback(update, context)
+        elif callback_data.startswith("ta_quick|"):
+            await trading.ta_quick_callback(update, context)
+        elif callback_data.startswith("ai_analyze|"):
+            await ta.ai_analysis_callback(update, context)
+        else:
+            logger.warning("Unknown ta callback: %s for user %d", callback_data, user_id)
+            duration_ms = (time.time() - handler_start) * 1000
+            logger.info("⚠️ _handle_ta unknown callback '%s' for user %d (%.0fms)", callback_data, user_id, duration_ms)
+            return
+        duration_ms = (time.time() - handler_start) * 1000
+        logger.info("✅ _handle_ta completed for user %d callback '%s' (%.0fms)", user_id, callback_data, duration_ms)
+    except Exception as e:
+        duration_ms = (time.time() - handler_start) * 1000
+        logger.error("❌ Error in _handle_ta for user %d callback '%s' (%.0fms): %s", user_id, callback_data, duration_ms, e, exc_info=True)
+        raise
+
+
+# ── GRAF callbacks ──
+
+async def _handle_graf(update: Update, context: ContextTypes.DEFAULT_TYPE, callback_data: str) -> None:
+    handler_start = time.time()
+    query = update.callback_query
+    user_id = query.from_user.id
+    logger.info("📈 Handler _handle_graf processing '%s' for user %d", callback_data, user_id)
+    try:
+        if callback_data.startswith("graf_tf|"):
+            await trading.graf_timeframe_callback(update, context)
+        elif callback_data.startswith("graf_from_ta|"):
+            await ta.graf_from_ta_callback(update, context)
+        elif callback_data.startswith("graf_from_btc|"):
+            await query.answer("⚠️ Funcionalidad no disponible", show_alert=True)
+            return
+        else:
+            logger.warning("Unknown graf callback: %s for user %d", callback_data, user_id)
+            duration_ms = (time.time() - handler_start) * 1000
+            logger.info("⚠️ _handle_graf unknown callback '%s' for user %d (%.0fms)", callback_data, user_id, duration_ms)
+            return
+        duration_ms = (time.time() - handler_start) * 1000
+        logger.info("✅ _handle_graf completed for user %d callback '%s' (%.0fms)", user_id, callback_data, duration_ms)
+    except Exception as e:
+        duration_ms = (time.time() - handler_start) * 1000
+        logger.error("❌ Error in _handle_graf for user %d callback '%s' (%.0fms): %s", user_id, callback_data, duration_ms, e, exc_info=True)
         raise
 
 

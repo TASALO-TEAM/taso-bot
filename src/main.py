@@ -41,6 +41,13 @@ from src.handlers.image_alerts import (
 from src.handlers.p import (
     p_command,
 )
+from src.handlers.ta import (
+    ta_command,
+)
+from src.handlers.trading import (
+    graf_command,
+    mk_command,
+)
 from src.services.daily_image_sender import start_daily_dispatcher, stop_daily_dispatcher
 from src.logger import BotLogger, LOGS_DIR, LOG_FILE_PATH
 
@@ -181,6 +188,9 @@ def create_application() -> Application:
         ("cadeca", cadeca_command),
         ("toqueimg", toqueimg_command),
         ("p", p_command),
+        ("ta", ta_command),
+        ("graf", graf_command),
+        ("mk", mk_command),
     ]
     
     for cmd_name, handler in command_handlers:
