@@ -63,6 +63,13 @@ class Settings(BaseSettings):
         examples=["your_cmc_pro_api_key_here"]
     )
 
+    # AI Analysis (Groq)
+    groq_api_key: str = Field(
+        default="",
+        description="Groq API key for AI-powered technical analysis (/ta AI button)",
+        examples=["gsk_..."]
+    )
+
     # Image Generation
     template_path: str = Field(
         default="data/template.png",

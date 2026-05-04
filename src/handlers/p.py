@@ -155,14 +155,14 @@ async def p_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     # 5. Construir teclado inline (Refresh + TA)
-    # Nota: namespace "p_" para enrutamiento en callback_router
+    # Nota: usa namespace "ta_quick" para que callback_router lo enrute directamente
     btn_refresh = InlineKeyboardButton(
         f"🔄 Actualizar /p {symbol}",
         callback_data=f"p_refresh_{symbol}"
     )
     btn_ta = InlineKeyboardButton(
         "📊 Ver Análisis Técnico (4H)",
-        callback_data=f"p_ta|{symbol}|4h"
+        callback_data=f"ta_quick|{symbol}|4h"  # Enruta a ta.ta_quick_callback
     )
     keyboard = InlineKeyboardMarkup([[btn_refresh], [btn_ta]])
 

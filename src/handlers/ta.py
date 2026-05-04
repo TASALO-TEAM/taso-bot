@@ -1,8 +1,9 @@
 # src/handlers/ta.py
-# Handler para comando /ta — copia literal de BBAlert
+# Handler para comando /ta — copia literal de BBAlert mejorada
 # Provee análisis técnico profesional con indicadores y mensajes en español.
 
 import asyncio
+import logging
 import requests
 import json
 import pytz
@@ -21,6 +22,8 @@ from src.utils.subscription_manager import check_feature_access, registrar_uso_c
 from src.utils.ads_manager import get_random_ad_text
 # I18n removed – using Spanish strings directly
 from src.core.btc_advanced_analysis import BTCAdvancedAnalyzer
+
+logger = logging.getLogger(__name__)
 
 
 # === NUEVO COMANDO /ta MEJORADO ===
@@ -373,66 +376,73 @@ async def ta_command(update: Update, context: ContextTypes.DEFAULT_TYPE, overrid
 
 
 async def ai_analysis_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle '🤖 Análisis IA Profesional' button from /ta command."""
     user_id = update.effective_user.id
     query = update.callback_query
-    await query.answer("🧠 Analizando datos...")
+    await query.answer("🧠 Analizando datos con IA...")
 
     try:
-        data = query.data.split("|")
-        source = data[1]
-        symbol = data[2]
-        pair = data[3]
-        timeframe = data[4]
+        parts = query.data.split("|")
+        if len(parts) < 5:
+            await query.answer("❌ Datos de callback inválidos", show_alert=True)
+            return
+
+        _, source, symbol, pair, timeframe = parts[:5]
         full_symbol = f"{symbol}{pair}"
 
         await query.message.reply_chat_action("typing")
 
+        # Extract original technical report from the message
         original_report_text = query.message.caption if query.message.caption else query.message.text
-
         if not original_report_text:
-            if query.message:
-                await query.message.reply_text(
-                    "❌ Error: No se pudo leer el reporte en pantalla.",
-                    parse_mode=ParseMode.MARKDOWN
-                )
-            else:
-                await context.bot.send_message(
-                    chat_id=query.from_user.id,
-                    text="❌ Error: No se pudo leer el reporte en pantalla.",
-                    parse_mode=ParseMode.MARKDOWN
-                )
+            await query.message.reply_text(
+                "❌ No se pudo leer el reporte técnico en pantalla.\n"
+                "Por favor, genera un nuevo análisis con /ta.",
+                parse_mode=ParseMode.MARKDOWN
+            )
             return
 
-        source_context = "FUENTE: TradingView (Consenso de indicadores y medias móviles)." if source == "TV" else "FUENTE: Binance Local (Cálculo matemático directo del Bot)."
+        source_context = (
+            "FUENTE: TradingView (Consenso de indicadores y medias móviles)."
+            if source == "TV"
+            else "FUENTE: Binance Local (Cálculo matemático directo del Bot)."
+        )
         final_text_for_ai = f"{source_context}\n\n{original_report_text}"
 
-        loop = asyncio.get_running_loop()
-        ai_response = await loop.run_in_executor(None, get_groq_crypto_analysis, full_symbol, timeframe, final_text_for_ai)
+        # Call Groq API (async with retry)
+        logger.info("🔍 Requesting Groq analysis for %s %s from user %d", full_symbol, timeframe, user_id)
+        ai_response = await get_groq_crypto_analysis(
+            symbol=full_symbol,
+            timeframe=timeframe,
+            technical_report_text=final_text_for_ai,
+            source=source,
+        )
 
-        icon = "📡" if source == "TV" else "📊"
-        header = f"🤖 *BitBread IA* (_Experimental_)\n {icon} *{source}* | Moneda: *{full_symbol}* ({timeframe})\n—————————————————\n"
+        # Send AI analysis as a reply
+        header = (
+            f"🤖 *BitBread IA* (_Experimental_)\n"
+            f"{'📡' if source == 'TV' else '📊'} *{source}* | Moneda: *{full_symbol}* ({timeframe})\n"
+            f"—————————————————\n"
+        )
 
-        if query.message:
-            await query.message.reply_text(header + ai_response, parse_mode=ParseMode.MARKDOWN, reply_to_message_id=query.message.message_id)
-        else:
-            await context.bot.send_message(chat_id=query.from_user.id, text=header + ai_response, parse_mode=ParseMode.MARKDOWN)
+        await query.message.reply_text(
+            header + ai_response,
+            parse_mode=ParseMode.MARKDOWN,
+            reply_to_message_id=query.message.message_id,
+        )
+
+        logger.info("✅ AI analysis delivered to user %d for %s %s", user_id, full_symbol, timeframe)
 
     except Exception as e:
-        print(f"Error en callback IA: {e}")
+        logger.exception("Unexpected error in ai_analysis_callback for user %d: %s", user_id, e)
         try:
-            if query.message:
-                await query.message.reply_text(
-                    "⚠️ La IA está ocupada, intenta de nuevo.",
-                    parse_mode=ParseMode.MARKDOWN
-                )
-            else:
-                await context.bot.send_message(
-                    chat_id=query.from_user.id,
-                    text="⚠️ La IA está ocupada, intenta de nuevo.",
-                    parse_mode=ParseMode.MARKDOWN
-                )
+            await query.message.reply_text(
+                "❌ Error inesperado al generar análisis IA.\n"
+                "Por favor, intenta de nuevo en unos minutos.",
+                parse_mode=ParseMode.MARKDOWN,
+            )
         except Exception:
-            pass
+            pass  # Give up gracefully
 
 
 async def graf_from_ta_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
