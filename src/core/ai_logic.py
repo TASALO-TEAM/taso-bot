@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 # ── Configuration ────────────────────────────────────────────────────────────
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
-DEFAULT_MODEL = "openai/gpt-oss-20b"  # or "llama-3.3-70b-versatile"
+DEFAULT_MODEL = "llama-3.3-70b-versatile"  # Modelo válido en Groq
 DEFAULT_TIMEOUT = 15
 MAX_RETRIES = 3
 
@@ -30,7 +30,7 @@ Tarea: Interpreta el reporte técnico a continuación y genera un análisis narr
 {report_text}
 === FIN REPORTE ===
 
-Instrucciones:
+INSTRUCCIONES:
 1. Analiza y tendencia: Resume el escenario actual y la tendencia dominante.
 2. Fuerza de la tendencia: Evalúa si es fuerte, moderada o débil.
 3. Osciladores y momentum: Interpreta RSI, MFI, CCI, ADX, WILLR, OBV.
@@ -39,21 +39,67 @@ Instrucciones:
 6. Recomendación: Acción sugerida (COMPRAR/VENDER/MANTENER) con justificación.
 7. Conclusión: Resumen ejecutivo en 1-2 líneas.
 
-Reglas:
+FORMATO EXACTO DE SALIDA (usa estos títulos con asteriscos exactamente como se muestra):
+📚 *Análisis y Tendencia*
+[Texto breve]
+
+📚 *Fuerza de la Tendencia*
+[Texto breve]
+
+📚 *Osciladores y Momentum*
+[Texto breve]
+
+📚 *Niveles de Soporte y Resistencia*
+[Texto breve]
+
+📚 *Riesgo y Oportunidad*
+[Texto breve]
+
+📚 *Recomendación*
+[Texto breve]
+
+📚 *Conclusión*
+[Texto breve]
+
+REGLAS:
 - Base exclusivamente en los datos proporcionados (no inventes números).
-- Máximo 1200 caracteres.
+- Máximo 1200 caracteres en total (aproximadamente 250-300 palabras).
 - Usa emojis moderadamente (📈📉⚠️✅).
-- No repitas valores numéricos ya mostrados.
-- Incluye disclaimer: "*Análisis generado por IA — no es asesoramiento financiero.*"
+- No repitas valores numéricos ya mostrados en el reporte.
+- NO uses otros formatos de Markdown (como _italic_, `code`, enlaces, etc.). Solo los títulos con *...* que están indicados.
+- Evita caracteres especiales que puedan romper el parseo de Telegram (como ~, `, _, [], () no formateados).
+- Incluye al final el disclaimer: "*Análisis generado por IA — no es asesoramiento financiero.*"
 """
 
 
 # ── Utilities ─────────────────────────────────────────────────────────────────
-def _clean_markdown(text: str) -> str:
-    """Escape Telegram Markdown special characters."""
+MAX_RESPONSE_CHARS = 3500  # Límite seguro para Telegram (deja espacio para encabezado)
+
+
+def _escape_telegram_markdown(text: str) -> str:
+    """
+    Escapa caracteres especiales de Telegram MarkdownV2,
+    preservando los asteriscos (*) que se usan para negrita en los títulos.
+    """
     if not text:
         return ""
-    return text.replace("*", "").replace("_", "").replace("`", "").replace("[", "(").replace("]", ")")
+    # Escapar backslash primero
+    text = text.replace("\\", "\\\\")
+    # Caracteres que deben escaparse en MarkdownV2 (excepto asterisco)
+    specials = r'_`[]()~>#+-=|{}.!'
+    for ch in specials:
+        text = text.replace(ch, f'\\{ch}')
+    return text
+
+
+def _truncate_smart(text: str, max_chars: int = MAX_RESPONSE_CHARS) -> str:
+    """Trunca el texto en el último espacio antes del límite."""
+    if len(text) <= max_chars:
+        return text
+    cut = text.rfind(' ', 0, max_chars)
+    if cut == -1:
+        cut = max_chars
+    return text[:cut] + "..."
 
 
 # ── HTTP Client ───────────────────────────────────────────────────────────────
@@ -150,11 +196,15 @@ async def get_groq_crypto_analysis(
             prompt_tokens + completion_tokens, elapsed,
         )
 
+        # Escape and truncate before returning
+        content = _escape_telegram_markdown(content)
+        content = _truncate_smart(content, MAX_RESPONSE_CHARS)
+
         # Append disclaimer if not already present
         if "Análisis generado por IA" not in content:
             content += "\n\n*Análisis generado por IA — no es asesoramiento financiero.*"
 
-        return _clean_markdown(content)
+        return content
 
     except httpx.HTTPStatusError as e:
         status = e.response.status_code if e.response else "??"
