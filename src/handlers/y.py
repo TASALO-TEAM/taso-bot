@@ -5,6 +5,7 @@ Includes subscription inline buttons and toggle callback.
 """
 
 import logging
+from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
@@ -43,9 +44,50 @@ def _build_sub_keyboard(current_hour: int | None) -> InlineKeyboardMarkup:
 
 
 async def y_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle /y — show year state (progress bar + daily quote + sub buttons)."""
+    """Handle /y — show year state (progress bar + daily quote + sub buttons).
+
+    Also supports /y add <frase> mode for adding a new quote.
+    """
     user_id = update.effective_user.id
     logger.info("📅 /y invoked by user %s", user_id)
+
+    args = context.args or []
+
+    if args:
+        quote_text = " ".join(args).strip()
+        if not quote_text or len(quote_text) < 5:
+            await update.message.reply_text(
+                "⚠️ Usa: `/y add <frase>`\nLa frase debe tener al menos 5 caracteres.",
+                parse_mode="Markdown",
+            )
+            return
+
+        await update.message.reply_text("📝 Añadiendo frase...")
+        result = await _year_api.add_year_quote(quote_text)
+        if not result or not result.get("ok"):
+            if result and result.get("status_code") == 409 or result is None:
+                await update.message.reply_text("❌ Esa frase ya existe en el registro.")
+            else:
+                await update.message.reply_text("❌ Error añadiendo frase. Intenta más tarde.")
+            return
+
+        context_data = result.get("context", {})
+        current = context_data.get("current", 0)
+        limit = context_data.get("limit", 365)
+        remaining = max(0, limit - current)
+        quote_ctx_year = context_data.get("year", datetime.now().year)
+        is_extra = context_data.get("is_extra", False)
+
+        year_label = f"próximo año" if is_extra else f"año {quote_ctx_year}"
+        confirm_msg = (
+            f"✅ *Frase añadida*\n"
+            f"•••\n"
+            f"💡 _{quote_text[:120]}{'...' if len(quote_text) > 120 else ''}_\n"
+            f"💭 Frase #{current} de {limit} del {year_label}\n"
+            f"📊 *Quedan {remaining} frases* sin añadir."
+        )
+        await update.message.reply_text(confirm_msg, parse_mode="Markdown")
+        return
 
     await update.message.reply_text("📅 Cargando estado del año...")
 

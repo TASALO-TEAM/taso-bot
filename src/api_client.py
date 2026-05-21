@@ -466,3 +466,16 @@ class TasaloApiClient:
         except Exception as e:
             logger.error("❌ Error en admin_list_year_subscriptions: %s", e)
             return None
+
+    async def add_year_quote(self, quote_text: str, target_year: Optional[int] = None) -> Optional[Dict[str, Any]]:
+        """Añadir una nueva frase (admin, requiere X-API-Key)."""
+        url = f"{self.api_url}/api/v1/year/quotes"
+        try:
+            payload: Dict[str, Any] = {"quote_text": quote_text}
+            if target_year is not None:
+                payload["target_year"] = target_year
+            data = await self._post_with_retry(url, headers=self._admin_headers, json=payload)
+            return data if data else None
+        except Exception as e:
+            logger.error("❌ Error en add_year_quote: %s", e)
+            return None
