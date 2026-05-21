@@ -19,7 +19,7 @@ from telegram import Update
 from telegram.ext import ContextTypes, CallbackQueryHandler
 from telegram.error import BadRequest
 
-from src.handlers import image_alerts, tasalo, start, toqueimg, p, ta, trading
+from src.handlers import image_alerts, tasalo, start, toqueimg, p, ta, trading, y as year_handlers
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +37,7 @@ ROUTE_MAP = {
     "ta": "_handle_ta",
     "ai": "_handle_ta",
     "graf": "_handle_graf",
+    "year_sub": "_handle_year",
 }
 
 
@@ -318,3 +319,27 @@ async def _handle_graf(update: Update, context: ContextTypes.DEFAULT_TYPE, callb
 def get_callback_handler() -> CallbackQueryHandler:
     """Return the router as a CallbackQueryHandler for registration in main.py."""
     return CallbackQueryHandler(callback_router)
+
+
+# ── Year subscription callbacks ──
+
+async def _handle_year(update: Update, context: ContextTypes.DEFAULT_TYPE, callback_data: str) -> None:
+    """Handle year_sub_* callbacks (subscription toggle buttons from /y)."""
+    handler_start = time.time()
+    query = update.callback_query
+    user_id = query.from_user.id
+
+    logger.info("📅 Handler _handle_year processing '%s' for user %d", callback_data, user_id)
+
+    try:
+        await year_handlers.year_sub_callback(update, context)
+
+        duration_ms = (time.time() - handler_start) * 1000
+        logger.info("✅ _handle_year completed for user %d callback '%s' (%.0fms)", user_id, callback_data, duration_ms)
+    except Exception as e:
+        duration_ms = (time.time() - handler_start) * 1000
+        logger.error(
+            "❌ Error in _handle_year for user %d callback '%s' (%.0fms): %s",
+            user_id, callback_data, duration_ms, e, exc_info=True,
+        )
+        raise
