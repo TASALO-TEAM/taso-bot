@@ -388,3 +388,81 @@ class TasaloApiClient:
             duration_ms = (time.time() - start_time) * 1000
             logger.error("❌ Error en get_stats_summary (%.0fms): %s", duration_ms, e)
             return None
+
+    # ── Year API methods ───────────────────────────────────────────────────────
+
+    async def get_year_state(self) -> Optional[Dict[str, Any]]:
+        """Obtener estado del año (progreso + frase del día + estadísticas)."""
+        url = f"{self.api_url}/api/v1/year/state"
+        try:
+            data = await self._get_with_retry(url)
+            return data if data and data.get("ok") else None
+        except Exception as e:
+            logger.error("❌ Error en get_year_state: %s", e)
+            return None
+
+    async def get_year_quote_today(self) -> Optional[Dict[str, Any]]:
+        """Obtener frase del día."""
+        url = f"{self.api_url}/api/v1/year/quotes/today"
+        try:
+            data = await self._get_with_retry(url)
+            return data if data and data.get("ok") else None
+        except Exception as e:
+            logger.error("❌ Error en get_year_quote_today: %s", e)
+            return None
+
+    async def get_year_subscription(self, user_id: int) -> Optional[Dict[str, Any]]:
+        """Obtener suscripción de un usuario."""
+        url = f"{self.api_url}/api/v1/year/subscriptions/me/{user_id}"
+        try:
+            data = await self._get_with_retry(url)
+            return data
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 404:
+                return None
+            logger.error("❌ HTTP %d en get_year_subscription", e.response.status_code)
+            return None
+        except Exception as e:
+            logger.error("❌ Error en get_year_subscription: %s", e)
+            return None
+
+    async def admin_set_year_subscription(self, user_id: int, hour: int) -> Optional[Dict[str, Any]]:
+        """Crear o actualizar suscripción (admin, requiere X-API-Key)."""
+        url = f"{self.api_url}/api/v1/year/subscriptions"
+        try:
+            data = await self._post_with_retry(
+                url,
+                headers=self._admin_headers,
+                json={"user_id": user_id, "hour": hour},
+            )
+            return data if data and data.get("ok") else None
+        except Exception as e:
+            logger.error("❌ Error en admin_set_year_subscription: %s", e)
+            return None
+
+    async def admin_delete_year_subscription(self, user_id: int) -> Optional[Dict[str, Any]]:
+        """Eliminar suscripción (admin, requiere X-API-Key)."""
+        try:
+            await self._client.delete(
+                f"{self.api_url}/api/v1/year/subscriptions/{user_id}",
+                headers=self._admin_headers,
+            )
+            return {"ok": True}
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 404:
+                return {"ok": False}
+            logger.error("❌ HTTP %d en admin_delete_year_subscription", e.response.status_code)
+            return None
+        except Exception as e:
+            logger.error("❌ Error en admin_delete_year_subscription: %s", e)
+            return None
+
+    async def admin_list_year_subscriptions(self) -> Optional[Dict[str, Any]]:
+        """Listar todas las suscripciones del año (admin, requiere X-API-Key)."""
+        url = f"{self.api_url}/api/v1/year/subscriptions"
+        try:
+            data = await self._get_with_retry(url, headers=self._admin_headers)
+            return data if data and data.get("ok") else None
+        except Exception as e:
+            logger.error("❌ Error en admin_list_year_subscriptions: %s", e)
+            return None
