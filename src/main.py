@@ -48,7 +48,11 @@ from src.handlers.trading import (
     graf_command,
     mk_command,
 )
+from src.handlers.y import (
+    y_command,
+)
 from src.services.daily_image_sender import start_daily_dispatcher, stop_daily_dispatcher
+from src.services.year_alert_scheduler import start_year_scheduler, stop_year_scheduler
 from src.logger import BotLogger, LOGS_DIR, LOG_FILE_PATH
 
 # Tipos de update que el bot realmente maneja (eficiencia)
@@ -179,6 +183,7 @@ def create_application() -> Application:
     # Registrar handlers
     command_handlers = [
         ("start", start_command),
+        ("y", y_command),
         ("tasalo", tasalo_command),
         ("health", health_check),
         ("refresh", refresh_command),
@@ -252,6 +257,13 @@ async def post_init(application: Application):
     except Exception as e:
         logger.error("❌ Failed to start daily image dispatcher: %s", e, exc_info=True)
 
+    # Iniciar dispatcher de alertas de año
+    try:
+        start_year_scheduler(application)
+        logger.info("✅ Year alert scheduler started")
+    except Exception as e:
+        logger.error("❌ Failed to start year alert scheduler: %s", e, exc_info=True)
+
     # Obtener y cachear foto de perfil del bot
     try:
         logger.info("📸 Fetching bot profile photo...")
@@ -318,6 +330,9 @@ def main():
         logger.info("🛑 Bot shutting down...")
         stop_daily_dispatcher()
         logger.info("✅ Daily dispatcher stopped")
+
+        stop_year_scheduler()
+        logger.info("✅ Year alert scheduler stopped")
         
         # Cerrar cliente HTTP para liberar conexiones
         api_client: TasaloApiClient = app.bot_data.get("api_client")
