@@ -17,6 +17,7 @@ settings = get_settings()
 
 _year_api = TasaloApiClient(
     api_url=settings.tasalo_api_url,
+    admin_key=settings.tasalo_admin_key,
     timeout=30,
 )
 
