@@ -477,5 +477,54 @@ class TasaloApiClient:
             data = await self._post_with_retry(url, headers=self._admin_headers, json=payload)
             return data if data else None
         except Exception as e:
-            logger.error("❌ Error en add_year_quote: %s", e)
+            logger.error("Error en add_year_quote: %s", e)
+            return None
+
+    async def admin_get_year_quote(self, quote_id: int) -> Optional[Dict[str, Any]]:
+        """Obtener una frase por id de posición (admin, requiere X-API-Key)."""
+        url = f"{self.api_url}/api/v1/year/quotes/{quote_id}"
+        try:
+            data = await self._get_with_retry(url, headers=self._admin_headers)
+            return data
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 404:
+                return None
+            logger.error("HTTP %d en admin_get_year_quote", e.response.status_code)
+            return None
+        except Exception as e:
+            logger.error("Error en admin_get_year_quote: %s", e)
+            return None
+
+    async def admin_edit_year_quote(self, quote_id: int, quote_text: str) -> Optional[Dict[str, Any]]:
+        """Editar frase por posición id (admin)."""
+        url = f"{self.api_url}/api/v1/year/quotes/{quote_id}"
+        try:
+            client = self._get_client()
+            resp = await client.put(url, headers=self._admin_headers, json={"quote_text": quote_text})
+            resp.raise_for_status()
+            return resp.json()
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 404:
+                return None
+            logger.error("HTTP %d en admin_edit_year_quote", e.response.status_code)
+            return None
+        except Exception as e:
+            logger.error("Error en admin_edit_year_quote: %s", e)
+            return None
+
+    async def admin_delete_year_quote(self, quote_id: int) -> Optional[Dict[str, Any]]:
+        """Eliminar una frase por id de posición (admin, requiere X-API-Key)."""
+        url = f"{self.api_url}/api/v1/year/quotes/{quote_id}"
+        try:
+            client = self._get_client()
+            resp = await client.delete(url, headers=self._admin_headers)
+            resp.raise_for_status()
+            return resp.json()
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 404:
+                return {"ok": False, "error": "not_found"}
+            logger.error("HTTP %d en admin_delete_year_quote", e.response.status_code)
+            return None
+        except Exception as e:
+            logger.error("Error en admin_delete_year_quote: %s", e)
             return None
