@@ -167,7 +167,7 @@ async def test_y_command_add_mode_success():
 
         update = _make_update("/y add frase de prueba")
         ctx = MagicMock(spec=ContextTypes)
-        ctx.args = ["frase", "de", "prueba"]
+        ctx.args = ["add", "frase", "de", "prueba"]
         await y_command(update, ctx)
 
         mock_api.add_year_quote.assert_called_once_with("frase de prueba")
@@ -176,6 +176,35 @@ async def test_y_command_add_mode_success():
         last = update.message.reply_text.call_args[0][0]
         assert "✅" in last
         assert "frase de prueba" in last
+        assert "Día #131 de 365" in last
+
+
+@pytest.mark.asyncio
+async def test_y_command_add_mode_extra_year():
+    """y_command /y add when year-in-progress is full: shows 'próximo año'."""
+    mock_add_result = {
+        "ok": True,
+        "success": True,
+        "is_duplicate": False,
+        "index": 3,   # 4th quote lands on day 4 of next year
+        "context": {"current": 3, "limit": 365, "year": 2026, "is_extra": True},
+    }
+    with patch("src.handlers.y._year_api") as mock_api:
+        mock_api.get_year_state = _amock(None)
+        mock_api.get_year_subscription = _amock(None)
+        mock_api.add_year_quote = _amock(mock_add_result)
+
+        update = _make_update("/y add frase overflow")
+        ctx = MagicMock(spec=ContextTypes)
+        ctx.args = ["add", "frase", "overflow"]
+        await y_command(update, ctx)
+
+        mock_api.add_year_quote.assert_called_once_with("frase overflow")
+        update.message.reply_text.assert_called()
+        last = update.message.reply_text.call_args[0][0]
+        assert "✅" in last
+        assert "próximo año" in last
+        assert "Día #3 de 365" in last
 
 
 @pytest.mark.asyncio
@@ -184,11 +213,14 @@ async def test_y_command_add_duplicate():
     with patch("src.handlers.y._year_api") as mock_api:
         mock_api.get_year_state = _amock(None)
         mock_api.get_year_subscription = _amock(None)
-        mock_api.add_year_quote = _amock(None)
+        mock_api.add_year_quote = _amock({
+            "ok": False, "success": False, "is_duplicate": True,
+            "status_code": 409,
+        })
 
         update = _make_update("/y add ya existe")
         ctx = MagicMock(spec=ContextTypes)
-        ctx.args = ["ya", "existe"]
+        ctx.args = ["add", "ya", "existe"]
         await y_command(update, ctx)
 
         update.message.reply_text.assert_called()

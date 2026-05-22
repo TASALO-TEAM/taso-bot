@@ -476,6 +476,12 @@ class TasaloApiClient:
                 payload["target_year"] = target_year
             data = await self._post_with_retry(url, headers=self._admin_headers, json=payload)
             return data if data else None
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 409:
+                return {"ok": False, "success": False, "is_duplicate": True,
+                        "status_code": 409}
+            logger.error("HTTP %d en add_year_quote: %s", e.response.status_code, e)
+            return None
         except Exception as e:
             logger.error("Error en add_year_quote: %s", e)
             return None
