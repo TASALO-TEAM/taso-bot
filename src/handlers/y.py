@@ -1,7 +1,14 @@
 """Year module handler — /y command.
 
-Shows year progress + daily quote. Consumes /api/v1/year/state from taso-api.
-Includes subscription inline buttons and toggle callback.
+Shows year state (progress + daily quote + sub buttons).
+
+Subcommands:
+  /y add <frase>              — add a new quote
+  /y dell [id]                — delete a quote (id=1 locked; reindexes on delete)
+  /y edit <id> <nueva_frase>  — edit a quote (id=1 locked)
+  /y show [id] | /y show      — show a specific quote or current day quote
+
+Consumes /api/v1/year/state, /api/v1/year/quotes/{id} from taso-api.
 """
 
 import logging
@@ -29,6 +36,9 @@ _hour_options = [
 ]
 
 
+# ── Helpers ────────────────────────────────────────────────────────────────
+
+
 async def _get_user_sub(user_id: int) -> dict | None:
     return await _year_api.get_year_subscription(user_id)
 
@@ -44,62 +54,66 @@ def _build_sub_keyboard(current_hour: int | None) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(buttons)
 
 
-async def y_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle /y — show year state (progress bar + daily quote + sub buttons).
+def _trunc(text: str, max_len: int = 120) -> str:
+    return text if len(text) <= max_len else text[:max_len] + "..."
 
-    Also supports /y add <frase> mode for adding a new quote.
-    """
+
+def _render_add_stats(ctx: dict, quote_text: str, slot: int, total: int, limit: int) -> str:
+    """Build the confirmation message for /y add with stats context."""
+    remaining = max(0, total - slot)
+    year = ctx.get("year", datetime.now().year)
+    is_extra = ctx.get("is_extra", False)
+    label = f"próximo año" if is_extra else f"año {year}"
+    return (
+        f"✅ *Frase añadida*\n"
+        f"•••\n"
+        f"💡 _{_trunc(quote_text)}_\n"
+        f"👤 Día #{slot} de {limit} del {label}\n"
+        f"📊 *Quedan {remaining} frases* por agregar."
+    )
+
+
+# ── Commands ───────────────────────────────────────────────────────────────
+
+
+async def y_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /y — year state + subcommands: add / show / edit / dell."""
     user_id = update.effective_user.id
     logger.info("📅 /y invoked by user %s", user_id)
-
     args = context.args or []
-
-    if args:
-        quote_text = " ".join(args).strip()
-        if not quote_text or len(quote_text) < 5:
-            await update.message.reply_text(
-                "⚠️ Usa: `/y add <frase>`\nLa frase debe tener al menos 5 caracteres.",
-                parse_mode="Markdown",
-            )
-            return
-
-        await update.message.reply_text("📝 Añadiendo frase...")
-        result = await _year_api.add_year_quote(quote_text)
-        if not result or not result.get("ok"):
-            if result and result.get("status_code") == 409 or result is None:
-                await update.message.reply_text("❌ Esa frase ya existe en el registro.")
-            else:
-                await update.message.reply_text("❌ Error añadiendo frase. Intenta más tarde.")
-            return
-
-        context_data = result.get("context", {})
-        current = context_data.get("current", 0)
-        limit = context_data.get("limit", 365)
-        remaining = max(0, limit - current)
-        quote_ctx_year = context_data.get("year", datetime.now().year)
-        is_extra = context_data.get("is_extra", False)
-
-        year_label = f"próximo año" if is_extra else f"año {quote_ctx_year}"
-        confirm_msg = (
-            f"✅ *Frase añadida*\n"
-            f"•••\n"
-            f"💡 _{quote_text[:120]}{'...' if len(quote_text) > 120 else ''}_\n"
-            f"💭 Frase #{current} de {limit} del {year_label}\n"
-            f"📊 *Quedan {remaining} frases* sin añadir."
-        )
-        await update.message.reply_text(confirm_msg, parse_mode="Markdown")
+    if not args:
+        await _show_year_state(update, context, user_id)
         return
 
-    await update.message.reply_text("📅 Cargando estado del año...")
+    sub = args[0].lower()
 
+    if sub == "add":
+        await _cmd_add(update, context, args[1:])
+    elif sub == "show":
+        await _cmd_show(update, context, args[1:])
+    elif sub == "edit":
+        await _cmd_edit(update, context, args[1:])
+    elif sub == "dell":
+        await _cmd_dell(update, context, args[1:])
+    else:
+        await update.message.reply_text(
+            "⚠️ Subcomandos disponibles:\n"
+            "`/y add <frase>` — agregar frase\n"
+            "`/y show [id]`  — mostrar frase\n"
+            "`/y edit <id> <nueva_frase>` — editar frase\n"
+            "`/y dell <id>`  — eliminar frase",
+            parse_mode="Markdown",
+        )
+
+
+async def _show_year_state(update: Update, context: ContextTypes.DEFAULT_TYPE, user_id: int):
+    await update.message.reply_text("📅 Cargando estado del año...")
     data = await _year_api.get_year_state()
     if not data:
         await update.message.reply_text("❌ No se pudo obtener el estado del año. Intenta más tarde.")
         return
-
     progress = data.get("progress", {})
     quote_data = data.get("quote", {})
-
     year = progress.get("year")
     date_str = progress.get("date_str", "")
     percent = progress.get("percent", 0.0)
@@ -113,7 +127,6 @@ async def y_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else "🏁 Recta final, ¡agárrate!"
     )
     quote_text = quote_data.get("quote", "⏳ El tiempo vuela, pero tú eres el piloto.")
-
     msg = (
         f"🗓 *ESTADO DEL AÑO {year}*\n"
         f"•••\n"
@@ -126,28 +139,189 @@ async def y_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"💡 *Frase Del Día:*\n"
         f'"{quote_text}"'
     )
-
-    # Check subscription status for button states
     sub_data = await _get_user_sub(user_id)
     current_hour = sub_data.get("hour") if sub_data and sub_data.get("ok") else None
-
     keyboard = _build_sub_keyboard(current_hour)
     await update.message.reply_text(msg, parse_mode="Markdown", reply_markup=keyboard)
+
+
+async def _cmd_add(update: Update, context: ContextTypes.DEFAULT_TYPE, extra_args: list):
+    if not extra_args:
+        await update.message.reply_text(
+            "⚠️ Usa: `/y add <frase>`\nLa frase debe tener al menos 5 caracteres.",
+            parse_mode="Markdown",
+        )
+        return
+    quote_text = " ".join(extra_args).strip()
+    if len(quote_text) < 5:
+        await update.message.reply_text(
+            "⚠️ La frase debe tener al menos 5 caracteres.",
+            parse_mode="Markdown",
+        )
+        return
+
+    await update.message.reply_text("📝 Añadiendo frase...")
+    result = await _year_api.add_year_quote(quote_text)
+    if not result or not result.get("ok"):
+        code = result.get("status_code") if result else None
+        if code == 409 or (result and result.get("success") is False):
+            await update.message.reply_text("❌ Esa frase ya existe en el registro.")
+        else:
+            await update.message.reply_text("❌ Error añadiendo frase. Intenta más tarde.")
+        return
+
+    ctx = result.get("context", {})
+    slot = result.get("index", ctx.get("current", 0))
+    await update.message.reply_text(
+        _render_add_stats(ctx, quote_text, slot, ctx.get("limit", 365)),
+        parse_mode="Markdown",
+    )
+
+
+async def _cmd_show(update: Update, context: ContextTypes.DEFAULT_TYPE, extra_args: list):
+    """Show a specific quote by position id. No id → show day's quote."""
+    if not extra_args:
+        # Show today's
+        await update.message.reply_text("📅 Cargando frase del día...")
+        data = await _year_api.get_year_quote_today()
+        if not data:
+            await update.message.reply_text("❌ Error obteniendo frase del día.")
+            return
+        quote_text = data.get("quote", "—")
+        ctx = data.get("context", {})
+        slot = ctx.get("current", "—")
+        year = ctx.get("year", "?")
+        is_extra = ctx.get("is_extra", False)
+        label = "📌 Próximo año" if is_extra else f"📌 Año {year}"
+        await update.message.reply_text(
+            f"💡 *Frase del día (día #{slot}, {label}):*\n"
+            f'"{_trunc(quote_text, 200)}"',
+            parse_mode="Markdown",
+        )
+        return
+
+    try:
+        quote_id = int(extra_args[0])
+    except ValueError:
+        await update.message.reply_text("⚠️ Usa: `/y show [id]` — id debe ser un número.", parse_mode="Markdown")
+        return
+
+    await update.message.reply_text(f"🔍 Buscando frase #{quote_id}...")
+    data = await _year_api.admin_get_year_quote(quote_id)
+    if not data or not data.get("ok"):
+        await update.message.reply_text(f"❌ Frase #{quote_id} no encontrada.")
+        return
+
+    quote_text = data.get("quote_text", "—")
+    if data.get("is_greeting"):
+        await update.message.reply_text(
+            f"🔒 *Día 1 (bloqueado):*\n"
+            f'"{_trunc(quote_text)}"',
+            parse_mode="Markdown",
+        )
+        return
+
+    created = data.get("created_at", "?")
+    await update.message.reply_text(
+        f"💡 *Frase #{quote_id}:*\n"
+        f'"{_trunc(quote_text, 200)}"\n'
+        f"🕐 Creada: {created}",
+        parse_mode="Markdown",
+    )
+
+
+async def _cmd_edit(update: Update, context: ContextTypes.DEFAULT_TYPE, extra_args: list):
+    """Edit quote: /y edit <id> <nueva_frase>."""
+    if len(extra_args) < 2:
+        await update.message.reply_text(
+            "⚠️ Usa: `/y edit <id> <nueva_frase>`",
+            parse_mode="Markdown",
+        )
+        return
+    try:
+        quote_id = int(extra_args[0])
+    except ValueError:
+        await update.message.reply_text("⚠️ El id debe ser un número.", parse_mode="Markdown")
+        return
+    new_text = " ".join(extra_args[1:]).strip()
+    if len(new_text) < 5:
+        await update.message.reply_text("⚠️ La nueva frase debe tener al menos 5 caracteres.", parse_mode="Markdown")
+        return
+
+    await update.message.reply_text(f"✏️ Editando frase #{quote_id}...")
+    result = await _year_api.admin_edit_year_quote(quote_id, new_text)
+    if not result or not result.get("ok"):
+        err = (result or {}).get("detail", "Error desconocido")
+        await update.message.reply_text(f"❌ No se pudo editar la frase #{quote_id}: {err}")
+        return
+
+    await update.message.reply_text(
+        f"✅ *Frase #{quote_id} actualizada*\n•••\n"
+        f'💡 *Nueva frase:* "{_trunc(new_text)}"',
+        parse_mode="Markdown",
+    )
+
+
+async def _cmd_dell(update: Update, context: ContextTypes.DEFAULT_TYPE, extra_args: list):
+    """Delete quote position by id (id=1 locked). Reindexes随之."""
+    if not extra_args:
+        await update.message.reply_text(
+            "⚠️ Usa: `/y dell <id>`\nEjemplo: `/y dell 5`",
+            parse_mode="Markdown",
+        )
+        return
+    try:
+        quote_id = int(extra_args[0])
+    except ValueError:
+        await update.message.reply_text("⚠️ El id debe ser un número.", parse_mode="Markdown")
+        return
+
+    # Fetch quote text before deleting for confirmation
+    pre = await _year_api.admin_get_year_quote(quote_id)
+    if not pre or not pre.get("ok"):
+        await update.message.reply_text(f"❌ Frase #{quote_id} no encontrada.")
+        return
+
+    if pre.get("is_greeting"):
+        await update.message.reply_text(
+            "🔒 *Día 1 bloqueado*\n"
+            "La frase 'Feliz año' no se puede eliminar.",
+            parse_mode="Markdown",
+        )
+        return
+
+    old_text = pre.get("quote_text", "—")
+
+    await update.message.reply_text(f"🗑 Eliminando frase #{quote_id}...")
+    result = await _year_api.admin_delete_year_quote(quote_id)
+    if not result or not result.get("ok"):
+        err = result.get("detail", "Error desconocido") if result else "Error de conexión"
+        await update.message.reply_text(f"❌ No se pudo eliminar: {err}")
+        return
+
+    reindexed = result.get("reindexed", False)
+    await update.message.reply_text(
+        f"✅ *Frase eliminada*\n"
+        f"•••\n"
+        f"🗑 *#{quote_id} →* \"{_trunc(old_text)}\"\n"
+        + (f"🔄 IDs reindexados correctamente." if reindexed else ""),
+        parse_mode="Markdown",
+    )
+
+
+# ── Callback handler ───────────────────────────────────────────────────────
 
 
 async def year_sub_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle year subscription button callbacks (year_sub_6, year_sub_9, etc.)."""
     query = update.callback_query
     user_id = query.from_user.id
-
     await query.answer()
-
-    callback_data = query.data  # e.g. "year_sub_6" or "year_sub_off"
+    callback_data = query.data
 
     if callback_data == "year_sub_off":
         result = await _year_api.admin_delete_year_subscription(user_id)
         if result and result.get("ok"):
-            logger.info("✅ Year subscription removed for user %s", user_id)
             await query.edit_message_reply_markup(reply_markup=_build_sub_keyboard(None))
             try:
                 await query.answer("✅ Alerta desactivada")
@@ -169,10 +343,8 @@ async def year_sub_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception:
                 pass
             return
-
         result = await _year_api.admin_set_year_subscription(user_id, hour)
         if result and result.get("ok"):
-            logger.info("✅ Year subscription set for user %s → hour %s", user_id, hour)
             await query.edit_message_reply_markup(reply_markup=_build_sub_keyboard(hour))
             try:
                 await query.answer(f"✅ Alerta activada para las {hour:02d}:00 UTC")
