@@ -58,7 +58,7 @@ def _trunc(text: str, max_len: int = 120) -> str:
     return text if len(text) <= max_len else text[:max_len] + "..."
 
 
-def _render_add_stats(ctx: dict, quote_text: str, slot: int, total: int, limit: int) -> str:
+def _render_add_stats(ctx: dict, quote_text: str, slot: int, total: int, limit: int, quote_id: int) -> str:
     """Build the confirmation message for /y add with stats context.
 
     *ctx* comes from the API response and already carries the *target-year*
@@ -70,15 +70,21 @@ def _render_add_stats(ctx: dict, quote_text: str, slot: int, total: int, limit: 
     *slot* and *limit* here are kept for backward compatibility but the
     canonical display values are taken from *ctx* to avoid off-by-one errors
     at year-boundary transitions.
+
+    Remaining calculation uses ``quote_id`` (sequential position) for the
+    current year, or ``ctx["current"]`` for overflow into the next year.
     """
     ctx_slot   = ctx.get("current", slot)
     ctx_limit  = ctx.get("limit",   limit)
     ctx_year   = ctx.get("year",    datetime.now().year)
     is_extra   = ctx.get("is_extra", False)
-    remaining  = max(0, ctx_limit - ctx_slot + 1)
+    if is_extra:
+        remaining = max(0, ctx_limit - ctx_slot)
+    else:
+        remaining = max(0, ctx_limit - quote_id)
     label      = f"próximo año" if is_extra else f"año {ctx_year}"
     return (
-        f"✅ *Frase añadida*\n"
+        f"✅ *Frase añadida (#{quote_id})*\n"
         f"•••\n"
         f"💡 _{_trunc(quote_text)}_\n"
         f"👤 Día #{ctx_slot} de {ctx_limit} del {label}\n"
@@ -185,9 +191,10 @@ async def _cmd_add(update: Update, context: ContextTypes.DEFAULT_TYPE, extra_arg
 
     ctx = result.get("context", {})
     slot = result.get("index", ctx.get("current", 0))
-    total = slot - 1  # frases de usuario agregadas hasta ahora (slot 1 = Feliz año)
+    quote_id = result.get("quote_id", 0)
+    total = max(0, quote_id - 1)  # frases de usuario agregadas hasta ahora (id 1 = Feliz año)
     await update.message.reply_text(
-        _render_add_stats(ctx, quote_text, slot, total, ctx.get("limit", 365)),
+        _render_add_stats(ctx, quote_text, slot, total, ctx.get("limit", 365), quote_id),
         parse_mode="Markdown",
     )
 

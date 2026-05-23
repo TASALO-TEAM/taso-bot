@@ -55,7 +55,7 @@ async def test_add_year_quote_success():
     """add_year_quote envía POST con quote_text al endpoint admin."""
     client = TasaloApiClient(api_url="http://localhost:8040", admin_key="test-key")
 
-    with patch.object(client, '_post_with_retry', return_value={"ok": True, "success": True, "is_duplicate": False, "index": 42, "context": {"current": 42, "limit": 365, "year": 2026, "is_extra": False}}) as mock_post:
+    with patch.object(client, '_post_with_retry', return_value={"ok": True, "success": True, "is_duplicate": False, "index": 41, "context": {"current": 42, "limit": 365, "year": 2026, "is_extra": False}, "quote_id": 43}) as mock_post:
         result = await client.add_year_quote("Test quote")
         assert result is not None
         assert result.get("ok") is True
@@ -157,8 +157,9 @@ async def test_y_command_add_mode_success():
         "ok": True,
         "success": True,
         "is_duplicate": False,
-        "index": 131,
-        "context": {"current": 131, "limit": 365, "year": 2026, "is_extra": False},
+        "index": 130,
+        "context": {"current": 132, "limit": 365, "year": 2026, "is_extra": False},
+        "quote_id": 132,
     }
     with patch("src.handlers.y._year_api") as mock_api:
         mock_api.get_year_state = _amock(None)
@@ -176,7 +177,8 @@ async def test_y_command_add_mode_success():
         last = update.message.reply_text.call_args[0][0]
         assert "✅" in last
         assert "frase de prueba" in last
-        assert "Día #131 de 365" in last
+        assert "Día #132 de 365" in last
+        assert "#132" in last  # quote_id shown in header
 
 
 @pytest.mark.asyncio
@@ -188,6 +190,7 @@ async def test_y_command_add_mode_extra_year():
         "is_duplicate": False,
         "index": 3,   # 4th quote lands on day 4 of next year
         "context": {"current": 3, "limit": 365, "year": 2026, "is_extra": True},
+        "quote_id": 368,
     }
     with patch("src.handlers.y._year_api") as mock_api:
         mock_api.get_year_state = _amock(None)
