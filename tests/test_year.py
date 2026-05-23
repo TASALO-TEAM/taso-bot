@@ -153,6 +153,8 @@ async def test_y_command_api_failure():
 @pytest.mark.asyncio
 async def test_y_command_add_mode_success():
     """y_command con /y add <text> llama a add_year_quote y muestra confirmación."""
+    from datetime import datetime as dt
+    today_day = dt.now().timetuple().tm_yday
     mock_add_result = {
         "ok": True,
         "success": True,
@@ -177,8 +179,9 @@ async def test_y_command_add_mode_success():
         last = update.message.reply_text.call_args[0][0]
         assert "✅" in last
         assert "frase de prueba" in last
-        assert "Día #132 de 365" in last
+        assert f"Día #{today_day} de 365" in last  # actual calendar day, not quote position
         assert "#132" in last  # quote_id shown in header
+        assert "Quedan 233 frases" in last  # 365 - 132 = 233
 
 
 @pytest.mark.asyncio
@@ -208,6 +211,7 @@ async def test_y_command_add_mode_extra_year():
         assert "✅" in last
         assert "próximo año" in last
         assert "Día #3 de 365" in last
+        assert "Quedan 362 frases" in last  # 365 - 3 = 362 (ctx_limit - ctx_slot for extra)
 
 
 @pytest.mark.asyncio

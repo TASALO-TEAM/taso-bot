@@ -73,6 +73,10 @@ def _render_add_stats(ctx: dict, quote_text: str, slot: int, total: int, limit: 
 
     Remaining calculation uses ``quote_id`` (sequential position) for the
     current year, or ``ctx["current"]`` for overflow into the next year.
+
+    ``day_of_year`` is ``None`` by default and will use the current system
+    date to display today's calendar position.  For overflow (is_extra=True),
+    the day shown is the quote's slot in the next year instead.
     """
     ctx_slot   = ctx.get("current", slot)
     ctx_limit  = ctx.get("limit",   limit)
@@ -80,14 +84,16 @@ def _render_add_stats(ctx: dict, quote_text: str, slot: int, total: int, limit: 
     is_extra   = ctx.get("is_extra", False)
     if is_extra:
         remaining = max(0, ctx_limit - ctx_slot)
+        day_display = ctx_slot
     else:
         remaining = max(0, ctx_limit - quote_id)
+        day_display = datetime.now().timetuple().tm_yday
     label      = f"próximo año" if is_extra else f"año {ctx_year}"
     return (
         f"✅ *Frase añadida (#{quote_id})*\n"
         f"•••\n"
         f"💡 _{_trunc(quote_text)}_\n"
-        f"👤 Día #{ctx_slot} de {ctx_limit} del {label}\n"
+        f"👤 Día #{day_display} de {ctx_limit} del {label}\n"
         f"📊 *Quedan {remaining} frases* por agregar."
     )
 
