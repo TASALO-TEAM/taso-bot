@@ -426,6 +426,42 @@ class TasaloApiClient:
             logger.error("❌ Error en get_year_subscription: %s", e)
             return None
 
+    async def set_year_subscription(self, user_id: int, hour: int) -> Optional[Dict[str, Any]]:
+        """Crear o actualizar suscripción propia (público, sin admin key).
+
+        Usa POST /api/v1/year/subscriptions/me/{user_id}.
+        """
+        url = f"{self.api_url}/api/v1/year/subscriptions/me/{user_id}"
+        try:
+            data = await self._post_with_retry(
+                url,
+                json={"user_id": user_id, "hour": hour},
+            )
+            return data if data and data.get("ok") else None
+        except Exception as e:
+            logger.error("❌ Error en set_year_subscription: %s", e)
+            return None
+
+    async def delete_year_subscription(self, user_id: int) -> Optional[Dict[str, Any]]:
+        """Eliminar suscripción propia (público, sin admin key).
+
+        Usa DELETE /api/v1/year/subscriptions/me/{user_id}.
+        """
+        url = f"{self.api_url}/api/v1/year/subscriptions/me/{user_id}"
+        try:
+            client = self._get_client()
+            resp = await client.delete(url)
+            resp.raise_for_status()
+            return resp.json()
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 404:
+                return {"ok": False}
+            logger.error("❌ HTTP %d en delete_year_subscription", e.response.status_code)
+            return None
+        except Exception as e:
+            logger.error("❌ Error en delete_year_subscription: %s", e)
+            return None
+
     async def admin_set_year_subscription(self, user_id: int, hour: int) -> Optional[Dict[str, Any]]:
         """Crear o actualizar suscripción (admin, requiere X-API-Key)."""
         url = f"{self.api_url}/api/v1/year/subscriptions"

@@ -14,6 +14,7 @@ Consumes /api/v1/year/state, /api/v1/year/quotes/{id} from taso-api.
 import logging
 from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 
 from src.api_client import TasaloApiClient
@@ -290,7 +291,7 @@ async def _cmd_edit(update: Update, context: ContextTypes.DEFAULT_TYPE, extra_ar
 
 
 async def _cmd_dell(update: Update, context: ContextTypes.DEFAULT_TYPE, extra_args: list):
-    """Delete quote position by id (id=1 locked). Reindexes随之."""
+    """Delete quote position by id (id=1 locked). Reindexes afterward."""
     if not extra_args:
         await update.message.reply_text(
             "⚠️ Usa: `/y dell <id>`\nEjemplo: `/y dell 5`",
@@ -336,6 +337,9 @@ async def _cmd_dell(update: Update, context: ContextTypes.DEFAULT_TYPE, extra_ar
     )
 
 
+# year_sub_callback is defined below (line 340) and wired through callback_router.
+
+
 # ── Callback handler ───────────────────────────────────────────────────────
 
 
@@ -353,11 +357,16 @@ async def year_sub_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     callback_data = query.data
 
     if callback_data == "year_sub_off":
-        result = await _year_api.admin_delete_year_subscription(user_id)
+        result = await _year_api.delete_year_subscription(user_id)
         if not result or not result.get("ok"):
             await query.answer("⚠️ No se pudo desactivar", show_alert=True)
             return
-        await query.edit_message_reply_markup(reply_markup=_build_sub_keyboard(None))
+        try:
+            await query.edit_message_reply_markup(reply_markup=_build_sub_keyboard(None))
+        except BadRequest:
+            # Keyboard already in the desired state — Telegram rejects
+            # the no-op edit.  Subscription was updated successfully.
+            pass
         return
 
     if callback_data.startswith("year_sub_"):
@@ -365,21 +374,20 @@ async def year_sub_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             hour = int(callback_data.split("_")[-1])
         except ValueError:
             return
-        result = await _year_api.admin_set_year_subscription(user_id, hour)
+        result = await _year_api.set_year_subscription(user_id, hour)
         if not result or not result.get("ok"):
             # API failed → notify user via answer
             await query.answer("❌ Error al guardar", show_alert=True)
             return
         try:
-            await query.edit_message_reply_markup(reply_markup=_build_sub_keyboard(hour))
-        except Exception:
-            # Keyboard update failed → best-effort error toast before propagating
-            try:
-                await query.answer("❌ Error al guardar", show_alert=True)
-            except Exception:
-                pass
-            raise
+            await query.edit_message_reply_markup(
+                reply_markup=_build_sub_keyboard(hour)
+            )
+        except BadRequest:
+            # Keyboard already showing this state — no-op, not an error.
+            pass
         return
 
     # No match → propagate to callback_router (which will log + show error toast)
     raise ValueError(f"Unrecognised year callback: {callback_data}")
+

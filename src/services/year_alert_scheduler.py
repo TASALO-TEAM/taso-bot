@@ -39,6 +39,7 @@ def create_year_scheduler(application) -> AsyncIOScheduler:
         """Check subscriptions and send alerts to users whose hour matches now (UTC)."""
         api_client = TasaloApiClient(
             api_url=settings.tasalo_api_url,
+            admin_key=settings.tasalo_admin_key,
             timeout=settings.api_timeout_seconds,
         )
 

@@ -19,26 +19,47 @@ from telegram import Update
 from telegram.ext import ContextTypes, CallbackQueryHandler
 from telegram.error import BadRequest
 
-from src.handlers import image_alerts, tasalo, start, toqueimg, p, ta, trading, y as year_handlers
+from src.handlers import image_alerts, tasalo, start, toqueimg, p, ta, trading, y
 
 logger = logging.getLogger(__name__)
 
 # Route map: prefix → handler function
-# The handler receives (update, context, callback_data)
-ROUTE_MAP = {
-    "start": "_handle_start",
-    "tasalo": "_handle_tasalo",
-    "toque": "_handle_tasalo",
-    "bcc": "_handle_tasalo",
-    "cadeca": "_handle_tasalo",
+# Multi-segment prefixes (e.g. "year_sub") are resolved by _resolve_namespace()
+# before lookup, so the map key must be the full compound prefix.
+ROUTE_MAP: dict[str, str] = {
+    "start":    "_handle_start",
+    "tasalo":   "_handle_tasalo",
+    "toque":    "_handle_tasalo",
+    "bcc":      "_handle_tasalo",
+    "cadeca":   "_handle_tasalo",
     "toqueimg": "_handle_toqueimg",
-    "alert": "_handle_alert",
-    "p": "_handle_p",
-    "ta": "_handle_ta",
-    "ai": "_handle_ta",
-    "graf": "_handle_graf",
+    "alert":    "_handle_alert",
+    "p":        "_handle_p",
+    "ta":       "_handle_ta",
+    "ai":       "_handle_ta",
+    "graf":     "_handle_graf",
     "year_sub": "_handle_year",
 }
+
+# Known multi-segment namespace prefixes that must be resolved atomically
+_NS_PREFIXES: tuple[str, ...] = tuple(k for k in ROUTE_MAP if "_" in k)
+
+
+def _resolve_namespace(callback_data: str) -> str:
+    """Resolve the namespace of a callback data string.
+
+    Supports both single-segment (``"tasalo"``) and multi-segment
+    (``"year_sub"``) prefixes.  For multi-segment prefixes only the
+    *first* join (first + second segment) is attempted so that prefixes
+    like ``year_sub`` are matched as one key instead of yielding only
+    ``"year"``.
+    """
+    parts = callback_data.split("_")
+    if len(parts) >= 2:
+        candidate = f"{parts[0]}_{parts[1]}"
+        if candidate in ROUTE_MAP:
+            return candidate
+    return parts[0]
 
 
 async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -50,7 +71,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     user_id = query.from_user.id
     callback_data = query.data
-    namespace = callback_data.split("_")[0]
+    namespace = _resolve_namespace(callback_data)
 
     logger.info("🔘 Callback '%s' from user %d (namespace: %s)", callback_data, user_id, namespace)
 
@@ -324,7 +345,12 @@ def get_callback_handler() -> CallbackQueryHandler:
 # ── Year subscription callbacks ──
 
 async def _handle_year(update: Update, context: ContextTypes.DEFAULT_TYPE, callback_data: str) -> None:
-    """Handle year_sub_* callbacks (subscription toggle buttons from /y)."""
+    """Handle year_sub_* callbacks (subscription toggle buttons from /y).
+
+    The actual implementation lives in ``handlers/y.py``; this thin wrapper
+    exists so ``globals().get("_handle_year")`` continues to resolve
+    correctly within the callback router.
+    """
     handler_start = time.time()
     query = update.callback_query
     user_id = query.from_user.id
@@ -332,7 +358,7 @@ async def _handle_year(update: Update, context: ContextTypes.DEFAULT_TYPE, callb
     logger.info("📅 Handler _handle_year processing '%s' for user %d", callback_data, user_id)
 
     try:
-        await year_handlers.year_sub_callback(update, context)
+        await y.year_sub_callback(update, context)
 
         duration_ms = (time.time() - handler_start) * 1000
         logger.info(
@@ -346,5 +372,5 @@ async def _handle_year(update: Update, context: ContextTypes.DEFAULT_TYPE, callb
             user_id, callback_data, duration_ms, e, exc_info=True,
         )
         # Do not re-raise — callback_router has already answered this query
-        # at line 59. A second answerCallbackQuery would fail with BadRequest
+        # at line 80. A second answerCallbackQuery would fail with BadRequest
         # and silence the error toast. Errors are already logged above.
