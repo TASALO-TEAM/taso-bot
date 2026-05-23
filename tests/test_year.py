@@ -288,7 +288,11 @@ async def test_year_sub_callback_off():
 
 @pytest.mark.asyncio
 async def test_year_sub_callback_api_failure():
-    """year_sub_callback responde con error visual si el API falla."""
+    """year_sub_callback llama query.answer('❌ Error al guardar') si la API falla.
+
+    After fix for double-answer bug: only ONE answerCallbackQuery call
+    (not two).  The single call carries the error visual notification.
+    """
     with patch("src.handlers.y._year_api") as mock_api:
         mock_api.admin_set_year_subscription = _amock(None)
 
@@ -296,7 +300,6 @@ async def test_year_sub_callback_api_failure():
         ctx = MagicMock(spec=ContextTypes)
         await year_sub_callback(update, ctx)
 
-        update.callback_query.answer.assert_called()
-        # 2nd call is the error message from year_sub_callback
-        assert update.callback_query.answer.call_count == 2
-        assert update.callback_query.answer.call_args_list[1][0][0] == "❌ Error al guardar"
+        update.callback_query.answer.assert_called_once()
+        # Single call is the error visual from year_sub_callback
+        assert update.callback_query.answer.call_args[0][0] == "❌ Error al guardar"

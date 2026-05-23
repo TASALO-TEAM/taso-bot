@@ -340,51 +340,46 @@ async def _cmd_dell(update: Update, context: ContextTypes.DEFAULT_TYPE, extra_ar
 
 
 async def year_sub_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle year subscription button callbacks (year_sub_6, year_sub_9, etc.)."""
+    """Handle year subscription button callbacks (year_sub_6, year_sub_9, etc.).
+
+    NOTE: callback_router has already called ``query.answer()`` once
+    (to dismiss the loading spinner) before routing here.  Never call
+    ``query.answer()`` again — Guard branches may catch exceptions
+    caused by a second call and silently swallow them, preventing
+    the subscription API from ever executing.
+    """
     query = update.callback_query
     user_id = query.from_user.id
-    await query.answer()
     callback_data = query.data
 
     if callback_data == "year_sub_off":
         result = await _year_api.admin_delete_year_subscription(user_id)
-        if result and result.get("ok"):
-            await query.edit_message_reply_markup(reply_markup=_build_sub_keyboard(None))
-            try:
-                await query.answer("✅ Alerta desactivada")
-            except Exception:
-                pass
-        else:
-            try:
-                await query.answer("⚠️ No tenías alerta activa", show_alert=True)
-            except Exception:
-                pass
+        if not result or not result.get("ok"):
+            await query.answer("⚠️ No se pudo desactivar", show_alert=True)
+            return
+        await query.edit_message_reply_markup(reply_markup=_build_sub_keyboard(None))
         return
 
     if callback_data.startswith("year_sub_"):
         try:
             hour = int(callback_data.split("_")[-1])
         except ValueError:
-            try:
-                await query.answer("⚠️ Opción inválida", show_alert=True)
-            except Exception:
-                pass
             return
         result = await _year_api.admin_set_year_subscription(user_id, hour)
-        if result and result.get("ok"):
+        if not result or not result.get("ok"):
+            # API failed → notify user via answer
+            await query.answer("❌ Error al guardar", show_alert=True)
+            return
+        try:
             await query.edit_message_reply_markup(reply_markup=_build_sub_keyboard(hour))
-            try:
-                await query.answer(f"✅ Alerta activada para las {hour:02d}:00 UTC")
-            except Exception:
-                pass
-        else:
+        except Exception:
+            # Keyboard update failed → best-effort error toast before propagating
             try:
                 await query.answer("❌ Error al guardar", show_alert=True)
             except Exception:
                 pass
+            raise
         return
 
-    try:
-        await query.answer("⚠️ Acción no reconocida", show_alert=True)
-    except Exception:
-        pass
+    # No match → propagate to callback_router (which will log + show error toast)
+    raise ValueError(f"Unrecognised year callback: {callback_data}")

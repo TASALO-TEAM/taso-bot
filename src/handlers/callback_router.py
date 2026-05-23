@@ -335,11 +335,16 @@ async def _handle_year(update: Update, context: ContextTypes.DEFAULT_TYPE, callb
         await year_handlers.year_sub_callback(update, context)
 
         duration_ms = (time.time() - handler_start) * 1000
-        logger.info("✅ _handle_year completed for user %d callback '%s' (%.0fms)", user_id, callback_data, duration_ms)
+        logger.info(
+            "✅ _handle_year completed for user %d callback '%s' (%.0fms)",
+            user_id, callback_data, duration_ms,
+        )
     except Exception as e:
         duration_ms = (time.time() - handler_start) * 1000
         logger.error(
             "❌ Error in _handle_year for user %d callback '%s' (%.0fms): %s",
             user_id, callback_data, duration_ms, e, exc_info=True,
         )
-        raise
+        # Do not re-raise — callback_router has already answered this query
+        # at line 59. A second answerCallbackQuery would fail with BadRequest
+        # and silence the error toast. Errors are already logged above.
