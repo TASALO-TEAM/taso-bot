@@ -590,19 +590,34 @@ class TasaloApiClient:
             return []
 
     async def create_price_alert(
-        self, user_id: int, coin: str, target_price: float
+        self, user_id: int, coin: str, target_price: float, price_at_creation: float
     ) -> Optional[list]:
         """Crea dos alertas de precio (ABOVE + BELOW) para el par user/coin/price.
+
+        Args:
+            user_id: Telegram user_id
+            coin: Símbolo de la moneda (ej: "BTC")
+            target_price: Precio objetivo configurado por el usuario
+            price_at_creation: Precio real de la moneda al momento de crear la alerta.
+                Permite al checker detectar cruces reales y evitar falsos positivos.
 
         Returns:
             Lista de alertas creadas o None si falla.
         """
         url = f"{self.api_url}/api/v1/alerts"
-        payload = {"user_id": user_id, "coin": coin.upper(), "target_price": target_price}
+        payload = {
+            "user_id": user_id,
+            "coin": coin.upper(),
+            "target_price": target_price,
+            "price_at_creation": price_at_creation,
+        }
         try:
             data = await self._post_with_retry(url, headers=self._admin_headers, json=payload)
             if data and data.get("ok"):
-                logger.info("✅ Price alert created: user=%d coin=%s price=%.6f", user_id, coin, target_price)
+                logger.info(
+                    "✅ Price alert created: user=%d coin=%s target=%.6f actual=%.6f",
+                    user_id, coin, target_price, price_at_creation,
+                )
                 return data.get("data", [])
             return None
         except Exception as e:

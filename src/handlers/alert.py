@@ -29,6 +29,11 @@ def _get_api_client(context: ContextTypes.DEFAULT_TYPE):
     return context.application.bot_data.get("api_client")
 
 
+def _get_crypto_client(context: ContextTypes.DEFAULT_TYPE):
+    """Obtiene el crypto_client desde bot_data."""
+    return context.application.bot_data.get("crypto_client")
+
+
 def _format_price(price: float) -> str:
     """Formatea el precio con la cantidad apropiada de decimales."""
     if price >= 1000:
@@ -136,22 +141,50 @@ async def alert_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
     await update.message.reply_chat_action("typing")
     api = _get_api_client(context)
-    created = await api.create_price_alert(user_id, coin, price)
+    crypto = _get_crypto_client(context)
+
+    # Consultar precio actual para guardarlo como referencia de cruce
+    current_price: float | None = None
+    try:
+        price_data = await crypto.get_crypto_data(coin)
+        if price_data and price_data.get("price"):
+            current_price = price_data["price"]
+    except Exception as e:
+        logger.warning("⚠️ No se pudo obtener precio actual de %s: %s", coin, e)
+
+    if current_price is None:
+        await update.message.reply_text(
+            f"❌ No se pudo obtener el precio actual de *{coin}*.\n"
+            f"Verifica que el símbolo sea correcto e inténtalo de nuevo.",
+            parse_mode=ParseMode.MARKDOWN,
+        )
+        return
+
+    created = await api.create_price_alert(user_id, coin, price, current_price)
 
     if created:
         precio_fmt = _format_price(price)
-        keyboard = [[
-            InlineKeyboardButton("📋 Ver mis alertas", callback_data="alert_back")
-        ]]
+        actual_fmt = _format_price(current_price)
+
+        # Indicar qué dirección es relevante según la posición del precio actual
+        if current_price < price:
+            direccion = f"📈 Notificarás cuando *{coin}* suba a {precio_fmt}"
+        elif current_price > price:
+            direccion = f"📉 Notificarás cuando *{coin}* baje a {precio_fmt}"
+        else:
+            direccion = f"🎯 El precio está exactamente en el objetivo — se disparará en el próximo check"
+
+        keyboard = [[InlineKeyboardButton("📋 Ver mis alertas", callback_data="alert_back")]]
         await update.message.reply_text(
             f"✅ *Alerta creada*\n\n"
-            f"🔔 *{coin}* @ {precio_fmt}\n\n"
-            f"Recibirás notificación cuando el precio suba o baje de este nivel.",
+            f"🔔 *{coin}* objetivo: {precio_fmt}\n"
+            f"💰 Precio actual: {actual_fmt}\n\n"
+            f"{direccion}",
             reply_markup=InlineKeyboardMarkup(keyboard),
             parse_mode=ParseMode.MARKDOWN,
         )
-        logger.info("✅ /alert creada: user=%d coin=%s price=%.6f (%.0fms)",
-                    user_id, coin, price, (time.time() - cmd_start) * 1000)
+        logger.info("✅ /alert creada: user=%d coin=%s target=%.6f actual=%.6f (%.0fms)",
+                    user_id, coin, price, current_price, (time.time() - cmd_start) * 1000)
     else:
         await update.message.reply_text(
             "❌ Error al crear la alerta. Inténtalo de nuevo.",

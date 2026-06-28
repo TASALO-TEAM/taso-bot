@@ -167,13 +167,35 @@ async def _check_all_active_alerts(api, application: Application, prices: dict) 
 
         target = alerta.get("target_price", 0)
         condition = alerta.get("condition", "")
+        price_at_creation = alerta.get("price_at_creation")
         alert_id = alerta.get("id")
         user_id = alerta.get("user_id")
 
-        should_trigger = (
-            (condition == "ABOVE" and current_price >= target) or
-            (condition == "BELOW" and current_price <= target)
-        )
+        # ── Lógica de cruce real ──────────────────────────────────────────────
+        # Solo dispara si el precio CRUZÓ el objetivo desde el lado correcto.
+        # Esto evita falsos positivos cuando el precio ya estaba por encima/debajo
+        # del target en el momento de crear la alerta.
+        #
+        # ABOVE: el precio inicial estaba por debajo del target y ahora lo superó
+        # BELOW: el precio inicial estaba por encima del target y ahora lo bajó
+        #
+        # Si price_at_creation es None (alertas antiguas), se usa la lógica simple.
+        if price_at_creation is not None:
+            if condition == "ABOVE":
+                should_trigger = (
+                    price_at_creation < target and current_price >= target
+                )
+            else:  # BELOW
+                should_trigger = (
+                    price_at_creation > target and current_price <= target
+                )
+        else:
+            # Fallback para alertas creadas antes de esta mejora
+            should_trigger = (
+                (condition == "ABOVE" and current_price >= target) or
+                (condition == "BELOW" and current_price <= target)
+            )
+        # ─────────────────────────────────────────────────────────────────────
 
         if not should_trigger:
             continue
@@ -239,18 +261,3 @@ def stop_price_alert_checker() -> None:
     if _scheduler and _scheduler.running:
         _scheduler.shutdown(wait=False)
         logger.info("🛑 [AlertChecker] Scheduler detenido")
-
-# ──────────────────────────────────────────────────────────────────────────────
-# NOTA: El checker usa GET /api/v1/alerts/active para obtener todas las alertas
-# activas en una sola llamada. Este endpoint aún no está en el router actual de
-# taso-api. Hay dos opciones:
-#
-# Opción A (recomendada): Añadir GET /api/v1/alerts/active en alerts.py de
-# taso-api que retorne todas las filas con status=ACTIVE. Una línea de código.
-#
-# Opción B: Dejar el código como está; _check_all_active_alerts fallará
-# silenciosamente con un 404 y el checker no disparará nada, pero tampoco
-# romperá el bot. Se puede añadir el endpoint después.
-#
-# Ver Fase 3 del plan en docs/plans/2026-06-27-taso-bot-price-alerts-integration.md
-# ──────────────────────────────────────────────────────────────────────────────
