@@ -50,6 +50,7 @@ from src.handlers.trading import (
 )
 from src.handlers.y import (
     y_command,
+    handle_year_hour_input,
 )
 from src.services.daily_image_sender import start_daily_dispatcher, stop_daily_dispatcher
 from src.services.year_alert_scheduler import start_year_scheduler, stop_year_scheduler
@@ -209,11 +210,17 @@ def create_application() -> Application:
     application.add_handler(get_callback_handler())
     logger.info("✅ Callback router registered (consolidated 13+ handlers into 1)")
 
-    # Registrar handler para input de hora (MessageHandler para texto)
+    # Registrar handler para input de hora personalizada del año
+    application.add_handler(
+        MessageHandler(filters.TEXT & ~filters.COMMAND, handle_year_hour_input)
+    )
+    logger.debug("✅ MessageHandler registered for year hour input")
+
+    # Registrar handler para input de hora de alertas de imágenes
     application.add_handler(
         MessageHandler(filters.TEXT & ~filters.COMMAND, handle_time_input)
     )
-    logger.debug("✅ MessageHandler registered for time input")
+    logger.debug("✅ MessageHandler registered for image alert time input")
 
     # Registrar error handler global
     application.add_error_handler(error_handler)

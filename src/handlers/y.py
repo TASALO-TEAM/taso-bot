@@ -12,6 +12,7 @@ Consumes /api/v1/year/state, /api/v1/year/quotes/{id} from taso-api.
 """
 
 import logging
+import time
 from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import BadRequest
@@ -51,6 +52,7 @@ def _build_sub_keyboard(current_hour: int | None) -> InlineKeyboardMarkup:
         prefix = "✅ " if current_hour == hour else ""
         row.append(InlineKeyboardButton(f"{prefix}{label}", callback_data=f"year_sub_{hour}"))
     buttons.append(row)
+    buttons.append([InlineKeyboardButton("⏰ Personalizar hora", callback_data="year_sub_custom")])
     buttons.append([InlineKeyboardButton("🔕 Desactivar Alerta Diaria", callback_data="year_sub_off")])
     return InlineKeyboardMarkup(buttons)
 
@@ -337,6 +339,43 @@ async def _cmd_dell(update: Update, context: ContextTypes.DEFAULT_TYPE, extra_ar
     )
 
 
+async def handle_year_hour_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    entry_time = context.user_data.get("awaiting_year_hour")
+    if not entry_time:
+        return
+    expiry = time.time() - entry_time > 300
+    if expiry:
+        del context.user_data["awaiting_year_hour"]
+        return
+    user_id = update.effective_user.id
+    text = update.message.text.strip()
+    if not text.isdigit():
+        del context.user_data["awaiting_year_hour"]
+        await update.message.reply_text(
+            "⚠️ Operación cancelada. Usa /y y selecciona ⏰ Personalizar hora para intentar de nuevo.",
+        )
+        return
+    hour = int(text)
+    if not (0 <= hour <= 23):
+        await update.message.reply_text(
+            "❌ Hora inválida. Usa un número entre 0 y 23 (UTC).\n"
+            "Ejemplo: `9` para las 9:00 AM.",
+            parse_mode="Markdown",
+        )
+        return
+    del context.user_data["awaiting_year_hour"]
+    await update.message.reply_text("⏳ Guardando alerta...")
+    result = await _year_api.set_year_subscription(user_id, hour)
+    if not result or not result.get("ok"):
+        await update.message.reply_text("❌ Error al guardar la alerta. Intenta más tarde.")
+        return
+    await update.message.reply_text(
+        f"✅ *Alerta diaria activada* a las {hour}:00 UTC.\n"
+        "Usa /y para ver el estado y modificar la alerta.",
+        parse_mode="Markdown",
+    )
+
+
 # year_sub_callback is defined below (line 340) and wired through callback_router.
 
 
@@ -356,16 +395,26 @@ async def year_sub_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = query.from_user.id
     callback_data = query.data
 
+    if callback_data == "year_sub_custom":
+        context.user_data["awaiting_year_hour"] = time.time()
+        await query.message.reply_text(
+            "⏰ *Personalizar hora de alerta*\n\n"
+            "Responde a este mensaje con la hora (0-23) en formato UTC "
+            "a la que quieres recibir la alerta diaria del año.\n\n"
+            "Ejemplos: `9` para las 9:00 AM, `14` para las 2:00 PM, `20` para las 8:00 PM.",
+            parse_mode="Markdown",
+        )
+        return
+
     if callback_data == "year_sub_off":
         result = await _year_api.delete_year_subscription(user_id)
         if not result or not result.get("ok"):
             await query.answer("⚠️ No se pudo desactivar", show_alert=True)
             return
+        await query.answer("🔕 Alerta diaria desactivada")
         try:
             await query.edit_message_reply_markup(reply_markup=_build_sub_keyboard(None))
         except BadRequest:
-            # Keyboard already in the desired state — Telegram rejects
-            # the no-op edit.  Subscription was updated successfully.
             pass
         return
 
@@ -376,18 +425,16 @@ async def year_sub_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         result = await _year_api.set_year_subscription(user_id, hour)
         if not result or not result.get("ok"):
-            # API failed → notify user via answer
             await query.answer("❌ Error al guardar", show_alert=True)
             return
+        await query.answer(f"✅ Alerta activada a las {hour}:00 UTC")
         try:
             await query.edit_message_reply_markup(
                 reply_markup=_build_sub_keyboard(hour)
             )
         except BadRequest:
-            # Keyboard already showing this state — no-op, not an error.
             pass
         return
 
-    # No match → propagate to callback_router (which will log + show error toast)
     raise ValueError(f"Unrecognised year callback: {callback_data}")
 
