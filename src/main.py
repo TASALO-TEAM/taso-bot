@@ -52,8 +52,10 @@ from src.handlers.y import (
     y_command,
     handle_year_hour_input,
 )
+from src.handlers.alert import alert_command
 from src.services.daily_image_sender import start_daily_dispatcher, stop_daily_dispatcher
 from src.services.year_alert_scheduler import start_year_scheduler, stop_year_scheduler
+from src.services.price_alert_checker import start_price_alert_checker, stop_price_alert_checker
 from src.logger import BotLogger, LOGS_DIR, LOG_FILE_PATH
 
 # Tipos de update que el bot realmente maneja (eficiencia)
@@ -197,6 +199,7 @@ def create_application() -> Application:
         ("ta", ta_command),
         ("graf", graf_command),
         ("mk", mk_command),
+        ("alert", alert_command),
     ]
     
     for cmd_name, handler in command_handlers:
@@ -271,6 +274,13 @@ async def post_init(application: Application):
     except Exception as e:
         logger.error("❌ Failed to start year alert scheduler: %s", e, exc_info=True)
 
+    # Iniciar checker de alertas de precio de criptomonedas
+    try:
+        start_price_alert_checker(application)
+        logger.info("✅ Price alert checker started (every 5 min)")
+    except Exception as e:
+        logger.error("❌ Failed to start price alert checker: %s", e, exc_info=True)
+
     # Obtener y cachear foto de perfil del bot
     try:
         logger.info("📸 Fetching bot profile photo...")
@@ -340,6 +350,9 @@ def main():
 
         stop_year_scheduler()
         logger.info("✅ Year alert scheduler stopped")
+
+        stop_price_alert_checker()
+        logger.info("✅ Price alert checker stopped")
         
         # Cerrar cliente HTTP para liberar conexiones
         api_client: TasaloApiClient = app.bot_data.get("api_client")

@@ -570,3 +570,123 @@ class TasaloApiClient:
         except Exception as e:
             logger.error("Error en admin_delete_year_quote: %s", e)
             return None
+
+    # ── Price Alert API methods ────────────────────────────────────────────────
+
+    async def get_user_price_alerts(self, user_id: int) -> list:
+        """Obtiene las alertas de precio activas de un usuario.
+
+        Returns:
+            Lista de dicts con las alertas o [] si hay error.
+        """
+        url = f"{self.api_url}/api/v1/alerts/{user_id}"
+        try:
+            data = await self._get_with_retry(url, headers=self._admin_headers)
+            if data and data.get("ok"):
+                return data.get("data", [])
+            return []
+        except Exception as e:
+            logger.error("❌ Error en get_user_price_alerts user=%d: %s", user_id, e)
+            return []
+
+    async def create_price_alert(
+        self, user_id: int, coin: str, target_price: float
+    ) -> Optional[list]:
+        """Crea dos alertas de precio (ABOVE + BELOW) para el par user/coin/price.
+
+        Returns:
+            Lista de alertas creadas o None si falla.
+        """
+        url = f"{self.api_url}/api/v1/alerts"
+        payload = {"user_id": user_id, "coin": coin.upper(), "target_price": target_price}
+        try:
+            data = await self._post_with_retry(url, headers=self._admin_headers, json=payload)
+            if data and data.get("ok"):
+                logger.info("✅ Price alert created: user=%d coin=%s price=%.6f", user_id, coin, target_price)
+                return data.get("data", [])
+            return None
+        except Exception as e:
+            logger.error("❌ Error en create_price_alert user=%d coin=%s: %s", user_id, coin, e)
+            return None
+
+    async def delete_price_alert(self, alert_id: int, user_id: int) -> bool:
+        """Elimina una alerta de precio específica.
+
+        Returns:
+            True si se eliminó correctamente, False si no.
+        """
+        url = f"{self.api_url}/api/v1/alerts/{alert_id}"
+        try:
+            client = self._get_client()
+            resp = await client.delete(
+                url,
+                headers=self._admin_headers,
+                params={"user_id": user_id},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            return bool(data.get("ok"))
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 404:
+                return False
+            logger.error("❌ HTTP %d en delete_price_alert id=%d", e.response.status_code, alert_id)
+            return False
+        except Exception as e:
+            logger.error("❌ Error en delete_price_alert id=%d: %s", alert_id, e)
+            return False
+
+    async def delete_all_price_alerts(self, user_id: int) -> bool:
+        """Elimina todas las alertas de precio de un usuario.
+
+        Returns:
+            True si tuvo éxito, False si hubo error.
+        """
+        url = f"{self.api_url}/api/v1/alerts/user/{user_id}"
+        try:
+            client = self._get_client()
+            resp = await client.delete(url, headers=self._admin_headers)
+            resp.raise_for_status()
+            data = resp.json()
+            return bool(data.get("ok"))
+        except Exception as e:
+            logger.error("❌ Error en delete_all_price_alerts user=%d: %s", user_id, e)
+            return False
+
+    async def trigger_price_alert(self, alert_id: int) -> bool:
+        """Marca una alerta como TRIGGERED tras enviar la notificación.
+
+        Returns:
+            True si se actualizó correctamente, False si no.
+        """
+        url = f"{self.api_url}/api/v1/alerts/{alert_id}/trigger"
+        try:
+            client = self._get_client()
+            resp = await client.patch(url, headers=self._admin_headers)
+            resp.raise_for_status()
+            data = resp.json()
+            return bool(data.get("ok"))
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 404:
+                return False
+            logger.error("❌ HTTP %d en trigger_price_alert id=%d", e.response.status_code, alert_id)
+            return False
+        except Exception as e:
+            logger.error("❌ Error en trigger_price_alert id=%d: %s", alert_id, e)
+            return False
+
+    async def get_active_alert_coins(self) -> list:
+        """Retorna la lista de coins con alertas ACTIVE.
+        Usado por el checker para saber qué precios consultar.
+
+        Returns:
+            Lista de strings, ej: ["BTC", "ETH"] o [] si no hay ninguna.
+        """
+        url = f"{self.api_url}/api/v1/alerts/active/coins"
+        try:
+            data = await self._get_with_retry(url, headers=self._admin_headers)
+            if data and data.get("ok"):
+                return data.get("data", {}).get("coins", [])
+            return []
+        except Exception as e:
+            logger.error("❌ Error en get_active_alert_coins: %s", e)
+            return []

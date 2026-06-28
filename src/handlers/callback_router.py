@@ -19,7 +19,7 @@ from telegram import Update
 from telegram.ext import ContextTypes, CallbackQueryHandler
 from telegram.error import BadRequest
 
-from src.handlers import image_alerts, tasalo, start, toqueimg, p, ta, trading, y
+from src.handlers import image_alerts, tasalo, start, toqueimg, p, ta, trading, y, alert as price_alert
 
 logger = logging.getLogger(__name__)
 
@@ -213,7 +213,8 @@ async def _handle_alert(update: Update, context: ContextTypes.DEFAULT_TYPE, call
 
     logger.info("🔔 Handler _handle_alert processing '%s' for user %d", callback_data, user_id)
 
-    alert_handlers = {
+    # Callbacks de image_alerts (alertas de imagen diaria)
+    image_alert_handlers = {
         "alert_enable_default": image_alerts.alert_enable_default_callback,
         "alert_custom_time": image_alerts.alert_custom_time_callback,
         "alert_disable": image_alerts.alert_disable_callback,
@@ -224,14 +225,25 @@ async def _handle_alert(update: Update, context: ContextTypes.DEFAULT_TYPE, call
     }
 
     try:
-        # Handle format sub-callbacks: alert_format_photo, alert_format_document
-        if callback_data.startswith("alert_format_"):
+        # ── Price alerts (nuevos, /alert command) ──
+        if callback_data == "alert_create":
+            await price_alert.alert_create_callback(update, context)
+        elif callback_data == "alert_delete_menu":
+            await price_alert.alert_delete_menu_callback(update, context)
+        elif callback_data == "alert_delete_all":
+            await price_alert.alert_delete_all_callback(update, context)
+        elif callback_data == "alert_back":
+            await price_alert.alert_back_callback(update, context)
+        elif callback_data.startswith("alert_delete_") and not callback_data.startswith("alert_delete_menu"):
+            await price_alert.alert_delete_single_callback(update, context)
+        # ── Image alerts (existentes, /toqueimg) ──
+        elif callback_data.startswith("alert_format_"):
             logger.debug("Routing '%s' to alert_format_callback for user %d", callback_data, user_id)
             await image_alerts.alert_format_callback(update, context)
-        elif callback_data in alert_handlers:
-            handler_name = alert_handlers[callback_data].__name__
+        elif callback_data in image_alert_handlers:
+            handler_name = image_alert_handlers[callback_data].__name__
             logger.debug("Routing '%s' to '%s' for user %d", callback_data, handler_name, user_id)
-            await alert_handlers[callback_data](update, context)
+            await image_alert_handlers[callback_data](update, context)
         else:
             duration_ms = (time.time() - handler_start) * 1000
             logger.warning(
