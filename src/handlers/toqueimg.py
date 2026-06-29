@@ -41,19 +41,27 @@ async def toqueimg_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         api = TasaloApiClient(api_url=API_URL, timeout=15)
 
-        # 1. Obtener última imagen ya capturada (sin lanzar Playwright/Selenium)
+        # 1. Obtener última imagen ya capturada
         latest_data = await api._get_with_retry(f"{API_URL}/api/v1/images/eltoque/latest")
 
+        # Si no hay imagen disponible → generarla bajo demanda (primera vez del día)
         if not latest_data or not latest_data.get("ok") or not latest_data.get("data"):
-            logger.warning("User %d: No hay imagen disponible todavía", user_id)
-            await loading_msg.edit_text(
-                "⚠️ *Imagen no disponible*\n\n"
-                "Aún no se ha capturado la imagen de hoy.\n"
-                "La captura automática ocurre a las *7:30 AM* hora Cuba.\n\n"
-                "Intenta de nuevo más tarde.",
-                parse_mode="Markdown"
-            )
-            return
+            logger.info("User %d: Sin imagen disponible, generando bajo demanda...", user_id)
+            await loading_msg.edit_text("⏳ Generando imagen del día...")
+
+            gen_data = await api._post_with_retry(f"{API_URL}/api/v1/images/eltoque/capture")
+
+            if gen_data and gen_data.get("ok") and gen_data.get("data"):
+                latest_data = {"ok": True, "data": gen_data["data"]}
+            else:
+                await loading_msg.edit_text(
+                    "⚠️ *Imagen no disponible*\n\n"
+                    "No se pudo obtener la imagen de hoy.\n"
+                    "La actualización automática ocurre a las *7:30 AM* hora Cuba.\n\n"
+                    "Intenta de nuevo más tarde.",
+                    parse_mode="Markdown"
+                )
+                return
 
         image_data = latest_data["data"]
         image_path = image_data["image_path"]
