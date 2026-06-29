@@ -1030,7 +1030,16 @@ def build_fuel_only_message(api_data: Dict[str, Any]) -> str:
 
             indicator = ""
             change_str = ""
-            if change == "up" and prev_rate is not None and rate is not None:
+
+            # Preferir change_pct/change_direction del scraper (más preciso)
+            change_pct = item.get("change_pct")
+            change_direction = item.get("change_direction", "neutral")
+
+            if change_pct is not None and change_direction in ("up", "down"):
+                indicator = "  " + (INDICATOR_UP if change_direction == "up" else INDICATOR_DOWN)
+                sign = "+" if change_direction == "up" else ""
+                change_str = f" {sign}{change_pct:.1f}%"
+            elif change == "up" and prev_rate is not None and rate is not None:
                 diff = rate - prev_rate
                 indicator = "  " + INDICATOR_UP
                 change_str = f" +{diff:,.0f}"
