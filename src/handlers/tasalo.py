@@ -673,8 +673,8 @@ async def fuel_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     try:
         response = await api_client.get_fuel()
 
-        if not response or not response.get("ok"):
-            logger.warning("⚠️ API respondió None o ok=False para /fuel")
+        if not response or response.get("rates") is None:
+            logger.warning("⚠️ API respondió None o sin rates para /fuel")
             await loading_msg.edit_text("⚠️ No se pudieron obtener datos de combustible.")
             asyncio.create_task(track_command_usage(update, context, "/fuel", source="fuel", success=False))
             return
@@ -731,7 +731,20 @@ async def source_refresh_callback(
         return
 
     try:
-        # Obtener response completo y extraer 'data'
+        # Fuel tiene su propio endpoint separado de /latest
+        if source == "fuel":
+            response = await api_client.get_fuel()
+            if not response or response.get("rates") is None:
+                logger.warning("⚠️ API respondió None o sin rates en refresh /fuel")
+                await query.answer("⚠️ Error actualizando datos", show_alert=True)
+                return
+            text = build_fuel_only_message(response)
+            keyboard = _build_source_refresh_keyboard("fuel")
+            await query.edit_message_text(text=text, reply_markup=keyboard, parse_mode="Markdown")
+            logger.info("✅ Refresh /fuel completado")
+            return
+
+        # Resto de fuentes usan /latest
         response = await api_client.get_latest()
         if not response or not response.get("ok"):
             logger.warning(f"⚠️ API respondió None o ok=False en refresh /{source}")
