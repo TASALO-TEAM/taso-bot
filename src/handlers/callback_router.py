@@ -277,6 +277,10 @@ async def _handle_p(update: Update, context: ContextTypes.DEFAULT_TYPE, callback
     try:
         if callback_data.startswith("p_refresh_"):
             await p.p_refresh_callback(update, context)
+        elif callback_data.startswith("p_more|"):
+            await p.p_more_callback(update, context)
+        elif callback_data.startswith("p_less|"):
+            await p.p_less_callback(update, context)
         else:
             logger.warning("Unknown p callback: %s for user %d", callback_data, user_id)
             duration_ms = (time.time() - handler_start) * 1000

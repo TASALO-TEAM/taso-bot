@@ -1274,4 +1274,136 @@ def build_crypto_message(data: Dict[str, Any]) -> str:
     lines.append(f"Cap: #{rank} | ${mcap:,.0f}")
     lines.append(f"Vol: ${volume:,.0f}")
 
+    # Indicador de fuente (solo cuando NO es CoinMarketCap, que es lo normal)
+    source = data.get("primary_source", "")
+    if source == "cryptocompare":
+        lines.append("_\ud83d\udd04 Fuente: CryptoCompare (fallback)_")
+    elif source == "coingecko":
+        lines.append("_\ud83d\udd04 Fuente: CoinGecko_")
+
+    return "\n".join(lines)
+
+
+def format_supply(value: Optional[float]) -> str:
+    """Formatea un valor de supply en notación compacta (K/M/B/T).
+
+    Args:
+        value: Cantidad de tokens (puede ser None)
+
+    Returns:
+        String formateado, ej: "19.80M" o "N/A" si value es None
+    """
+    if value is None:
+        return "N/A"
+
+    abs_value = abs(value)
+    if abs_value >= 1_000_000_000_000:
+        return f"{value / 1_000_000_000_000:,.2f}T"
+    elif abs_value >= 1_000_000_000:
+        return f"{value / 1_000_000_000:,.2f}B"
+    elif abs_value >= 1_000_000:
+        return f"{value / 1_000_000:,.2f}M"
+    elif abs_value >= 1_000:
+        return f"{value / 1_000:,.2f}K"
+    return f"{value:,.2f}"
+
+
+def format_ath_date(iso_string: Optional[str]) -> str:
+    """Formatea la fecha de ATH/ATL de CoinGecko a "DD/MM/YYYY".
+
+    Args:
+        iso_string: Fecha en formato ISO 8601 (ej: "2021-11-10T14:24:11.849Z")
+
+    Returns:
+        String formateado como "DD/MM/YYYY" o "N/A" si no se puede parsear
+    """
+    if not iso_string:
+        return "N/A"
+    try:
+        cleaned = iso_string.replace("Z", "+00:00")
+        dt = datetime.fromisoformat(cleaned)
+        return dt.strftime("%d/%m/%Y")
+    except (ValueError, AttributeError):
+        return "N/A"
+
+
+def build_crypto_extended_block(enrichment: Dict[str, Any]) -> str:
+    """Construye el bloque extendido de enriquecimiento (CoinGecko) para /p.
+
+    Se muestra al pulsar el botón "📋 Ver más" en el mensaje de /p, debajo
+    del bloque base ya generado por build_crypto_message(). Solo incluye
+    datos que CoinMarketCap/CryptoCompare NO proveen: ATH/ATL, supply y
+    categoría del proyecto. Nunca repite precio, % de cambio ni market cap
+    ya mostrados en el bloque base.
+
+    Formato:
+        ─────────────────────
+        📋 *Info adicional (CoinGecko)*
+        🏆 *ATH:* $73,750.07 (10/03/2024)
+        ↳ -18.45% desde el máximo
+        🔻 *ATL:* $67.81 (06/07/2013)
+        🪙 *Supply circulante:* 19.80M
+        🔒 *Supply máximo:* 21.00M
+        🏷️ *Categoría:* Smart Contract Platform
+        😊 *Sentiment:* 78.3% positivo
+
+    Args:
+        enrichment: Dict devuelto por CoinGeckoClient.get_enrichment_data()
+
+    Returns:
+        String formateado con el bloque adicional (Markdown).
+    """
+    lines = []
+
+    lines.append(SEPARATOR_THICK)
+    lines.append("📋 *Info adicional (CoinGecko)*")
+
+    ath = enrichment.get("ath")
+    ath_change_pct = enrichment.get("ath_change_pct")
+    ath_date = enrichment.get("ath_date")
+    if ath:
+        lines.append(f"🏆 *ATH:* ${ath:,.4f} ({format_ath_date(ath_date)})")
+        if ath_change_pct is not None:
+            lines.append(f"   ↳ {ath_change_pct:.2f}% desde el máximo")
+
+    atl = enrichment.get("atl")
+    atl_date = enrichment.get("atl_date")
+    if atl is not None:
+        lines.append(f"🔻 *ATL:* ${atl:,.4f} ({format_ath_date(atl_date)})")
+
+    circulating = enrichment.get("circulating_supply")
+    max_supply = enrichment.get("max_supply")
+    total_supply = enrichment.get("total_supply")
+
+    if circulating:
+        lines.append(f"🪙 *Supply circulante:* {format_supply(circulating)}")
+
+    # Mostrar total solo si difiere significativamente del circulante
+    # (evitar mostrar el mismo número dos veces, ej: BTC donde son casi iguales)
+    if total_supply and circulating:
+        diff_ratio = abs(total_supply - circulating) / max(total_supply, circulating)
+        if diff_ratio > 0.001:  # Más del 0.1% de diferencia
+            lines.append(f"📦 *Supply total:* {format_supply(total_supply)}")
+    elif total_supply and not circulating:
+        lines.append(f"📦 *Supply total:* {format_supply(total_supply)}")
+
+    if max_supply:
+        lines.append(f"🔒 *Supply máximo:* {format_supply(max_supply)}")
+
+    category = enrichment.get("category")
+    if category:
+        lines.append(f"🏷️ *Categoría:* {category}")
+
+    sentiment = enrichment.get("sentiment_up_pct")
+    if sentiment is not None:
+        lines.append(f"😊 *Sentiment:* {sentiment:.1f}% positivo")
+
+    cg_rank = enrichment.get("market_cap_rank")
+    if cg_rank:
+        lines.append(f"📊 *Rank CoinGecko:* #{cg_rank}")
+
+    if len(lines) == 2:
+        # No había ningún dato útil más allá del header — evitar bloque vacío
+        lines.append("Sin datos adicionales disponibles.")
+
     return "\n".join(lines)

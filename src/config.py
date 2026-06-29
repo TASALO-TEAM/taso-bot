@@ -63,6 +63,13 @@ class Settings(BaseSettings):
         examples=["your_cmc_pro_api_key_here"]
     )
 
+    # Cryptocurrency Prices (CoinGecko — enriquecimiento de /p)
+    coingecko_api_key: str = Field(
+        default="",
+        description="CoinGecko Demo API key, usada para enriquecer /p con ATH/ATL, supply y categoría",
+        examples=["CG-xxxxxxxxxxxxxxxxxxxxxxxx"]
+    )
+
     # AI Analysis (Groq)
     groq_api_key: str = Field(
         default="",
