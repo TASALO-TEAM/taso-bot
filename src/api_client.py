@@ -205,10 +205,11 @@ class TasaloApiClient:
             data = await self._get_with_retry(url)
             duration_ms = (time.time() - start_time) * 1000
 
-            if data and data.get('ok'):
+            # El endpoint fuel devuelve {source, rates, updated_at} sin campo "ok"
+            if data and data.get("rates") is not None:
                 logger.info("✅ Combustible obtenido de taso-api (%.0fms)", duration_ms)
                 return data
-            logger.warning("⚠️ Combustible respondió ok=False (%.0fms)", duration_ms)
+            logger.warning("⚠️ Combustible respondió sin datos (%.0fms): %s", duration_ms, data)
             return None
 
         except Exception as e:
