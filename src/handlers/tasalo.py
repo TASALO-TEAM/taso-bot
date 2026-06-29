@@ -24,6 +24,7 @@ from src.formatters import (
     build_eltoque_only_message,
     build_bcc_only_message,
     build_cadeca_only_message,
+    build_fuel_only_message,
     build_toque_new_message,
 )
 from src.stats_tracker import track_command_usage
@@ -650,6 +651,65 @@ async def cadeca_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     await _handle_source_command(update, context, "cadeca", build_cadeca_only_message)
 
 
+async def fuel_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Comando /fuel — Precios de combustible del mercado informal (ElToque)."""
+    user_id = update.effective_user.id if update.effective_user else 0
+    logger.info("⛽ /fuel command invoked by user %s", user_id)
+
+    asyncio.create_task(track_command_usage(update, context, "/fuel", source="fuel"))
+
+    if not update.message:
+        logger.warning("⚠️ update.message es None para /fuel")
+        return
+
+    api_client: TasaloApiClient = context.bot_data.get("api_client")
+    if not api_client:
+        logger.error("❌ api_client no está disponible en bot_data")
+        await update.message.reply_text("❌ Error de configuración del bot.")
+        return
+
+    loading_msg = await update.message.reply_text("⏳ Consultando combustible...")
+
+    try:
+        response = await api_client.get_fuel()
+
+        if not response or not response.get("ok"):
+            logger.warning("⚠️ API respondió None o ok=False para /fuel")
+            await loading_msg.edit_text("⚠️ No se pudieron obtener datos de combustible.")
+            asyncio.create_task(track_command_usage(update, context, "/fuel", source="fuel", success=False))
+            return
+
+        text = build_fuel_only_message(response)
+        keyboard = _build_source_refresh_keyboard("fuel")
+
+        try:
+            await loading_msg.edit_text(
+                text=text,
+                reply_markup=keyboard,
+                parse_mode="Markdown",
+            )
+            logger.info("✅ /fuel enviado (texto con botones)")
+        except Exception as send_error:
+            logger.error("❌ Error enviando /fuel: %s", send_error, exc_info=True)
+            try:
+                await update.message.reply_text(
+                    text=text,
+                    reply_markup=keyboard,
+                    parse_mode="Markdown",
+                )
+                logger.info("✅ Texto enviado para /fuel (fallback)")
+            except Exception as fallback_error:
+                logger.error("❌ Error en fallback final /fuel: %s", fallback_error, exc_info=True)
+
+    except Exception as e:
+        logger.error("❌ Error en comando /fuel: %s", e, exc_info=True)
+        try:
+            await loading_msg.edit_text("❌ Error consultando combustible.")
+        except Exception:
+            pass
+        asyncio.create_task(track_command_usage(update, context, "/fuel", source="fuel", success=False))
+
+
 async def source_refresh_callback(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> None:
@@ -688,6 +748,7 @@ async def source_refresh_callback(
             "toque": build_toque_new_message,
             "bcc": build_bcc_only_message,
             "cadeca": build_cadeca_only_message,
+            "fuel": build_fuel_only_message,
         }
         build_func = build_funcs.get(source)
         if not build_func:

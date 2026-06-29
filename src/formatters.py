@@ -976,6 +976,84 @@ def build_cadeca_only_message(api_data: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def build_fuel_only_message(api_data: Dict[str, Any]) -> str:
+    """Construye mensaje con precios de combustible para comando /fuel."""
+    lines = []
+
+    lines.append("COMBUSTIBLE (MERCADO INFORMAL)")
+    lines.append(SEPARATOR_THICK)
+
+    fuel_data = api_data.get("rates", api_data.get("fuel", {}))
+
+    if not fuel_data:
+        logger.warning("⚠️ Fuel data empty for /fuel command")
+        lines.append("Datos no disponibles")
+    else:
+        logger.debug("⛽ /fuel fuel data: %d items", len(fuel_data))
+
+        priority = ["B-94", "B-90", "B-83", "Petroleo", "Gas_LP"]
+        display_names = {
+            "B-94": "B-94",
+            "B-90": "B-90",
+            "B-83": "B-83",
+            "Petroleo": "Petroleo (Diésel)",
+            "Gas_LP": "Gas LP",
+        }
+        sorted_items = sorted(
+            fuel_data.keys(),
+            key=lambda x: (priority.index(x) if x in priority else 99, x),
+        )
+
+        for key in sorted_items:
+            item = fuel_data[key]
+            if not isinstance(item, dict):
+                continue
+
+            rate = item.get("rate")
+            buy = item.get("buy")
+            sell = item.get("sell")
+            change = item.get("change")
+            prev_rate = item.get("prev_rate")
+            subtype = item.get("subtype")
+            unit = item.get("unit")
+
+            label = f"{display_names.get(key, key)}" + (f" ({subtype})" if subtype else "")
+
+            if buy is not None and sell is not None and buy != sell:
+                price_str = f"{buy:,.0f} – {sell:,.0f}"
+            elif rate is not None:
+                price_str = f"{rate:,.0f}"
+            else:
+                price_str = "---"
+
+            unit_str = f" {unit}" if unit else ""
+
+            indicator = ""
+            change_str = ""
+            if change == "up" and prev_rate is not None and rate is not None:
+                diff = rate - prev_rate
+                indicator = "  " + INDICATOR_UP
+                change_str = f" +{diff:,.0f}"
+            elif change == "down" and prev_rate is not None and rate is not None:
+                diff = rate - prev_rate
+                indicator = "  " + INDICATOR_DOWN
+                change_str = f" {diff:,.0f}"
+
+            line = f" *{label}:*  {price_str}{unit_str}{indicator}{change_str}"
+            lines.append(line)
+
+    lines.append("")
+    lines.append(SEPARATOR_THICK)
+
+    updated_at = api_data.get("updated_at")
+    if updated_at:
+        date_str = parse_iso_datetime(updated_at)
+        lines.append(f"📆 {date_str}")
+    lines.append("🔗 eltoque.com")
+
+    return "\n".join(lines)
+
+
 def build_toque_new_message(api_data: Dict[str, Any]) -> str:
     """Construye mensaje con nuevo formato para comando /toque.
 
