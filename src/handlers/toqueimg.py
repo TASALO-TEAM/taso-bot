@@ -1,9 +1,9 @@
 """Handler for /toqueimg command."""
 
-import httpx
 import logging
 import time
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
 from telegram.ext import ContextTypes
 
@@ -13,162 +13,110 @@ from src.config import get_settings
 from src.api_client import TasaloApiClient
 
 settings = get_settings()
-API_URL = settings.tasalo_api_url  # https://tasalo.duckdns.org
+API_URL = settings.tasalo_api_url
 
-api_client = TasaloApiClient(api_url=API_URL)
+CUBA_TZ = ZoneInfo("America/Havana")
 
 
 async def toqueimg_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
-    Comando /toqueimg - Muestra imagen de ElToque con botones de alerta.
+    Comando /toqueimg - Muestra la última imagen capturada de ElToque.
+
+    No captura en tiempo real: usa la imagen diaria capturada por el scheduler
+    de taso-api a las 11:30 UTC (7:30 AM Cuba), que se actualiza automáticamente.
     """
     cmd_start = time.time()
     user_id = update.effective_user.id
     username = update.effective_user.username or "N/A"
-    first_name = update.effective_user.first_name or "Unknown"
-    
-    logger.info(
-        "📸 /toqueimg command invoked by user %d (@%s, %s)",
-        user_id, username, first_name
-    )
 
-    # 1. Mostrar "loading"
-    loading_msg = await update.message.reply_text("📸 Capturando imagen...")
+    logger.info("📸 /toqueimg invocado por user %d (@%s)", user_id, username)
+
+    # Detectar si viene de un callback (refresh) o de un comando directo
+    is_callback = update.callback_query is not None
+    if is_callback:
+        loading_msg = await update.callback_query.message.reply_text("📸 Cargando imagen...")
+    else:
+        loading_msg = await update.message.reply_text("📸 Cargando imagen...")
 
     try:
-        # 2. Capturar imagen desde API (con retry automático 3x)
-        capture_start = time.time()
-        logger.debug("User %d: Starting image capture from API", user_id)
-        
-        # Create client instance with increased timeout for image capture operations
-        image_api_client = TasaloApiClient(api_url=API_URL, timeout=30)
-        capture_data = await image_api_client._post_with_retry(
-            f"{API_URL}/api/v1/images/eltoque/capture"
-        )
+        api = TasaloApiClient(api_url=API_URL, timeout=15)
 
-        capture_duration_ms = (time.time() - capture_start) * 1000
-        logger.info(
-            "User %d: Image capture completed (%.0fms)",
-            user_id, capture_duration_ms
-        )
+        # 1. Obtener última imagen ya capturada (sin lanzar Playwright/Selenium)
+        latest_data = await api._get_with_retry(f"{API_URL}/api/v1/images/eltoque/latest")
 
-        if not capture_data or not capture_data.get("ok"):
-            error_detail = capture_data.get('error')
-            logger.error(
-                "User %d: API capture returned error: %s",
-                user_id, error_detail
+        if not latest_data or not latest_data.get("ok") or not latest_data.get("data"):
+            logger.warning("User %d: No hay imagen disponible todavía", user_id)
+            await loading_msg.edit_text(
+                "⚠️ *Imagen no disponible*\n\n"
+                "Aún no se ha capturado la imagen de hoy.\n"
+                "La captura automática ocurre a las *7:30 AM* hora Cuba.\n\n"
+                "Intenta de nuevo más tarde.",
+                parse_mode="Markdown"
             )
-            raise Exception(f"API error: {error_detail}")
+            return
 
-        # 3. Obtener última imagen (file path) (con retry automático 3x)
-        latest_start = time.time()
-        logger.debug("User %d: Fetching latest image info", user_id)
-        
-        latest_data = await image_api_client._get_with_retry(
-            f"{API_URL}/api/v1/images/eltoque/latest"
-        )
+        image_data = latest_data["data"]
+        image_path = image_data["image_path"]
+        captured_at_str = image_data.get("captured_at", "")
 
-        latest_duration_ms = (time.time() - latest_start) * 1000
-        logger.info(
-            "User %d: Latest image fetch completed (%.0fms)",
-            user_id, latest_duration_ms
-        )
+        # Formatear fecha/hora de captura en hora Cuba
+        try:
+            from datetime import datetime, timezone
+            captured_dt = datetime.fromisoformat(captured_at_str.replace("Z", "+00:00"))
+            captured_cuba = captured_dt.astimezone(CUBA_TZ)
+            captured_label = captured_cuba.strftime("%d/%m/%Y %H:%M")
+        except Exception:
+            captured_label = datetime.now(CUBA_TZ).strftime("%d/%m/%Y")
 
-        if not latest_data or not latest_data.get("ok"):
-            logger.error("User %d: Failed to get latest image - response: %s", user_id, latest_data)
-            raise Exception("Failed to get latest image")
-
-        image_path = latest_data["data"]["image_path"]
-        logger.debug("User %d: Image path resolved to: %s", user_id, image_path)
-
-        # 4. Verificar si usuario tiene alerta activa (con retry automático 3x)
-        alert_start = time.time()
-        logger.debug("User %d: Checking alert status", user_id)
-        
-        alert_data = await image_api_client._get_with_retry(
-            f"{API_URL}/api/v1/images/alerts/{user_id}"
-        )
-
-        alert_duration_ms = (time.time() - alert_start) * 1000
+        # 2. Verificar si usuario tiene alerta activa
+        alert_data = await api._get_with_retry(f"{API_URL}/api/v1/images/alerts/{user_id}")
         has_alert = (
-            alert_data and
-            alert_data.get("ok") and
-            alert_data.get("data") and
-            alert_data["data"].get("enabled", False)
-        )
-        logger.info(
-            "User %d: Alert status check completed (%.0fms, has_alert=%s)",
-            user_id, alert_duration_ms, has_alert
+            alert_data
+            and alert_data.get("ok")
+            and alert_data.get("data")
+            and alert_data["data"].get("enabled", False)
         )
 
-        # 5. Construir keyboard interactivo
+        # 3. Construir teclado y caption
         keyboard = _build_toqueimg_keyboard(has_alert)
-        logger.debug("User %d: Keyboard built (has_alert=%s)", user_id, has_alert)
-
-        # 6. Construir caption simple (max 1024 chars para Telegram)
         caption = (
             "🇨🇺 *Tasa Diaria El Toque*\n"
-            f"📅 {datetime.now().strftime('%d/%m/%Y')}\n\n"
-            "Esta es la tasa diaria de El Toque."
+            f"📅 {captured_label} (Cuba)\n\n"
+            "_Fuente: iframe.cubanomic.com_"
         )
 
-        # Debug: log caption length
-        caption_length = len(caption)
-        logger.debug("User %d: Caption length: %d chars", user_id, caption_length)
-
-        # 7. Enviar imagen
-        send_start = time.time()
-        logger.debug("User %d: Starting image send to Telegram", user_id)
-        
-        try:
-            with open(image_path, "rb") as f:
-                await loading_msg.edit_media(
-                    media=InputMediaPhoto(
-                        media=f,
-                        caption=caption,
-                        parse_mode="Markdown"
-                    ),
-                    reply_markup=InlineKeyboardMarkup(keyboard)
-                )
-            
-            send_duration_ms = (time.time() - send_start) * 1000
-            logger.info(
-                "User %d: Image sent successfully (%.0fms)",
-                user_id, send_duration_ms
-            )
-            
-        except Exception as media_error:
-            send_duration_ms = (time.time() - send_start) * 1000
-            logger.error(
-                "User %d: Failed to send image after %.0fms - path: %s, error: %s",
-                user_id, send_duration_ms, image_path, media_error,
-                exc_info=True
-            )
-            logger.error(
-                "User %d: Caption length: %d, Image path: %s",
-                user_id, caption_length, image_path
-            )
-            # Fallback: enviar solo texto
+        # 4. Enviar imagen
+        import os
+        if not os.path.exists(image_path):
+            logger.error("User %d: Archivo de imagen no encontrado: %s", user_id, image_path)
             await loading_msg.edit_text(
-                f"❌ Error al enviar imagen: {str(media_error)}\n\nIntenta de nuevo más tarde."
+                "❌ No se encontró el archivo de imagen.\n"
+                "Intenta de nuevo más tarde."
             )
+            return
+
+        with open(image_path, "rb") as f:
+            await loading_msg.edit_media(
+                media=InputMediaPhoto(
+                    media=f,
+                    caption=caption,
+                    parse_mode="Markdown"
+                ),
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+
+        cmd_duration_ms = (time.time() - cmd_start) * 1000
+        logger.info("✅ /toqueimg completado para user %d (%.0fms)", user_id, cmd_duration_ms)
 
     except Exception as e:
         cmd_duration_ms = (time.time() - cmd_start) * 1000
         logger.error(
-            "User %d (@%s): /toqueimg command failed after %.0fms - %s",
-            user_id, username, cmd_duration_ms, e,
-            exc_info=True
+            "❌ /toqueimg falló para user %d (@%s) tras %.0fms: %s",
+            user_id, username, cmd_duration_ms, e, exc_info=True
         )
         await loading_msg.edit_text(
-            f"❌ Error: {str(e)}\n\nIntenta de nuevo más tarde."
+            "❌ Error al cargar la imagen.\nIntenta de nuevo más tarde."
         )
-
-    cmd_duration_ms = (time.time() - cmd_start) * 1000
-    logger.info(
-        "✅ /toqueimg completed for user %d (%.0fms)",
-        user_id, cmd_duration_ms
-    )
 
 
 def _build_toqueimg_keyboard(has_alert: bool) -> list:
@@ -224,35 +172,80 @@ def _build_toqueimg_keyboard(has_alert: bool) -> list:
 
 
 async def toqueimg_refresh_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Callback para botón Actualizar en /toqueimg."""
+    """Callback para botón 🔄 Actualizar en /toqueimg.
+
+    Edita el mensaje de imagen existente con la última captura disponible,
+    sin enviar mensajes nuevos.
+    """
     callback_start = time.time()
     user_id = update.effective_user.id
     username = update.effective_user.username or "N/A"
-    
-    logger.info(
-        "🔄 /toqueimg refresh callback invoked by user %d (@%s)",
-        user_id, username
-    )
-    
     query = update.callback_query
+
+    logger.info("🔄 toqueimg_refresh callback de user %d (@%s)", user_id, username)
     await query.answer("🔄 Actualizando...")
 
     try:
-        # Re-ejecutar el comando
-        await toqueimg_command(update, context)
-        
-        callback_duration_ms = (time.time() - callback_start) * 1000
-        logger.info(
-            "✅ /toqueimg refresh callback completed for user %d (%.0fms)",
-            user_id, callback_duration_ms
+        api = TasaloApiClient(api_url=API_URL, timeout=15)
+
+        # Obtener última imagen
+        latest_data = await api._get_with_retry(f"{API_URL}/api/v1/images/eltoque/latest")
+
+        if not latest_data or not latest_data.get("ok") or not latest_data.get("data"):
+            await query.answer("⚠️ Imagen no disponible aún. Intenta después de las 7:30 AM Cuba.", show_alert=True)
+            return
+
+        image_data = latest_data["data"]
+        image_path = image_data["image_path"]
+        captured_at_str = image_data.get("captured_at", "")
+
+        try:
+            from datetime import datetime as dt_cls, timezone as tz_mod
+            captured_at = dt_cls.fromisoformat(captured_at_str.replace("Z", "+00:00"))
+            captured_cuba = captured_at.astimezone(CUBA_TZ)
+            captured_label = captured_cuba.strftime("%d/%m/%Y %H:%M")
+        except Exception:
+            from datetime import datetime as dt_cls
+            captured_label = dt_cls.now(CUBA_TZ).strftime("%d/%m/%Y")
+
+        # Estado de alerta
+        alert_data = await api._get_with_retry(f"{API_URL}/api/v1/images/alerts/{user_id}")
+        has_alert = (
+            alert_data
+            and alert_data.get("ok")
+            and alert_data.get("data")
+            and alert_data["data"].get("enabled", False)
         )
-        
+
+        keyboard = _build_toqueimg_keyboard(has_alert)
+        caption = (
+            "🇨🇺 *Tasa Diaria El Toque*\n"
+            f"📅 {captured_label} (Cuba)\n\n"
+            "_Fuente: iframe.cubanomic.com_"
+        )
+
+        import os
+        if not os.path.exists(image_path):
+            await query.answer("❌ Archivo de imagen no encontrado.", show_alert=True)
+            return
+
+        with open(image_path, "rb") as f:
+            await query.edit_message_media(
+                media=InputMediaPhoto(
+                    media=f,
+                    caption=caption,
+                    parse_mode="Markdown"
+                ),
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+
+        duration_ms = (time.time() - callback_start) * 1000
+        logger.info("✅ toqueimg_refresh completado para user %d (%.0fms)", user_id, duration_ms)
+
     except Exception as e:
-        callback_duration_ms = (time.time() - callback_start) * 1000
+        duration_ms = (time.time() - callback_start) * 1000
         logger.error(
-            "User %d (@%s): /toqueimg refresh callback failed after %.0fms - %s",
-            user_id, username, callback_duration_ms, e,
-            exc_info=True
+            "❌ toqueimg_refresh falló para user %d tras %.0fms: %s",
+            user_id, duration_ms, e, exc_info=True
         )
-        # Re-raise to let Telegram handle the error response
-        raise
+        await query.answer("❌ Error al actualizar. Intenta de nuevo.", show_alert=True)

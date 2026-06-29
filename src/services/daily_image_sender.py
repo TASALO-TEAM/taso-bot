@@ -131,55 +131,60 @@ async def send_daily_images_job(application: Application):
         logger.info("ℹ️ No alerts matching current Cuba time slot, skipping")
         return
     
-    # 3. Capture image from API (after 7:30 AM Cuba to ensure source is updated)
-    logger.info("📸 Capturing image from API...")
+    # 3. Obtener última imagen capturada por el scheduler de taso-api
+    # (no capturamos aquí — la captura ocurre en taso-api a las 11:30 UTC)
+    logger.info("📸 Obteniendo última imagen capturada...")
     img_data = None
+
     for attempt in range(3):
-        logger.info("🔍 Getting image (attempt %d/3)", attempt + 1)
+        logger.info("🔍 Solicitando imagen a taso-api (intento %d/3)", attempt + 1)
         try:
             async with httpx.AsyncClient() as client:
                 img_response = await client.get(
-                    f"{API_URL}/api/v1/images/eltoque/capture",
-                    timeout=30.0
+                    f"{API_URL}/api/v1/images/eltoque/latest",
+                    timeout=15.0
                 )
                 img_data = img_response.json()
         except httpx.TimeoutException:
-            logger.warning("⏱️ Timeout getting image (attempt %d/3)", attempt + 1)
+            logger.warning("⏱️ Timeout obteniendo imagen (intento %d/3)", attempt + 1)
             if attempt < 2:
-                await asyncio.sleep(60)
+                await asyncio.sleep(30)
             continue
         except Exception:
-            logger.warning("⚠️ Error getting image (attempt %d/3)", attempt + 1, exc_info=True)
+            logger.warning("⚠️ Error obteniendo imagen (intento %d/3)", attempt + 1, exc_info=True)
             if attempt < 2:
-                await asyncio.sleep(60)
+                await asyncio.sleep(30)
             continue
-        
-        if not img_data.get("ok"):
-            logger.warning("⚠️ API error on attempt %d: %s", attempt + 1, img_data.get("error"))
+
+        if not img_data or not img_data.get("ok") or not img_data.get("data"):
+            logger.warning("⚠️ API sin imagen disponible (intento %d/3)", attempt + 1)
             if attempt < 2:
-                await asyncio.sleep(60)
+                await asyncio.sleep(30)
             continue
-        
-        # Verify image is from today (Cuba time)
-        captured_at_str = img_data["data"]["captured_at"]
-        captured_at = datetime.fromisoformat(captured_at_str.replace('Z', '+00:00'))
-        captured_at_cuba = captured_at.astimezone(CUBA_TZ)
-        image_date = captured_at_cuba.date()
-        
+
+        # Verificar que la imagen es de hoy (hora Cuba)
+        captured_at_str = img_data["data"].get("captured_at", "")
+        try:
+            from datetime import timezone as tz_mod
+            captured_at = datetime.fromisoformat(captured_at_str.replace("Z", "+00:00"))
+            captured_cuba = captured_at.astimezone(CUBA_TZ)
+            image_date = captured_cuba.date()
+        except Exception:
+            image_date = None
+
         if image_date == today_date:
-            logger.info("✅ Image from today %s obtained", today_date.strftime("%d/%m/%Y"))
+            logger.info("✅ Imagen de hoy %s obtenida", today_date.strftime("%d/%m/%Y"))
             break
         else:
-            logger.warning("⚠️ Image is from previous day (%s), waiting for today's image", 
-                          image_date.strftime("%Y-%m-%d"))
+            logger.warning(
+                "⚠️ Imagen disponible es de %s, aún no hay imagen de hoy. Reintentando...",
+                image_date.strftime("%Y-%m-%d") if image_date else "fecha desconocida"
+            )
             if attempt < 2:
                 await asyncio.sleep(60)
-            else:
-                # Last attempt - use what we have but log warning
-                logger.warning("⚠️ Using image from %s as fallback", image_date.strftime("%Y-%m-%d"))
-    
-    if not img_data or not img_data.get("ok"):
-        logger.error("❌ Failed to get image after 3 attempts, aborting job")
+
+    if not img_data or not img_data.get("ok") or not img_data.get("data"):
+        logger.error("❌ No se pudo obtener imagen tras 3 intentos, abortando job")
         return
     
     image_path = img_data["data"]["image_path"]
