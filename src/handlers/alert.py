@@ -20,6 +20,7 @@ from telegram.ext import ContextTypes
 from telegram.constants import ParseMode
 
 from src.stats_tracker import track_command_usage
+from src.handlers.p import get_crypto_client
 
 logger = logging.getLogger(__name__)
 
@@ -27,11 +28,6 @@ logger = logging.getLogger(__name__)
 def _get_api_client(context: ContextTypes.DEFAULT_TYPE):
     """Obtiene el api_client desde bot_data."""
     return context.application.bot_data.get("api_client")
-
-
-def _get_crypto_client(context: ContextTypes.DEFAULT_TYPE):
-    """Obtiene el crypto_client desde bot_data."""
-    return context.application.bot_data.get("crypto_client")
 
 
 def _format_price(price: float) -> str:
@@ -141,7 +137,7 @@ async def alert_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
     await update.message.reply_chat_action("typing")
     api = _get_api_client(context)
-    crypto = _get_crypto_client(context)
+    crypto = get_crypto_client()
 
     # Consultar precio actual para guardarlo como referencia de cruce
     current_price: float | None = None
