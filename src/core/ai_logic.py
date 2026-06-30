@@ -19,10 +19,11 @@ DEFAULT_MODEL = "llama-3.3-70b-versatile"  # Modelo válido en Groq
 DEFAULT_TIMEOUT = 15
 MAX_RETRIES = 3
 
-# ── Prompt Template ──────────────────────────────────────────────────────────
-CRYPTO_ANALYSIS_PROMPT = """Eres un Analista Experto en Inversiones Institucionales, Trading y criptomonedas.
-
-Tarea: Interpreta el reporte técnico a continuación y genera un análisis narrativo profesional en español.
+# ── Prompt Template — Análisis Técnico Profesional (/ta) ─────────────────────
+CRYPTO_ANALYSIS_PROMPT = """Eres un analista técnico senior con experiencia en mesas de trading
+institucionales. Tu trabajo es traducir un reporte de indicadores crudos en
+un análisis claro y accionable para un trader que ya conoce los conceptos
+básicos pero no tiene tiempo de interpretar cada número por separado.
 
 === REPORTE TÉCNICO ===
 {symbol} ({timeframe}) — Fuente: {source}
@@ -30,14 +31,25 @@ Tarea: Interpreta el reporte técnico a continuación y genera un análisis narr
 {report_text}
 === FIN REPORTE ===
 
-INSTRUCCIONES:
-1. Analiza y tendencia: Resume el escenario actual y la tendencia dominante.
-2. Fuerza de la tendencia: Evalúa si es fuerte, moderada o débil.
-3. Osciladores y momentum: Interpreta RSI, MFI, CCI, ADX, WILLR, OBV.
-4. Niveles de soporte y resistencia: Destaca los niveles clave.
-5. Riesgo y oportunidad: Identifica riesgos y oportunidades concretas.
-6. Recomendación: Acción sugerida (COMPRAR/VENDER/MANTENER) con justificación.
-7. Conclusión: Resumen ejecutivo en 1-2 líneas.
+CÓMO INTERPRETAR LOS DATOS:
+- RSI: >70 sobrecompra, <30 sobreventa, 45-55 zona neutral/indecisión.
+- MFI: similar al RSI pero pondera volumen; útil para confirmar o contradecir al RSI.
+- CCI: >100 momentum alcista fuerte, <-100 momentum bajista fuerte.
+- ADX: >25 tendencia con fuerza real, <20 mercado lateral/sin tendencia clara.
+- Williams %R (WR): valores cercanos a 0 sugieren sobrecompra, cercanos a -100 sobreventa.
+- OBV: confirma o diverge del movimiento de precio según si acompaña o no la tendencia.
+- MACD histograma: positivo y creciente refuerza la tendencia alcista; negativo y decreciente, la bajista.
+- Pivotes (R1-R3, S1-S3): zonas donde el precio históricamente reacciona, no garantías.
+- Si dos o más osciladores se contradicen entre sí, dilo explícitamente — es información valiosa, no un error a ocultar.
+
+TAREA — analiza el reporte y cubre estos siete puntos, en este orden:
+1. Análisis y tendencia: contexto general y dirección dominante del precio.
+2. Fuerza de la tendencia: usa el ADX y el score compra/venta para calificarla (fuerte/moderada/débil) y justifica por qué.
+3. Osciladores y momentum: interpreta RSI, MFI, CCI, WR y OBV en conjunto — señala si confirman o contradicen la tendencia.
+4. Niveles de soporte y resistencia: cuáles son los más relevantes ahora mismo y qué pasaría si se rompen.
+5. Riesgo y oportunidad: qué podría invalidar la lectura actual, y dónde está el mejor punto de entrada/salida si la tendencia se mantiene.
+6. Recomendación: una acción concreta (COMPRAR / VENDER / MANTENER) con la justificación más fuerte que la respalde, no una lista de razones.
+7. Conclusión: una o dos frases que resuman el panorama completo.
 
 FORMATO EXACTO DE SALIDA (usa estos títulos con asteriscos exactamente como se muestra):
 📚 *Análisis y Tendencia*
@@ -62,13 +74,14 @@ FORMATO EXACTO DE SALIDA (usa estos títulos con asteriscos exactamente como se 
 [Texto breve]
 
 REGLAS:
-- Base exclusivamente en los datos proporcionados (no inventes números).
+- Basa el análisis exclusivamente en los datos del reporte (no inventes cifras ni niveles que no aparezcan ahí).
+- Sé directo y específico: evita relleno como "es importante monitorear el mercado" sin aportar nada concreto.
 - Máximo 1200 caracteres en total (aproximadamente 250-300 palabras).
-- Usa emojis moderadamente (📈📉⚠️✅).
-- No repitas valores numéricos ya mostrados en el reporte.
-- NO uses otros formatos de Markdown (como _italic_, `code`, enlaces, etc.). Solo los títulos con *...* que están indicados.
-- Evita caracteres especiales que puedan romper el parseo de Telegram (como ~, `, _, [], () no formateados).
-- Incluye al final el disclaimer: "*Análisis generado por IA — no es asesoramiento financiero.*"
+- Usa emojis moderadamente, solo donde aporten claridad (📈📉⚠️✅).
+- No repitas los valores numéricos exactos ya mostrados en el reporte; interprétalos en vez de citarlos de nuevo.
+- Formato de texto permitido: SOLO asteriscos *así* para los siete títulos indicados arriba. No uses guion bajo, backticks, enlaces ni ningún otro formato Markdown.
+- No uses los caracteres . ! - dentro de listas o numeración manual (1. 2. 3.) en el cuerpo del texto, ya que rompen el parseo; si necesitas enumerar, usa palabras ("primero", "en segundo lugar") en vez de números con punto.
+- No incluyas tú mismo el disclaimer final — se añade automáticamente después de tu respuesta.
 """
 
 
@@ -137,20 +150,46 @@ después de tu respuesta. Termina tu texto justo después de la conclusión.
 MAX_RESPONSE_CHARS = 3500  # Límite seguro para Telegram (deja espacio para encabezado)
 
 
-def _escape_telegram_markdown(text: str) -> str:
-    """
-    Escapa caracteres especiales de Telegram MarkdownV2,
-    preservando los asteriscos (*) que se usan para negrita en los títulos.
+def _sanitize_telegram_markdown_v1(text: str) -> str:
+    """Sanea texto para Telegram Markdown v1 (legacy), preservando los
+    asteriscos *así* que usamos para los títulos en negrita.
+
+    IMPORTANTE: el bot envía estos mensajes con ParseMode.MARKDOWN (v1),
+    NO MarkdownV2. En v1 caracteres como '.', '!', '-' son texto normal y
+    NO deben escaparse con backslash — escaparlos (como hacía la versión
+    anterior de esta función) produce los "\\." literales visibles en el
+    mensaje final, que es exactamente el bug que se corrige aquí.
+
+    Lo único que realmente rompe el parseo en Markdown v1 es un número
+    impar de '_', '*' o '`' sueltos en el texto (abren un span de formato
+    que nunca se cierra). Esta función neutraliza esos casos sin tocar el
+    resto de la puntuación.
+
+    Args:
+        text: Texto crudo devuelto por el modelo.
+
+    Returns:
+        Texto seguro para enviar con parse_mode=ParseMode.MARKDOWN.
     """
     if not text:
         return ""
-    # Escapar backslash primero
-    text = text.replace("\\", "\\\\")
-    # Caracteres que deben escaparse en MarkdownV2 (excepto asterisco)
-    specials = r'_`[]()~>#+-=|{}.!'
-    for ch in specials:
-        text = text.replace(ch, f'\\{ch}')
-    return text
+
+    # Backticks y guion bajo: no se usan intencionalmente en este prompt,
+    # así que cualquier aparición es accidental — se neutralizan reemplazándolos
+    # por su equivalente visual sin función de formato.
+    text = text.replace("`", "'")
+    text = text.replace("_", "-")
+
+    # Asteriscos: se usan SOLO para los 7 títulos "📚 *Título*". Cualquier
+    # asterisco que no forme parte de un título es ruido del modelo (p.ej.
+    # "**énfasis**" en vez de un título) y puede dejar un número impar de
+    # '*', rompiendo el formato de todo lo que sigue. Se cuenta y, si es
+    # impar, se elimina el último asterisco suelto para balancear.
+    if text.count("*") % 2 != 0:
+        idx = text.rfind("*")
+        text = text[:idx] + text[idx + 1:]
+
+    return text.strip()
 
 
 def _truncate_smart(text: str, max_chars: int = MAX_RESPONSE_CHARS) -> str:
@@ -257,13 +296,19 @@ async def get_groq_crypto_analysis(
             prompt_tokens + completion_tokens, elapsed,
         )
 
-        # Escape and truncate before returning
-        content = _escape_telegram_markdown(content)
+        # Sanear (Markdown v1 — ver _sanitize_telegram_markdown_v1) y truncar
+        content = _sanitize_telegram_markdown_v1(content)
         content = _truncate_smart(content, MAX_RESPONSE_CHARS)
 
-        # Append disclaimer if not already present
-        if "Análisis generado por IA" not in content:
-            content += "\n\n*Análisis generado por IA — no es asesoramiento financiero.*"
+        # Quitar cualquier disclaimer que el modelo haya añadido por su cuenta
+        for variant in (
+            "Análisis generado por IA — no es asesoramiento financiero.",
+            "*Análisis generado por IA — no es asesoramiento financiero.*",
+        ):
+            content = content.replace(variant, "").strip()
+
+        # Disclaimer siempre añadido por el código, con salto de línea propio
+        content += "\n\n*Análisis generado por IA — no es asesoramiento financiero.*"
 
         return content
 
