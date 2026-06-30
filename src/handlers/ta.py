@@ -420,7 +420,7 @@ async def ai_analysis_callback(update: Update, context: ContextTypes.DEFAULT_TYP
 
         # Send AI analysis as a reply
         header = (
-            f"🤖 *BitBread IA* (_Experimental_)\n"
+            f"🤖 *Panorama IA* (_Experimental_)\n"
             f"{'📡' if source == 'TV' else '📊'} *{source}* | Moneda: *{full_symbol}* ({timeframe})\n"
             f"—————————————————\n"
         )
