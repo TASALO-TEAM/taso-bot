@@ -25,13 +25,19 @@ MINIAPP_URL = "https://tasalo.duckdns.org/miniapp"
 
 
 def build_start_keyboard() -> InlineKeyboardMarkup:
-    """Construye el teclado inline con 5 botones para comandos + Web App.
+    """Construye el teclado inline con botones de acceso rápido + Web App.
 
     Distribución:
-        [📊 Tasalo] [📈 Toque]
-        [🏛 BCC    ] [🏢 CADECA]
-        [📸 ToqueImg]
+        [📊 Tasalo ] [📈 Toque  ]
+        [🏛 BCC    ] [🏢 CADECA ]
+        [💰 Precio Cripto /p]
+        [📊 Análisis Técnico /ta]
+        [🔔 Alertas de Precio /alert]
         [🌐 Abrir TASALO Web]
+
+    Nota: el botón de ToqueImg fue retirado temporalmente del /start
+    mientras esa función está en mantenimiento — el comando /toqueimg,
+    su handler y callbacks siguen intactos y operativos vía comando.
 
     Returns:
         InlineKeyboardMarkup con los botones de acción
@@ -51,10 +57,16 @@ def build_start_keyboard() -> InlineKeyboardMarkup:
         ],
         [
             InlineKeyboardButton(
-                "📸 ToqueImg",
-                callback_data="start_toqueimg",
+                "💰 Precio Cripto /p",
+                callback_data="start_p_help",
                 style="primary",  # Azul - feature destacada
             ),
+        ],
+        [
+            InlineKeyboardButton("📊 Análisis Técnico /ta", callback_data="start_ta_help"),
+        ],
+        [
+            InlineKeyboardButton("🔔 Alertas de Precio /alert", callback_data="start_alert_help"),
         ],
         [
             InlineKeyboardButton("🌐 Abrir TASALO Web", web_app=WebAppInfo(url=MINIAPP_URL)),
@@ -159,6 +171,49 @@ async def start_button_callback(update: Update, context: ContextTypes.DEFAULT_TY
         answer_ms = (time.time() - answer_start) * 1000
         logger.debug("Callback answered for user %d (%.0fms)", user_id, answer_ms)
 
+        # Botones de ayuda para comandos que requieren argumentos (/p, /ta,
+        # /alert) — no consultan la API de tasas, solo muestran cómo usarlos.
+        help_texts = {
+            "p_help": (
+                "💰 *Precio de Criptomonedas — /p*\n\n"
+                "Consulta el precio en tiempo real de cualquier criptomoneda, "
+                "con datos de CoinMarketCap y CoinGecko combinados.\n\n"
+                "Uso: `/p <MONEDA>`\n"
+                "Ejemplos:\n"
+                "`/p BTC`\n"
+                "`/p ETH`\n"
+                "`/p SOL`"
+            ),
+            "ta_help": (
+                "📊 *Análisis Técnico — /ta*\n\n"
+                "Genera un análisis técnico completo con indicadores (RSI, MFI, "
+                "CCI, ADX, MACD), niveles de soporte/resistencia y un análisis "
+                "narrativo con IA.\n\n"
+                "Uso: `/ta <SYMBOL> [PAR] [TIME]`\n"
+                "Ejemplos:\n"
+                "`/ta BTC`\n"
+                "`/ta ETH USDT 4h`\n"
+                "`/ta SOL USDT 1d`"
+            ),
+            "alert_help": (
+                "🔔 *Alertas de Precio — /alert*\n\n"
+                "Crea alertas para que el bot te avise automáticamente cuando "
+                "una criptomoneda alcance el precio que definas.\n\n"
+                "Usa `/alert` para ver el menú de gestión de tus alertas "
+                "(crear, ver y eliminar)."
+            ),
+        }
+        if command in help_texts:
+            await query.message.reply_text(
+                help_texts[command], parse_mode="Markdown"
+            )
+            duration_ms = (time.time() - cb_start) * 1000
+            logger.info(
+                "✅ Help text for '%s' sent to user %d (@%s) (%.0fms)",
+                command, user_id, username, duration_ms,
+            )
+            return
+
         # Obtener cliente API
         api_client: TasaloApiClient = context.bot_data.get("api_client")
         if not api_client:
@@ -203,7 +258,6 @@ async def start_button_callback(update: Update, context: ContextTypes.DEFAULT_TY
             "toque": build_toque_new_message,
             "bcc": build_bcc_only_message,
             "cadeca": build_cadeca_only_message,
-            "toqueimg": _handle_toqueimg_start,
         }
 
         build_func = build_funcs.get(command)
@@ -212,22 +266,6 @@ async def start_button_callback(update: Update, context: ContextTypes.DEFAULT_TY
                 "❌ Build function not found for button '%s', user %d",
                 command,
                 user_id,
-            )
-            return
-
-        # Manejar toqueimg diferente (envía imagen, no texto)
-        if command == "toqueimg":
-            img_start = time.time()
-            await build_func(context, query)
-            img_ms = (time.time() - img_start) * 1000
-
-            duration_ms = (time.time() - cb_start) * 1000
-            logger.info(
-                "✅ ToqueImg sent for user %d (@%s) [render=%.0fms, total=%.0fms]",
-                user_id,
-                username,
-                img_ms,
-                duration_ms,
             )
             return
 
