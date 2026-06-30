@@ -84,15 +84,35 @@ class CryptoApiClient:
             logger.debug("CryptoCompare HL falló para %s: %s", symbol, e)
             return 0.0, 0.0
 
-    async def get_high_low_24h(self, symbol: str) -> tuple[float, float]:
-        """Obtener High/Low 24h con fallback cascada: Binance → CryptoCompare."""
+    async def get_high_low_24h(self, symbol: str, coingecko_fallback: Optional[Dict[str, Any]] = None) -> tuple[float, float]:
+        """Obtener High/Low 24h con fallback cascada: Binance → CryptoCompare → CoinGecko.
+
+        Args:
+            symbol: Símbolo de la moneda (ej: BTC)
+            coingecko_fallback: Datos de enriquecimiento de CoinGecko ya obtenidos
+                (evita una llamada HTTP extra); si trae high_24h/low_24h válidos
+                se usan como último recurso cuando Binance y CC fallan.
+        """
         # Intentar Binance primero (rápido)
         high, low = await self._get_high_low_binance(symbol)
         if high > 0:
             return high, low
 
         # Fallback CryptoCompare
-        return await self._get_high_low_cryptocompare(symbol)
+        high, low = await self._get_high_low_cryptocompare(symbol)
+        if high > 0:
+            return high, low
+
+        # Último fallback: CoinGecko (útil para monedas no listadas en Binance/CC,
+        # p.ej. HIVE, HBD u otros tokens de nicho que sí tiene CoinGecko)
+        if coingecko_fallback:
+            cg_high = coingecko_fallback.get("high_24h") or 0
+            cg_low = coingecko_fallback.get("low_24h") or 0
+            if cg_high > 0:
+                logger.debug("High/Low 24h de %s obtenido desde CoinGecko (fallback final)", symbol)
+                return cg_high, cg_low
+
+        return 0.0, 0.0
 
     # ── Datos principales (CoinMarketCap) ──
 
@@ -212,8 +232,8 @@ class CryptoApiClient:
                 price_eth = data_eth.get("quote", {}).get("USD", {}).get("price", 0)
                 price_btc = data_btc.get("quote", {}).get("USD", {}).get("price", 0)
 
-                # Obtener High/Low (Binance → CC fallback)
-                high_24h, low_24h = await self.get_high_low_24h(symbol_upper)
+                # Obtener High/Low (Binance → CC → CoinGecko fallback)
+                high_24h, low_24h = await self.get_high_low_24h(symbol_upper, coingecko_fallback=coingecko_data)
 
                 result = {
                     "symbol": data_moneda["symbol"],
@@ -253,9 +273,9 @@ class CryptoApiClient:
                 if price_usd == 0:
                     return None
 
-                # Bug fix: usar Binance para High/Low también en path CC
-                # (CC da HIGH24HOUR como fallback si Binance falla)
-                high_24h, low_24h = await self.get_high_low_24h(symbol_upper)
+                # Bug fix: usar Binance → CC → CoinGecko también en path CC
+                # (HIGH24HOUR de CC mismo solo como último recurso final)
+                high_24h, low_24h = await self.get_high_low_24h(symbol_upper, coingecko_fallback=coingecko_data)
                 if high_24h == 0:
                     high_24h = float(symbol_data.get("HIGH24HOUR", 0))
                     low_24h = float(symbol_data.get("LOW24HOUR", 0))

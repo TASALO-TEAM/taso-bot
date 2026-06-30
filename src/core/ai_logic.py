@@ -72,6 +72,57 @@ REGLAS:
 """
 
 
+# ── Prompt Template — Spotlight de Mercado (/p) ──────────────────────────────
+PRICE_SPOTLIGHT_PROMPT = """Eres un analista profesional de criptomonedas.
+
+Tu tarea NO es hacer un análisis técnico tradicional.
+
+Debes generar un comentario estilo "Spotlight" similar al que aparece en CoinMarketCap.
+
+Recibirás datos de una criptomoneda provenientes de CoinMarketCap y/o CoinGecko.
+
+=== DATOS DE MERCADO ===
+{market_data_text}
+=== FIN DATOS ===
+
+Analiza:
+- comportamiento del precio
+- variación 1h, 24h y 7d (si está disponible)
+- capitalización de mercado
+- volumen
+- distancia respecto al ATH (si está disponible)
+- oferta circulante y máxima (si está disponible)
+- sentimiento del mercado (si está disponible)
+- posición en el ranking
+- cualquier otro dato disponible
+
+No inventes información ni uses datos que no aparezcan arriba.
+
+No menciones indicadores técnicos como RSI, MACD o medias móviles porque no están disponibles.
+
+Explica qué significan los datos para un inversor promedio.
+
+El análisis debe sentirse humano y conversacional.
+
+Debe responder preguntas implícitas como:
+¿Qué está pasando? ¿Por qué es importante? ¿Qué transmite el mercado?
+¿Qué podría significar para las próximas sesiones?
+
+No hagas predicciones absolutas. Utiliza expresiones como: podría indicar...,
+sugiere..., parece reflejar..., el mercado muestra..., los inversores parecen...
+
+Evita lenguaje exagerado. No uses emojis dentro de los párrafos.
+
+La respuesta debe ocupar entre 120 y 180 palabras, en español.
+
+Termina siempre con una conclusión breve de una sola frase.
+
+Finaliza exactamente con esta línea (sin modificarla):
+"Análisis generado por IA. No constituye asesoramiento financiero."
+"""
+
+
+
 # ── Utilities ─────────────────────────────────────────────────────────────────
 MAX_RESPONSE_CHARS = 3500  # Límite seguro para Telegram (deja espacio para encabezado)
 
@@ -226,5 +277,180 @@ async def get_groq_crypto_analysis(
 
     except Exception as e:
         logger.exception("Unexpected error in get_groq_crypto_analysis")
+        return f"⚠️ Error inesperado: {e}"
+
+
+# ── Public API — Price Spotlight (/p) ───────────────────────────────────────
+
+def _format_price_spotlight_data(price_data: dict) -> str:
+    """Convierte el dict de get_crypto_data() en texto plano para el prompt.
+
+    Solo incluye campos presentes y con valor (evita "None" o "N/A" sueltos
+    que podrían confundir al modelo y hacerle inventar contexto).
+
+    Args:
+        price_data: Dict devuelto por CryptoApiClient.get_crypto_data()
+
+    Returns:
+        Texto formateado en líneas "Etiqueta: valor" listo para el prompt.
+    """
+    lines = []
+
+    symbol = price_data.get("symbol", "N/A")
+    price = price_data.get("price")
+    source = price_data.get("primary_source", "desconocida")
+
+    lines.append(f"Símbolo: {symbol}")
+    lines.append(f"Fuente principal: {source}")
+    if price is not None:
+        lines.append(f"Precio actual: ${price:,.4f} USD")
+
+    high_24h = price_data.get("high_24h") or 0
+    low_24h = price_data.get("low_24h") or 0
+    if high_24h > 0:
+        lines.append(f"Máximo 24h: ${high_24h:,.4f}")
+        lines.append(f"Mínimo 24h: ${low_24h:,.4f}")
+
+    pct_1h = price_data.get("percent_change_1h")
+    pct_24h = price_data.get("percent_change_24h")
+    pct_7d = price_data.get("percent_change_7d")
+    if pct_1h is not None:
+        lines.append(f"Variación 1h: {pct_1h:+.2f}%")
+    if pct_24h is not None:
+        lines.append(f"Variación 24h: {pct_24h:+.2f}%")
+    if pct_7d is not None:
+        lines.append(f"Variación 7d: {pct_7d:+.2f}%")
+
+    rank = price_data.get("market_cap_rank") or 0
+    mcap = price_data.get("market_cap") or 0
+    volume = price_data.get("volume_24h") or 0
+    if rank > 0:
+        lines.append(f"Ranking por capitalización: #{rank}")
+    if mcap > 0:
+        lines.append(f"Capitalización de mercado: ${mcap:,.0f} USD")
+    if volume > 0:
+        lines.append(f"Volumen 24h: ${volume:,.0f} USD")
+
+    enrichment = price_data.get("enrichment") or {}
+
+    ath = enrichment.get("ath")
+    ath_change_pct = enrichment.get("ath_change_pct")
+    if ath:
+        lines.append(f"ATH (máximo histórico): ${ath:,.4f} USD")
+        if ath_change_pct is not None:
+            lines.append(f"Distancia respecto al ATH: {ath_change_pct:.2f}%")
+
+    atl = enrichment.get("atl")
+    if atl is not None:
+        lines.append(f"ATL (mínimo histórico): ${atl:,.4f} USD")
+
+    circulating = enrichment.get("circulating_supply")
+    max_supply = enrichment.get("max_supply")
+    total_supply = enrichment.get("total_supply")
+    if circulating:
+        lines.append(f"Oferta circulante: {circulating:,.0f}")
+    if max_supply:
+        lines.append(f"Oferta máxima: {max_supply:,.0f}")
+    elif total_supply:
+        lines.append(f"Oferta total: {total_supply:,.0f}")
+
+    category = enrichment.get("category")
+    if category:
+        lines.append(f"Categoría del proyecto: {category}")
+
+    sentiment = enrichment.get("sentiment_up_pct")
+    if sentiment is not None:
+        lines.append(f"Sentimiento positivo de la comunidad: {sentiment:.1f}%")
+
+    return "\n".join(lines)
+
+
+async def get_groq_price_spotlight(price_data: dict) -> str:
+    """Genera un comentario "Spotlight" de mercado (estilo CoinMarketCap)
+    para el comando /p, a partir de los datos ya obtenidos de CMC/CoinGecko.
+
+    A diferencia de get_groq_crypto_analysis() (usado en /ta), este NO hace
+    análisis técnico: es un comentario narrativo y conversacional pensado
+    para inversores promedio, basado solo en datos de mercado fundamentales
+    (precio, variación, capitalización, ATH/ATL, supply, sentiment, ranking).
+
+    Args:
+        price_data: Dict devuelto por CryptoApiClient.get_crypto_data()
+
+    Returns:
+        Texto del análisis (español) o mensaje de error legible.
+    """
+    if not settings.groq_api_key:
+        logger.error("GROQ_API_KEY not configured")
+        return "⚠️ *Error:* Variable de entorno GROQ_API_KEY no configurada."
+
+    symbol = price_data.get("symbol", "N/A")
+    market_data_text = _format_price_spotlight_data(price_data)
+
+    prompt = PRICE_SPOTLIGHT_PROMPT.format(market_data_text=market_data_text)
+
+    payload = {
+        "model": DEFAULT_MODEL,
+        "messages": [
+            {"role": "system", "content": "Eres un analista de mercado de criptomonedas que escribe comentarios breves, claros y conversacionales en español, sin tecnicismos de trading."},
+            {"role": "user", "content": prompt},
+        ],
+        "temperature": 0.7,
+        "max_tokens": 512,
+    }
+
+    try:
+        start = asyncio.get_event_loop().time()
+        data = await _call_groq_async(payload)
+        elapsed = asyncio.get_event_loop().time() - start
+
+        choices = data.get("choices", [])
+        if not choices:
+            logger.warning("Groq (spotlight) returned empty choices for %s", symbol)
+            return "⚠️ La IA no generó respuesta (respuesta vacía)."
+
+        content = choices[0].get("message", {}).get("content", "").strip()
+        if not content:
+            logger.warning("Groq (spotlight) returned empty content for %s", symbol)
+            return "⚠️ La IA devolvió contenido vacío."
+
+        usage = data.get("usage", {})
+        prompt_tokens = usage.get("prompt_tokens", 0)
+        completion_tokens = usage.get("completion_tokens", 0)
+        logger.info(
+            "✅ Groq price spotlight OK for %s — tokens: p=%d c=%d total=%d (%.1fs)",
+            symbol, prompt_tokens, completion_tokens,
+            prompt_tokens + completion_tokens, elapsed,
+        )
+
+        # El prompt no usa Markdown de Telegram (sin *titulos*), así que no
+        # se aplica _escape_telegram_markdown aquí — solo truncado de seguridad.
+        content = _truncate_smart(content, MAX_RESPONSE_CHARS)
+
+        if "Análisis generado por IA" not in content:
+            content += "\n\nAnálisis generado por IA. No constituye asesoramiento financiero."
+
+        return content
+
+    except httpx.HTTPStatusError as e:
+        status = e.response.status_code if e.response else "??"
+        logger.error("Groq HTTP error %s (spotlight) for %s: %s", status, symbol, e)
+        if status == 401:
+            return "⚠️ Error de autenticación con la IA (API key inválida)."
+        elif status == 429:
+            return "⚠️ Límite de tasa excedido en la IA. Intenta en 1 minuto."
+        else:
+            return f"⚠️ Error HTTP {status} de la IA. Intenta más tarde."
+
+    except httpx.TimeoutException:
+        logger.error("Groq timeout (spotlight) for %s", symbol)
+        return "⚠️ La IA tardó demasiado en responder. Intenta de nuevo."
+
+    except httpx.NetworkError:
+        logger.error("Groq network error (spotlight) for %s", symbol)
+        return "⚠️ Error de red al contactar la IA."
+
+    except Exception as e:
+        logger.exception("Unexpected error in get_groq_price_spotlight")
         return f"⚠️ Error inesperado: {e}"
 

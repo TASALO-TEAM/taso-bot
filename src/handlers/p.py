@@ -2,9 +2,11 @@
 """Handler para comando /p — consulta de precios de criptomonedas.
 
 Implementa la funcionalidad de BBAlert /p en taso-bot:
-- Consulta CoinMarketCap (primario) o CryptoCompare (fallback)
-- Muestra precio, high/low 24h, cambios %, precio en ETH/BTC
-- Botones de refresh y análisis técnico
+- Consulta CoinMarketCap (primario) o CryptoCompare/CoinGecko (fallback)
+- Muestra precio, high/low 24h, cambios %, precio en ETH/BTC y, si hay
+  datos de CoinGecko, el bloque extendido (ATH/ATL, supply, categoría)
+  siempre visible en el mismo mensaje (sin botón "Ver más")
+- Botones de refresh, análisis técnico y panorama de IA
 """
 
 import asyncio
@@ -15,8 +17,9 @@ from telegram.ext import ContextTypes
 from telegram.constants import ParseMode
 
 from src.crypto_client import CryptoApiClient
-from src.formatters import build_crypto_message, build_crypto_extended_block
+from src.formatters import build_crypto_message
 from src.stats_tracker import track_command_usage
+from src.core.ai_logic import get_groq_price_spotlight
 
 logger = logging.getLogger(__name__)
 
@@ -58,119 +61,88 @@ async def p_refresh_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await p_command(update, context)
 
 
-async def p_more_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Callback para botón 📋 Ver más — expande el bloque de CoinGecko.
+async def p_ai_panorama_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Callback para botón 🌍 Panorama IA — genera comentario tipo Spotlight.
 
-    callback_data formato: "p_more|{SYMBOL}"
+    callback_data formato: "ai_panorama|{SYMBOL}"
 
-    Vuelve a consultar los datos (no se persisten entre callbacks) para
-    construir el mensaje completo con el bloque extendido + botón "Ver menos".
-    Si CoinGecko ya no tiene datos de enriquecimiento al momento del click
-    (p.ej. la API falló), informa al usuario sin romper el mensaje base.
+    Vuelve a consultar los datos (no se persisten entre callbacks) y los
+    envía a Groq con el prompt de "Spotlight de mercado" (diferente del
+    análisis técnico de /ta). El resultado se envía como mensaje nuevo en
+    respuesta al mensaje de /p, igual que hace /ta con su botón de IA.
     """
     query = update.callback_query
     user_id = query.from_user.id
     callback_data = query.data
 
-    symbol = callback_data.replace("p_more|", "").upper()
+    symbol = callback_data.replace("ai_panorama|", "").upper()
     if not symbol:
         await query.answer("❌ Símbolo inválido", show_alert=True)
         return
 
-    logger.info("📋 /p ver más callback: símbolo '%s' por usuario %d", symbol, user_id)
+    logger.info("🌍 /p panorama IA callback: símbolo '%s' por usuario %d", symbol, user_id)
+
+    await query.answer("🧠 Analizando el mercado...")
+    await query.message.reply_chat_action("typing")
 
     client = get_crypto_client()
     try:
         datos = await client.get_crypto_data(symbol)
     except Exception as e:
-        logger.error("❌ Error en p_more_callback para %s: %s", symbol, e, exc_info=True)
-        await query.answer("⚠️ Error obteniendo info adicional", show_alert=True)
-        return
-
-    if not datos:
-        await query.answer("⚠️ Ya no se pueden obtener datos", show_alert=True)
-        return
-
-    enrichment = datos.get("enrichment")
-    if not enrichment:
-        await query.answer("ℹ️ No hay info adicional disponible para esta moneda", show_alert=True)
-        return
-
-    mensaje_base = build_crypto_message(datos)
-    bloque_extra = build_crypto_extended_block(enrichment)
-    mensaje_completo = f"{mensaje_base}\n{bloque_extra}"
-
-    keyboard = _build_keyboard(symbol, has_enrichment=True, expanded=True)
-
-    try:
-        await query.edit_message_text(
-            mensaje_completo,
+        logger.error("❌ Error obteniendo datos para panorama IA de %s: %s", symbol, e, exc_info=True)
+        await query.message.reply_text(
+            "⚠️ No se pudieron obtener datos actualizados para el análisis. Intenta de nuevo.",
             parse_mode=ParseMode.MARKDOWN,
-            reply_markup=keyboard,
         )
-    except Exception as e:
-        if "Message is not modified" in str(e):
-            await query.answer("✅ Ya estás viendo la info completa")
-        else:
-            logger.error("❌ Error expandiendo /p para %s: %s", symbol, e, exc_info=True)
-            await query.answer("⚠️ Error mostrando info adicional", show_alert=True)
-
-
-async def p_less_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Callback para botón 🔼 Ver menos — vuelve al mensaje compacto.
-
-    callback_data formato: "p_less|{SYMBOL}"
-    """
-    query = update.callback_query
-    user_id = query.from_user.id
-    callback_data = query.data
-
-    symbol = callback_data.replace("p_less|", "").upper()
-    if not symbol:
-        await query.answer("❌ Símbolo inválido", show_alert=True)
         return
 
-    logger.info("🔼 /p ver menos callback: símbolo '%s' por usuario %d", symbol, user_id)
-
-    client = get_crypto_client()
-    try:
-        datos = await client.get_crypto_data(symbol)
-    except Exception as e:
-        logger.error("❌ Error en p_less_callback para %s: %s", symbol, e, exc_info=True)
-        await query.answer("⚠️ Error actualizando", show_alert=True)
-        return
-
-    if not datos:
-        await query.answer("⚠️ Ya no se pueden obtener datos", show_alert=True)
-        return
-
-    mensaje = build_crypto_message(datos)
-    keyboard = _build_keyboard(symbol, has_enrichment=bool(datos.get("enrichment")), expanded=False)
-
-    try:
-        await query.edit_message_text(
-            mensaje,
+    if not datos or datos.get("not_found"):
+        await query.message.reply_text(
+            f"⚠️ No hay datos suficientes de *{symbol}* para generar el panorama.",
             parse_mode=ParseMode.MARKDOWN,
-            reply_markup=keyboard,
         )
+        return
+
+    try:
+        spotlight = await get_groq_price_spotlight(datos)
     except Exception as e:
-        if "Message is not modified" in str(e):
-            await query.answer("✅ Vista compacta")
-        else:
-            logger.error("❌ Error colapsando /p para %s: %s", symbol, e, exc_info=True)
-            await query.answer("⚠️ Error actualizando vista", show_alert=True)
+        logger.exception("❌ Error inesperado generando panorama IA para %s: %s", symbol, e)
+        await query.message.reply_text(
+            "❌ Error inesperado al generar el panorama IA. Intenta de nuevo en unos minutos.",
+            parse_mode=ParseMode.MARKDOWN,
+        )
+        return
+
+    header = f"🌍 *Panorama IA — {symbol}*\n{'—' * 20}\n"
+
+    try:
+        await query.message.reply_text(
+            header + spotlight,
+            parse_mode=ParseMode.MARKDOWN,
+            reply_to_message_id=query.message.message_id,
+        )
+        logger.info("✅ Panorama IA entregado a usuario %d para %s", user_id, symbol)
+    except Exception as e:
+        # Fallback sin Markdown si el contenido generado por la IA rompe el parseo
+        logger.warning("⚠️ Fallo enviando panorama IA con Markdown para %s: %s", symbol, e)
+        try:
+            await query.message.reply_text(
+                header.replace("*", "") + spotlight,
+                reply_to_message_id=query.message.message_id,
+            )
+        except Exception as e2:
+            logger.error("❌ Error enviando panorama IA (fallback) para %s: %s", symbol, e2, exc_info=True)
+            await query.message.reply_text("❌ Error mostrando el panorama IA. Intenta de nuevo.")
 
 
-def _build_keyboard(symbol: str, has_enrichment: bool, expanded: bool) -> InlineKeyboardMarkup:
-    """Construye el teclado inline de /p según el estado de expansión.
+def _build_keyboard(symbol: str) -> InlineKeyboardMarkup:
+    """Construye el teclado inline de /p.
 
     Args:
         symbol: Símbolo de la moneda (ej: BTC)
-        has_enrichment: True si hay datos de CoinGecko disponibles
-        expanded: True si el bloque extendido ya está visible
 
     Returns:
-        InlineKeyboardMarkup con botones Refresh + TA + (Ver más/Ver menos)
+        InlineKeyboardMarkup con botones Refresh + TA + Panorama IA
     """
     btn_refresh = InlineKeyboardButton(
         f"🔄 Actualizar /p {symbol}",
@@ -180,21 +152,12 @@ def _build_keyboard(symbol: str, has_enrichment: bool, expanded: bool) -> Inline
         "📊 Ver Análisis Técnico (4H)",
         callback_data=f"ta_quick|{symbol}|4h"  # Enruta a ta.ta_quick_callback
     )
+    btn_ai_panorama = InlineKeyboardButton(
+        "🌍 Panorama IA",
+        callback_data=f"ai_panorama|{symbol}"
+    )
 
-    rows = [[btn_refresh], [btn_ta]]
-
-    if has_enrichment:
-        if expanded:
-            btn_toggle = InlineKeyboardButton(
-                "🔼 Ver menos", callback_data=f"p_less|{symbol}"
-            )
-        else:
-            btn_toggle = InlineKeyboardButton(
-                "📋 Ver más", callback_data=f"p_more|{symbol}"
-            )
-        rows.append([btn_toggle])
-
-    return InlineKeyboardMarkup(rows)
+    return InlineKeyboardMarkup([[btn_refresh], [btn_ta], [btn_ai_panorama]])
 
 
 # ── Comando principal ──
@@ -208,8 +171,9 @@ async def p_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     Lógica:
     1. Validar que se proporcionó símbolo
     2. Mostrar "escribiendo..." para feedback visual
-    3. Obtener datos (CoinMarketCap → fallback CryptoCompare)
-    4. Formatear y enviar mensaje Markdown con botones inline
+    3. Obtener datos (CoinMarketCap → fallback CryptoCompare/CoinGecko)
+    4. Formatear (mensaje completo, con bloque extendido si aplica) y
+       enviar con botones inline
     """
     cmd_start = time.time()
     user_id = update.effective_user.id
@@ -299,7 +263,7 @@ async def p_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         symbol, datos.get("price", 0), fetch_duration_ms
     )
 
-    # 4. Construir mensaje con formatter
+    # 4. Construir mensaje con formatter (siempre completo, sin "Ver más")
     try:
         mensaje = build_crypto_message(datos)
     except Exception as e:
@@ -314,13 +278,8 @@ async def p_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
 
-    # 5. Construir teclado inline (Refresh + TA + Ver más si hay datos CoinGecko)
-    # Nota: usa namespace "ta_quick" para que callback_router lo enrute directamente
-    keyboard = _build_keyboard(
-        symbol,
-        has_enrichment=bool(datos.get("enrichment")),
-        expanded=False,
-    )
+    # 5. Construir teclado inline (Refresh + TA + Panorama IA)
+    keyboard = _build_keyboard(symbol)
 
     # 6. Enviar/editar mensaje
     send_start = time.time()
@@ -373,3 +332,4 @@ async def p_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     asyncio.create_task(
         track_command_usage(update, context, "/p", source=symbol, success=True)
     )
+

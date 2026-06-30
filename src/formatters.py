@@ -1203,28 +1203,17 @@ def format_change_crypto(change: Optional[float]) -> str:
 
 
 def build_crypto_message(data: Dict[str, Any]) -> str:
-    """Construye mensaje de criptomoneda para comando /p.
+    """Construye el mensaje completo de criptomoneda para comando /p.
 
-    Formato BBAlert:
-        *{SYMBOL}*
-        —————————————————
-        💰 *Precio:* ${price:,.4f}
-        📈 *High 24h:* ${high_24h:,.4f}
-        📉 *Low 24h:* ${low_24h:,.4f}
-        —————————————————
-        Ξ: {price_eth:.8f}
-        ₿: {price_btc:.8f}
-        1h  {format_change(percent_change_1h)}
-        24h {format_change(percent_change_24h)}
-        7d  {format_change(percent_change_7d)}
-        Cap: #{market_cap_rank} | ${market_cap:,.0f}
-        Vol: ${volume_24h:,.0f}
+    Muestra siempre toda la información disponible en un único mensaje
+    (ya no hay botón "Ver más"): precio base, high/low 24h, precios
+    cruzados, cambios %, market cap/volumen, y — si hay datos de
+    CoinGecko — el bloque adicional de ATH/ATL, supply y categoría.
 
     Args:
-        data: Diccionario con datos de criptomoneda (claves: symbol, price,
-              price_eth, price_btc, high_24h, low_24h,
-              percent_change_1h, percent_change_24h, percent_change_7d,
-              market_cap_rank, market_cap, volume_24h)
+        data: Diccionario con datos de criptomoneda. Puede incluir la clave
+              opcional "enrichment" (dict de CoinGeckoClient.get_enrichment_data)
+              que se renderiza automáticamente al final del mensaje.
 
     Returns:
         Mensaje formateado listo para enviar (Markdown).
@@ -1243,6 +1232,8 @@ def build_crypto_message(data: Dict[str, Any]) -> str:
     rank = data.get("market_cap_rank", 0)
     mcap = data.get("market_cap", 0)
     volume = data.get("volume_24h", 0)
+    source = data.get("primary_source", "")
+    enrichment = data.get("enrichment")
 
     # Header — símbolo
     lines.append(f"*{symbol}*")
@@ -1274,12 +1265,16 @@ def build_crypto_message(data: Dict[str, Any]) -> str:
     lines.append(f"Cap: #{rank} | ${mcap:,.0f}")
     lines.append(f"Vol: ${volume:,.0f}")
 
+    # Bloque extendido de CoinGecko (ATH/ATL, supply, categoría) — ahora
+    # siempre visible cuando hay datos disponibles, sin botón "Ver más"
+    if enrichment and not enrichment.get("not_found"):
+        lines.append(build_crypto_extended_block(enrichment))
+
     # Indicador de fuente (solo cuando NO es CoinMarketCap, que es lo normal)
-    source = data.get("primary_source", "")
     if source == "cryptocompare":
-        lines.append("_\ud83d\udd04 Fuente: CryptoCompare (fallback)_")
+        lines.append("_🔄 Fuente: CryptoCompare (fallback)_")
     elif source == "coingecko":
-        lines.append("_\ud83d\udd04 Fuente: CoinGecko_")
+        lines.append("_🔄 Fuente: CoinGecko_")
 
     return "\n".join(lines)
 
