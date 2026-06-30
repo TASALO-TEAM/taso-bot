@@ -113,12 +113,22 @@ sugiere..., parece reflejar..., el mercado muestra..., los inversores parecen...
 
 Evita lenguaje exagerado. No uses emojis dentro de los párrafos.
 
-La respuesta debe ocupar entre 120 y 180 palabras, en español.
+FORMATO DE SALIDA (muy importante):
+- Escribe el análisis en 3 párrafos cortos y separados, NO un bloque único.
+- Cada párrafo debe tratar una idea distinta, por ejemplo:
+  1) Qué está pasando con el precio y el momentum reciente.
+  2) Qué dicen la capitalización, el volumen y/o el ranking sobre la posición del activo.
+  3) Qué transmite el sentimiento del mercado o la distancia al ATH/ATL para el inversor.
+- Separa cada párrafo con una línea en blanco (doble salto de línea).
+- Cada párrafo debe tener entre 2 y 4 frases.
+- No uses títulos, encabezados ni numeración para los párrafos.
 
-Termina siempre con una conclusión breve de una sola frase.
+La respuesta debe ocupar entre 120 y 180 palabras en total, en español.
 
-Finaliza exactamente con esta línea (sin modificarla):
-"Análisis generado por IA. No constituye asesoramiento financiero."
+Termina el último párrafo con una conclusión breve de una sola frase.
+
+NO incluyas tú mismo la línea del disclaimer final — se añade automáticamente
+después de tu respuesta. Termina tu texto justo después de la conclusión.
 """
 
 
@@ -365,6 +375,51 @@ def _format_price_spotlight_data(price_data: dict) -> str:
     return "\n".join(lines)
 
 
+def _normalize_spotlight_paragraphs(text: str) -> str:
+    """Garantiza que el comentario de Spotlight quede en párrafos separados.
+
+    El modelo a veces ignora la instrucción de doble salto de línea y
+    devuelve todo en un único bloque. Esta función:
+      1. Si ya hay líneas en blanco entre párrafos, las normaliza (colapsa
+         3+ saltos seguidos a exactamente 2).
+      2. Si NO hay ninguna línea en blanco (un solo bloque de texto),
+         intenta partir el texto en frases y agruparlas en párrafos de
+         2-3 frases para evitar el muro de texto.
+
+    Args:
+        text: Texto crudo devuelto por el modelo (ya sin el disclaimer).
+
+    Returns:
+        Texto con párrafos separados por doble salto de línea.
+    """
+    text = text.strip()
+    if not text:
+        return text
+
+    # Caso 1: el modelo ya separó en párrafos (al menos una línea en blanco)
+    if "\n\n" in text:
+        # Colapsar 3+ saltos seguidos a exactamente 2
+        import re as _re
+        return _re.sub(r"\n{3,}", "\n\n", text)
+
+    # Caso 2: bloque único de texto — partir en frases y agrupar de a 2-3
+    import re as _re
+    # Split conservando el delimitador (punto seguido de espacio y mayúscula/fin)
+    sentences = _re.split(r"(?<=[.!?])\s+(?=[A-ZÁÉÍÓÚÑ])", text)
+    sentences = [s.strip() for s in sentences if s.strip()]
+
+    if len(sentences) <= 3:
+        # Muy corto para dividir en párrafos, dejarlo como un solo bloque
+        return text
+
+    paragraphs = []
+    chunk_size = 3 if len(sentences) > 6 else 2
+    for i in range(0, len(sentences), chunk_size):
+        paragraphs.append(" ".join(sentences[i:i + chunk_size]))
+
+    return "\n\n".join(paragraphs)
+
+
 async def get_groq_price_spotlight(price_data: dict) -> str:
     """Genera un comentario "Spotlight" de mercado (estilo CoinMarketCap)
     para el comando /p, a partir de los datos ya obtenidos de CMC/CoinGecko.
@@ -427,8 +482,21 @@ async def get_groq_price_spotlight(price_data: dict) -> str:
         # se aplica _escape_telegram_markdown aquí — solo truncado de seguridad.
         content = _truncate_smart(content, MAX_RESPONSE_CHARS)
 
-        if "Análisis generado por IA" not in content:
-            content += "\n\nAnálisis generado por IA. No constituye asesoramiento financiero."
+        # Quitar cualquier disclaimer que el modelo haya añadido por su cuenta
+        # (se le pidió que no lo hiciera, pero por seguridad se limpia aquí)
+        for variant in (
+            "Análisis generado por IA. No constituye asesoramiento financiero.",
+            "Análisis generado por IA — no es asesoramiento financiero.",
+        ):
+            content = content.replace(variant, "").strip()
+
+        # Asegurar separación visual en párrafos (evita el "muro de texto")
+        content = _normalize_spotlight_paragraphs(content)
+
+        # Disclaimer siempre añadido por el código (no por el modelo),
+        # con su propio salto de línea y formato en cursiva para que se
+        # distinga visualmente del cuerpo del análisis.
+        content += "\n\n_Análisis generado por IA. No constituye asesoramiento financiero._"
 
         return content
 

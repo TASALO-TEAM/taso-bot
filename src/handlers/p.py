@@ -17,7 +17,7 @@ from telegram.ext import ContextTypes
 from telegram.constants import ParseMode
 
 from src.crypto_client import CryptoApiClient
-from src.formatters import build_crypto_message
+from src.formatters import build_crypto_message, SEPARATOR_THICK
 from src.stats_tracker import track_command_usage
 from src.core.ai_logic import get_groq_price_spotlight
 
@@ -113,7 +113,7 @@ async def p_ai_panorama_callback(update: Update, context: ContextTypes.DEFAULT_T
         )
         return
 
-    header = f"🌍 *Panorama IA — {symbol}*\n{'—' * 20}\n"
+    header = f"🌍 *Panorama IA — {symbol}*\n{SEPARATOR_THICK}\n\n"
 
     try:
         await query.message.reply_text(
