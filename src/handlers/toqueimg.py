@@ -1,7 +1,15 @@
-"""Handler for /toqueimg command."""
+"""Handler for /toqueimg command.
+
+Modelo (2026-06-30): bajo demanda puro. Cada invocación pide a taso-api que
+intente refrescar la imagen (clic real en 'Guardar POST' en
+iframe.cubanomic.com). Si la fuente no responde, taso-api devuelve la última
+imagen local disponible marcada como 'stale' — el bot nunca falla solo
+porque la descarga fresca no se pudo completar.
+"""
 
 import logging
 import time
+import os
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
@@ -16,14 +24,68 @@ settings = get_settings()
 API_URL = settings.tasalo_api_url
 
 CUBA_TZ = ZoneInfo("America/Havana")
+CAPTURE_ENDPOINT = f"{API_URL}/api/v1/images/eltoque/capture"
+
+
+async def _fetch_toqueimg_data(api: TasaloApiClient, user_id: int) -> dict:
+    """Pide a taso-api que refresque la imagen y trae el estado de alerta.
+
+    Siempre llama al endpoint de captura (bajo demanda) — taso-api decide
+    internamente si sirve una imagen fresca o cae a la local existente.
+
+    Returns:
+        dict con: ok, image_path, captured_label, stale, has_alert, error
+    """
+    capture_data = await api._post_with_retry(CAPTURE_ENDPOINT)
+
+    if not capture_data or not capture_data.get("ok") or not capture_data.get("data"):
+        error = (capture_data or {}).get("error", {}).get("message", "Error desconocido")
+        return {"ok": False, "error": error}
+
+    image_data = capture_data["data"]
+    stale = capture_data.get("stale", False)
+    image_path = image_data["image_path"]
+    captured_at_str = image_data.get("captured_at", "")
+
+    try:
+        captured_dt = datetime.fromisoformat(captured_at_str.replace("Z", "+00:00"))
+        captured_label = captured_dt.astimezone(CUBA_TZ).strftime("%d/%m/%Y %H:%M")
+    except Exception:
+        captured_label = datetime.now(CUBA_TZ).strftime("%d/%m/%Y")
+
+    alert_data = await api._get_with_retry(f"{API_URL}/api/v1/images/alerts/{user_id}")
+    has_alert = (
+        alert_data
+        and alert_data.get("ok")
+        and alert_data.get("data")
+        and alert_data["data"].get("enabled", False)
+    )
+
+    return {
+        "ok": True,
+        "image_path": image_path,
+        "captured_label": captured_label,
+        "stale": stale,
+        "has_alert": has_alert,
+    }
+
+
+def _build_toqueimg_caption(captured_label: str, stale: bool) -> str:
+    """Caption del mensaje. Si stale=True, avisa que puede no ser la más reciente."""
+    caption = (
+        "🇨🇺 *Tasa Diaria El Toque*\n"
+        f"📅 {captured_label} (Cuba)\n\n"
+    )
+    if stale:
+        caption += "_⚠️ No se pudo actualizar ahora, mostrando última imagen disponible_\n"
+    caption += "_Fuente: iframe.cubanomic.com_"
+    return caption
 
 
 async def toqueimg_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
-    Comando /toqueimg - Muestra la última imagen capturada de ElToque.
-
-    No captura en tiempo real: usa la imagen diaria capturada por el scheduler
-    de taso-api a las 11:30 UTC (7:30 AM Cuba), que se actualiza automáticamente.
+    Comando /toqueimg - Refresca (bajo demanda) y muestra la imagen del post
+    de ElToque en iframe.cubanomic.com.
     """
     cmd_start = time.time()
     user_id = update.effective_user.id
@@ -31,7 +93,6 @@ async def toqueimg_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     logger.info("📸 /toqueimg invocado por user %d (@%s)", user_id, username)
 
-    # Detectar si viene de un callback (refresh) o de un comando directo
     is_callback = update.callback_query is not None
     if is_callback:
         loading_msg = await update.callback_query.message.reply_text("📸 Cargando imagen...")
@@ -39,77 +100,32 @@ async def toqueimg_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         loading_msg = await update.message.reply_text("📸 Cargando imagen...")
 
     try:
-        api = TasaloApiClient(api_url=API_URL, timeout=15)
+        api = TasaloApiClient(api_url=API_URL, timeout=30)
+        result = await _fetch_toqueimg_data(api, user_id)
 
-        # 1. Obtener última imagen ya capturada
-        latest_data = await api._get_with_retry(f"{API_URL}/api/v1/images/eltoque/latest")
+        if not result["ok"]:
+            await loading_msg.edit_text(
+                "⚠️ *Imagen no disponible*\n\n"
+                "No se pudo obtener la imagen en este momento.\n"
+                "Intenta de nuevo más tarde.",
+                parse_mode="Markdown"
+            )
+            return
 
-        # Si no hay imagen disponible → generarla bajo demanda (primera vez del día)
-        if not latest_data or not latest_data.get("ok") or not latest_data.get("data"):
-            logger.info("User %d: Sin imagen disponible, generando bajo demanda...", user_id)
-            await loading_msg.edit_text("⏳ Generando imagen del día...")
-
-            gen_data = await api._post_with_retry(f"{API_URL}/api/v1/images/eltoque/capture")
-
-            if gen_data and gen_data.get("ok") and gen_data.get("data"):
-                latest_data = {"ok": True, "data": gen_data["data"]}
-            else:
-                await loading_msg.edit_text(
-                    "⚠️ *Imagen no disponible*\n\n"
-                    "No se pudo obtener la imagen de hoy.\n"
-                    "La actualización automática ocurre a las *7:30 AM* hora Cuba.\n\n"
-                    "Intenta de nuevo más tarde.",
-                    parse_mode="Markdown"
-                )
-                return
-
-        image_data = latest_data["data"]
-        image_path = image_data["image_path"]
-        captured_at_str = image_data.get("captured_at", "")
-
-        # Formatear fecha/hora de captura en hora Cuba
-        try:
-            from datetime import datetime, timezone
-            captured_dt = datetime.fromisoformat(captured_at_str.replace("Z", "+00:00"))
-            captured_cuba = captured_dt.astimezone(CUBA_TZ)
-            captured_label = captured_cuba.strftime("%d/%m/%Y %H:%M")
-        except Exception:
-            captured_label = datetime.now(CUBA_TZ).strftime("%d/%m/%Y")
-
-        # 2. Verificar si usuario tiene alerta activa
-        alert_data = await api._get_with_retry(f"{API_URL}/api/v1/images/alerts/{user_id}")
-        has_alert = (
-            alert_data
-            and alert_data.get("ok")
-            and alert_data.get("data")
-            and alert_data["data"].get("enabled", False)
-        )
-
-        # 3. Construir teclado y caption
-        keyboard = _build_toqueimg_keyboard(has_alert)
-        caption = (
-            "🇨🇺 *Tasa Diaria El Toque*\n"
-            f"📅 {captured_label} (Cuba)\n\n"
-            "_Fuente: iframe.cubanomic.com_"
-        )
-
-        # 4. Enviar imagen
-        import os
-        if not os.path.exists(image_path):
-            logger.error("User %d: Archivo de imagen no encontrado: %s", user_id, image_path)
+        if not os.path.exists(result["image_path"]):
+            logger.error("User %d: Archivo de imagen no encontrado: %s", user_id, result["image_path"])
             await loading_msg.edit_text(
                 "❌ No se encontró el archivo de imagen.\n"
                 "Intenta de nuevo más tarde."
             )
             return
 
-        with open(image_path, "rb") as f:
+        keyboard = _build_toqueimg_keyboard(result["has_alert"])
+        caption = _build_toqueimg_caption(result["captured_label"], result["stale"])
+
+        with open(result["image_path"], "rb") as f:
             await loading_msg.edit_media(
-                media=InputMediaPhoto(
-                    media=f,
-                    caption=caption,
-                    parse_mode="Markdown"
-                ),
+                media=InputMediaPhoto(media=f, caption=caption, parse_mode="Markdown"),
                 reply_markup=InlineKeyboardMarkup(keyboard)
             )
 
@@ -132,36 +148,28 @@ def _build_toqueimg_keyboard(has_alert: bool) -> list:
     logger.debug("Building toqueimg keyboard (has_alert=%s)", has_alert)
 
     if has_alert:
-        # Usuario YA tiene alerta activa
         keyboard = [
             [InlineKeyboardButton(
                 "✅ Alerta activa",
                 callback_data="alert_status",
-                style="success",  # Verde - estado activo
+                style="success",
             )],
             [
-                InlineKeyboardButton(
-                    "⏰ Cambiar hora",
-                    callback_data="alert_change_time",
-                ),
-                InlineKeyboardButton(
-                    "📄 Cambiar formato",
-                    callback_data="alert_change_format",
-                ),
+                InlineKeyboardButton("⏰ Cambiar hora", callback_data="alert_change_time"),
+                InlineKeyboardButton("📄 Cambiar formato", callback_data="alert_change_format"),
             ],
             [InlineKeyboardButton(
                 "❌ Desactivar alerta",
                 callback_data="alert_disable",
-                style="danger",  # Rojo - acción destructiva
+                style="danger",
             )],
         ]
     else:
-        # Usuario NO tiene alerta
         keyboard = [
             [InlineKeyboardButton(
                 "🔔 Activar alerta (7:30 AM)",
                 callback_data="alert_enable_default",
-                style="success",  # Verde - acción positiva
+                style="success",
             )],
             [InlineKeyboardButton(
                 "⏰ Elegir hora personalizada",
@@ -169,11 +177,10 @@ def _build_toqueimg_keyboard(has_alert: bool) -> list:
             )],
         ]
 
-    # Botón común de refresh
     keyboard.append([InlineKeyboardButton(
         "🔄 Actualizar imagen",
         callback_data="toqueimg_refresh",
-        style="primary",  # Azul - acción principal
+        style="primary",
     )])
 
     return keyboard
@@ -183,7 +190,7 @@ async def toqueimg_refresh_callback(update: Update, context: ContextTypes.DEFAUL
     """Callback para botón 🔄 Actualizar en /toqueimg.
 
     Edita el mensaje de imagen existente con la última captura disponible,
-    sin enviar mensajes nuevos.
+    sin enviar mensajes nuevos. Usa el mismo flujo on-demand que el comando.
     """
     callback_start = time.time()
     user_id = update.effective_user.id
@@ -194,56 +201,23 @@ async def toqueimg_refresh_callback(update: Update, context: ContextTypes.DEFAUL
     await query.answer("🔄 Actualizando...")
 
     try:
-        api = TasaloApiClient(api_url=API_URL, timeout=15)
+        api = TasaloApiClient(api_url=API_URL, timeout=30)
+        result = await _fetch_toqueimg_data(api, user_id)
 
-        # Obtener última imagen
-        latest_data = await api._get_with_retry(f"{API_URL}/api/v1/images/eltoque/latest")
-
-        if not latest_data or not latest_data.get("ok") or not latest_data.get("data"):
-            await query.answer("⚠️ Imagen no disponible aún. Intenta después de las 7:30 AM Cuba.", show_alert=True)
+        if not result["ok"]:
+            await query.answer("⚠️ No se pudo actualizar la imagen. Intenta de nuevo.", show_alert=True)
             return
 
-        image_data = latest_data["data"]
-        image_path = image_data["image_path"]
-        captured_at_str = image_data.get("captured_at", "")
-
-        try:
-            from datetime import datetime as dt_cls, timezone as tz_mod
-            captured_at = dt_cls.fromisoformat(captured_at_str.replace("Z", "+00:00"))
-            captured_cuba = captured_at.astimezone(CUBA_TZ)
-            captured_label = captured_cuba.strftime("%d/%m/%Y %H:%M")
-        except Exception:
-            from datetime import datetime as dt_cls
-            captured_label = dt_cls.now(CUBA_TZ).strftime("%d/%m/%Y")
-
-        # Estado de alerta
-        alert_data = await api._get_with_retry(f"{API_URL}/api/v1/images/alerts/{user_id}")
-        has_alert = (
-            alert_data
-            and alert_data.get("ok")
-            and alert_data.get("data")
-            and alert_data["data"].get("enabled", False)
-        )
-
-        keyboard = _build_toqueimg_keyboard(has_alert)
-        caption = (
-            "🇨🇺 *Tasa Diaria El Toque*\n"
-            f"📅 {captured_label} (Cuba)\n\n"
-            "_Fuente: iframe.cubanomic.com_"
-        )
-
-        import os
-        if not os.path.exists(image_path):
+        if not os.path.exists(result["image_path"]):
             await query.answer("❌ Archivo de imagen no encontrado.", show_alert=True)
             return
 
-        with open(image_path, "rb") as f:
+        keyboard = _build_toqueimg_keyboard(result["has_alert"])
+        caption = _build_toqueimg_caption(result["captured_label"], result["stale"])
+
+        with open(result["image_path"], "rb") as f:
             await query.edit_message_media(
-                media=InputMediaPhoto(
-                    media=f,
-                    caption=caption,
-                    parse_mode="Markdown"
-                ),
+                media=InputMediaPhoto(media=f, caption=caption, parse_mode="Markdown"),
                 reply_markup=InlineKeyboardMarkup(keyboard)
             )
 
