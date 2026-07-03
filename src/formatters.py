@@ -1170,6 +1170,102 @@ def build_toque_new_message(api_data: Dict[str, Any]) -> str:
 
 
 # =============================================================================
+# CRIPTOMONEDAS — COMANDO /spl (Spotlight de Mercado)
+# =============================================================================
+
+TV_RECOMMENDATION_LABELS = {
+    "STRONG_BUY": "🚀 Compra fuerte",
+    "BUY": "🐂 Compra",
+    "NEUTRAL": "⚖️ Neutral",
+    "SELL": "📉 Venta",
+    "STRONG_SELL": "🐻 Venta fuerte",
+}
+
+
+def _fmt_pct_change(value: Optional[float]) -> str:
+    """Formatea un % de cambio con flecha, estilo CMC (▲1.67% / ▼0.31%)."""
+    if value is None:
+        return ""
+    arrow = "🔺" if value >= 0 else "🔻"
+    return f" {arrow}{abs(value):.2f}%"
+
+
+def build_market_spotlight_data_block(snapshot: Dict[str, Any]) -> str:
+    """Construye el bloque de datos duros del Spotlight de mercado (/spl).
+
+    Reproduce, con los datos disponibles en el plan Basic de CMC + el
+    sesgo técnico de TradingView, el mismo tipo de bloque numérico que
+    aparece en el newsletter real "CMC Spotlight": Fear & Greed, Altcoin
+    Season Index, Market Cap/Volumen/Dominancia globales con su variación
+    24h, gainers/losers y monedas en tendencia.
+
+    Args:
+        snapshot: Dict devuelto por CryptoApiClient.get_market_snapshot()
+
+    Returns:
+        Bloque de texto formateado (Markdown v1), listo para anteponer al
+        comentario narrativo generado por IA.
+    """
+    lines: list[str] = []
+
+    fear_greed = snapshot.get("fear_greed")
+    altcoin_season = snapshot.get("altcoin_season")
+    if fear_greed and fear_greed.get("value") is not None:
+        lines.append(f"😨 *Fear & Greed:* {fear_greed['value']} ({fear_greed.get('classification', 'N/A')})")
+    if altcoin_season and altcoin_season.get("value") is not None:
+        lines.append(f"🌗 *Altcoin Season Index:* {altcoin_season['value']}/100 ({altcoin_season.get('label', 'N/A')})")
+
+    global_metrics = snapshot.get("global_metrics")
+    if global_metrics:
+        mcap = global_metrics.get("total_market_cap")
+        vol = global_metrics.get("total_volume_24h")
+        btc_dom = global_metrics.get("btc_dominance")
+        eth_dom = global_metrics.get("eth_dominance")
+        if mcap:
+            lines.append(f"🌍 *Market Cap Global:* {format_supply(mcap)} USD{_fmt_pct_change(global_metrics.get('market_cap_change_24h'))}")
+        if vol:
+            lines.append(f"📊 *Volumen 24h:* {format_supply(vol)} USD{_fmt_pct_change(global_metrics.get('volume_change_24h'))}")
+        if btc_dom is not None:
+            dom_line = f"₿ *Dominancia BTC:* {btc_dom:.1f}%{_fmt_pct_change(global_metrics.get('btc_dominance_change_24h'))}"
+            if eth_dom is not None:
+                dom_line += f"  |  Ξ *ETH:* {eth_dom:.1f}%"
+            lines.append(dom_line)
+
+    btc_technical = snapshot.get("btc_technical")
+    if btc_technical and btc_technical.get("recommendation"):
+        rec_label = TV_RECOMMENDATION_LABELS.get(btc_technical["recommendation"], btc_technical["recommendation"])
+        lines.append(
+            f"📈 *Sesgo Técnico BTC (TradingView, 1D):* {rec_label} "
+            f"({btc_technical.get('buy_score', 0)} 🆚 {btc_technical.get('sell_score', 0)})"
+        )
+
+    top_movers = snapshot.get("top_movers") or {}
+    gainers = top_movers.get("gainers") or []
+    losers = top_movers.get("losers") or []
+    if gainers or losers:
+        lines.append("")
+    if gainers:
+        lines.append("🔺 *Mayores subidas 24h:*")
+        for coin in gainers:
+            lines.append(f"   • {coin.get('name')} ({coin.get('symbol')}): +{coin.get('percent_change_24h', 0):.2f}%")
+    if losers:
+        lines.append("🔻 *Mayores bajadas 24h:*")
+        for coin in losers:
+            lines.append(f"   • {coin.get('name')} ({coin.get('symbol')}): {coin.get('percent_change_24h', 0):.2f}%")
+
+    trending = snapshot.get("trending") or []
+    if trending:
+        lines.append("")
+        nombres = ", ".join(f"{c.get('name')} ({c.get('symbol')})" for c in trending)
+        lines.append(f"🔥 *Tendencia:* {nombres}")
+
+    if not lines:
+        lines.append("⚠️ Datos de mercado no disponibles en este momento.")
+
+    return "\n".join(lines)
+
+
+# =============================================================================
 # CRIPTOMONEDAS — COMANDO /p
 # =============================================================================
 

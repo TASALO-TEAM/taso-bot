@@ -45,18 +45,23 @@ def _make_callback_update(user_id: int = 222):
 
 SNAPSHOT_COMPLETO = {
     "fear_greed": {"value": 21, "classification": "Fear", "updated_at": "2026-07-02T00:00:00Z"},
+    "altcoin_season": {"value": 47, "label": "Mixto"},
     "global_metrics": {
         "total_market_cap": 2_100_000_000_000,
         "total_volume_24h": 80_000_000_000,
         "market_cap_change_24h": -1.2,
+        "volume_change_24h": -10.3,
         "btc_dominance": 58.2,
         "eth_dominance": 12.1,
+        "btc_dominance_change_24h": -0.3,
+        "eth_dominance_change_24h": 0.1,
     },
     "top_movers": {
         "gainers": [{"symbol": "SOL", "name": "Solana", "percent_change_24h": 12.5, "price": 77.0}],
         "losers": [{"symbol": "XYZ", "name": "Xyz Coin", "percent_change_24h": -8.1, "price": 1.2}],
     },
     "trending": [{"symbol": "SOL", "name": "Solana", "percent_change_24h": 12.5}],
+    "btc_technical": {"symbol": "BTCUSDT", "interval": "1d", "recommendation": "BUY", "buy_score": 14, "sell_score": 6, "neutral_score": 3},
     "news": None,  # plan Basic -> siempre None (ver docs/plans/2026-07-02-comando-spl-spotlight.md)
 }
 
@@ -84,7 +89,14 @@ async def test_spl_command_builds_message_on_cache_miss():
 
         mock_client.get_market_snapshot.assert_called_once()
         mock_groq.assert_called_once_with(SNAPSHOT_COMPLETO)
-        mock_cache.set.assert_called_once_with(CACHE_KEY, "Texto narrativo del panorama de mercado.")
+
+        # Se cachea el cuerpo completo (bloque de datos duros + narrativa),
+        # no solo el texto de la IA — verificamos que la narrativa quede
+        # incluida dentro de lo que se guarda en caché.
+        mock_cache.set.assert_called_once()
+        cached_key, cached_body = mock_cache.set.call_args[0]
+        assert cached_key == CACHE_KEY
+        assert "Texto narrativo del panorama de mercado." in cached_body
 
         update.message.reply_text.assert_called_once()
         mensaje = update.message.reply_text.call_args[0][0]
@@ -208,3 +220,34 @@ def test_build_keyboard_has_refresh_button():
     keyboard = _build_keyboard()
     callback_datas = [btn.callback_data for row in keyboard.inline_keyboard for btn in row]
     assert "spl_refresh" in callback_datas
+
+
+# ── build_market_spotlight_data_block (formatters.py) ──
+
+def test_data_block_includes_new_fields():
+    """Verifica que el bloque de datos duros incluye Altcoin Season Index
+    y el sesgo técnico de TradingView cuando están presentes en el snapshot.
+    """
+    from src.formatters import build_market_spotlight_data_block
+
+    bloque = build_market_spotlight_data_block(SNAPSHOT_COMPLETO)
+    assert "Altcoin Season Index" in bloque
+    assert "47/100" in bloque
+    assert "Sesgo Técnico BTC" in bloque
+    assert "Compra" in bloque  # BUY -> 🐂 Compra
+    assert "Fear & Greed" in bloque
+    assert "Mayores subidas 24h" in bloque
+    assert "Tendencia" in bloque
+
+
+def test_data_block_handles_missing_optional_sources():
+    """Si altcoin_season o btc_technical vinieron en None (fuente caída),
+    el bloque no debe romperse ni mencionar esas secciones.
+    """
+    from src.formatters import build_market_spotlight_data_block
+
+    snapshot_parcial = {**SNAPSHOT_COMPLETO, "altcoin_season": None, "btc_technical": None}
+    bloque = build_market_spotlight_data_block(snapshot_parcial)
+    assert "Altcoin Season Index" not in bloque
+    assert "Sesgo Técnico" not in bloque
+    assert "Fear & Greed" in bloque  # el resto sigue presente

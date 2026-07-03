@@ -18,7 +18,7 @@ from telegram.ext import ContextTypes
 from telegram.constants import ParseMode
 
 from src.handlers.p import get_crypto_client
-from src.formatters import SEPARATOR_THICK
+from src.formatters import SEPARATOR_THICK, build_market_spotlight_data_block
 from src.stats_tracker import track_command_usage
 from src.core.ai_logic import get_groq_market_spotlight
 from src.cache import cache
@@ -38,12 +38,14 @@ def _build_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([[btn_refresh]])
 
 
-async def _get_or_build_spotlight_text() -> str:
-    """Retorna el texto del spotlight desde cache, o lo genera si expiró.
+async def _get_or_build_spotlight_body() -> str:
+    """Retorna el cuerpo completo del spotlight (datos duros + narrativa IA)
+    desde caché, o lo genera si expiró.
 
-    No distingue entre comando nuevo y refresh: ambos respetan el mismo
-    TTL para no gastar créditos de CMC ni tokens de Groq de más — el
-    panorama de mercado no cambia de forma relevante en menos de 15 min.
+    Se cachea el cuerpo YA ENSAMBLADO (no solo el texto de la IA) para que
+    los números del bloque de datos y la narrativa correspondan siempre al
+    mismo snapshot — evita que un refresh a mitad del TTL muestre datos
+    duros nuevos junto a una narrativa vieja o viceversa.
     """
     cached = cache.get(CACHE_KEY, ttl=CACHE_TTL_SECONDS)
     if cached:
@@ -51,10 +53,13 @@ async def _get_or_build_spotlight_text() -> str:
 
     client = get_crypto_client()
     snapshot = await client.get_market_snapshot()
-    texto = await get_groq_market_spotlight(snapshot)
 
-    cache.set(CACHE_KEY, texto)
-    return texto
+    data_block = build_market_spotlight_data_block(snapshot)
+    narrativa = await get_groq_market_spotlight(snapshot)
+
+    body = f"{data_block}\n{SEPARATOR_THICK}\n\n{narrativa}"
+    cache.set(CACHE_KEY, body)
+    return body
 
 
 async def spl_refresh_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -82,7 +87,7 @@ async def spl_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         await update.callback_query.answer("🔄 Actualizando panorama...")
 
     try:
-        texto = await _get_or_build_spotlight_text()
+        cuerpo = await _get_or_build_spotlight_body()
     except Exception as e:
         logger.error("❌ Error generando /spl: %s", e, exc_info=True)
         error_msg = "⚠️ No se pudo generar el panorama de mercado. Intenta de nuevo en unos momentos."
@@ -95,7 +100,7 @@ async def spl_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         )
         return
 
-    mensaje = f"🔦 *SPOTLIGHT — Panorama del Mercado*\n{SEPARATOR_THICK}\n\n{texto}"
+    mensaje = f"🔦 *SPOTLIGHT — Panorama del Mercado*\n{SEPARATOR_THICK}\n\n{cuerpo}"
     keyboard = _build_keyboard()
 
     try:

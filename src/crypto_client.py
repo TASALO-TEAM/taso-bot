@@ -11,6 +11,8 @@ import httpx
 import logging
 from typing import Optional, Dict, Any
 
+from tradingview_ta import TA_Handler, Interval
+
 from src.config import get_settings
 from src.coingecko_client import CoinGeckoClient, CoinGeckoNetworkError
 
@@ -395,7 +397,11 @@ class CryptoApiClient:
         }
 
     async def get_global_metrics(self) -> Optional[Dict[str, Any]]:
-        """Market cap total, dominancia BTC/ETH y volumen 24h globales."""
+        """Market cap total, dominancia BTC/ETH, volumen 24h globales y sus
+        respectivas variaciones 24h (mismos 3 datos que el bloque "Global
+        Market Cap / 24h Market Volume / Bitcoin Dominance" del Spotlight
+        real de CMC).
+        """
         data = await self._cmc_get("v1/global-metrics/quotes/latest")
         if not data:
             return None
@@ -404,9 +410,88 @@ class CryptoApiClient:
             "total_market_cap": quote_usd.get("total_market_cap"),
             "total_volume_24h": quote_usd.get("total_volume_24h"),
             "market_cap_change_24h": quote_usd.get("total_market_cap_yesterday_percentage_change"),
+            "volume_change_24h": quote_usd.get("total_volume_24h_yesterday_percentage_change"),
             "btc_dominance": data.get("btc_dominance"),
             "eth_dominance": data.get("eth_dominance"),
+            "btc_dominance_change_24h": data.get("btc_dominance_24h_percentage_change"),
+            "eth_dominance_change_24h": data.get("eth_dominance_24h_percentage_change"),
         }
+
+    async def get_altcoin_season_index(self) -> Optional[Dict[str, Any]]:
+        """Altcoin Season Index de CMC (0-100, disponible en plan Basic e
+        incluso sin API key vía Keyless Public API).
+
+        Escala: >=75 "temporada altcoin", <=25 "temporada Bitcoin", el resto
+        es mixto. Aparece en el Spotlight real de CMC junto al Fear & Greed.
+        """
+        data = await self._cmc_get("v1/altcoin-season-index/latest")
+        if not data:
+            return None
+        value = data.get("altcoin_index")
+        if value is None:
+            return None
+        if value >= 75:
+            label = "Temporada Altcoin"
+        elif value <= 25:
+            label = "Temporada Bitcoin"
+        else:
+            label = "Mixto"
+        return {"value": value, "label": label}
+
+    @staticmethod
+    def _fetch_tv_bias_sync(symbol_pair: str, interval: str) -> Optional[Dict[str, Any]]:
+        """Llamada SINCRÓNICA (bloqueante) a tradingview_ta.
+
+        Misma librería y patrón de fallback BINANCE→GATEIO ya usados en
+        src/handlers/ta.py (get_tradingview_analysis_enhanced). Se define
+        aquí como método separado y minimalista (solo la recomendación
+        agregada, no todos los indicadores) para no acoplar crypto_client.py
+        a src/handlers/ta.py.
+        """
+        interval_map = {
+            "1h": Interval.INTERVAL_1_HOUR,
+            "4h": Interval.INTERVAL_4_HOURS,
+            "1d": Interval.INTERVAL_1_DAY,
+            "1w": Interval.INTERVAL_1_WEEK,
+        }
+        tv_interval = interval_map.get(interval, Interval.INTERVAL_1_DAY)
+        try:
+            handler = TA_Handler(symbol=symbol_pair, screener="crypto", exchange="BINANCE", interval=tv_interval)
+            analysis = handler.get_analysis()
+        except Exception:
+            try:
+                handler = TA_Handler(symbol=symbol_pair, screener="crypto", exchange="GATEIO", interval=tv_interval)
+                analysis = handler.get_analysis()
+            except Exception:
+                return None
+        if not analysis:
+            return None
+        summ = analysis.summary
+        return {
+            "symbol": symbol_pair,
+            "interval": interval,
+            "recommendation": summ.get("RECOMMENDATION", "NEUTRAL"),
+            "buy_score": summ.get("BUY", 0),
+            "sell_score": summ.get("SELL", 0),
+            "neutral_score": summ.get("NEUTRAL", 0),
+        }
+
+    async def get_technical_bias(self, symbol_pair: str = "BTCUSDT", interval: str = "1d") -> Optional[Dict[str, Any]]:
+        """Sesgo técnico agregado de TradingView (recomendación de consenso)
+        para un símbolo, usado como "pulso técnico" del mercado en /spl.
+
+        Usa la librería tradingview-ta (ya dependencia del proyecto, usada
+        en /ta), que consulta el scanner público NO OFICIAL de TradingView
+        — no es una API con contrato soportado por TradingView, puede
+        cambiar o fallar sin aviso. Es sincrónica, así que se ejecuta en
+        threadpool para no bloquear el event loop.
+        """
+        loop = asyncio.get_running_loop()
+        try:
+            return await loop.run_in_executor(None, self._fetch_tv_bias_sync, symbol_pair, interval)
+        except Exception as e:
+            logger.debug("TradingView bias falló para %s: %s", symbol_pair, e)
+            return None
 
     async def get_top_movers(self, limit: int = 3) -> Dict[str, list]:
         """Top gainers y losers de las últimas 24h.
@@ -484,15 +569,16 @@ class CryptoApiClient:
     async def get_market_snapshot(self) -> Dict[str, Any]:
         """Arma el snapshot completo de mercado para /spl.
 
-        Dispara las 5 fuentes en paralelo; si alguna falla (excepción o
+        Dispara las 7 fuentes en paralelo; si alguna falla (excepción o
         plan insuficiente) simplemente queda como None/vacía en el dict,
         sin tumbar el resto — el prompt de Groq (get_groq_market_spotlight)
         está preparado para trabajar con secciones faltantes.
 
         Returns:
             Dict con claves: fear_greed, global_metrics, top_movers,
-            trending, news. Cualquiera puede ser None (o dict vacío en el
-            caso de top_movers) si la fuente falló.
+            trending, news, altcoin_season, btc_technical. Cualquiera
+            puede ser None (o dict vacío en el caso de top_movers) si la
+            fuente falló.
         """
         results = await asyncio.gather(
             self.get_fear_greed(),
@@ -500,13 +586,18 @@ class CryptoApiClient:
             self.get_top_movers(),
             self.get_trending(),
             self.get_market_news(),
+            self.get_altcoin_season_index(),
+            self.get_technical_bias("BTCUSDT", "1d"),
             return_exceptions=True,
         )
 
         def _safe(value):
             return None if isinstance(value, Exception) else value
 
-        fear_greed, global_metrics, top_movers, trending, news = (_safe(r) for r in results)
+        (
+            fear_greed, global_metrics, top_movers, trending, news,
+            altcoin_season, btc_technical,
+        ) = (_safe(r) for r in results)
 
         return {
             "fear_greed": fear_greed,
@@ -514,4 +605,6 @@ class CryptoApiClient:
             "top_movers": top_movers or {"gainers": [], "losers": []},
             "trending": trending,
             "news": news,
+            "altcoin_season": altcoin_season,
+            "btc_technical": btc_technical,
         }

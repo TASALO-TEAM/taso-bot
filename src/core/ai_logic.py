@@ -584,10 +584,15 @@ Instrucciones:
 - Si hay titulares de noticias reales en los datos (sección "Noticias"),
   puedes referenciarlos brevemente.
 - Si NO aparece la sección "Noticias", NO inventes eventos ni titulares:
-  concentra el comentario en el sentimiento (Fear and Greed), la
-  dominancia de mercado, y los movimientos de gainers/losers/tendencias.
+  concentra el comentario en el sentimiento (Fear and Greed, Altcoin
+  Season Index), la dominancia, el sesgo técnico de TradingView si está
+  disponible, y los movimientos de gainers/losers/tendencias.
 - No inventes cifras que no aparezcan en los datos.
 - Explica qué podrían significar los datos para un inversor promedio.
+- Si el sesgo técnico de TradingView está disponible, puedes mencionar si
+  coincide o contrasta con el sentimiento de Fear and Greed (por ejemplo,
+  sesgo técnico alcista con sentimiento de miedo puede leerse como
+  posible divergencia).
 - Usa expresiones moderadas: podría indicar, sugiere, el mercado
   muestra, los inversores parecen. Nunca uses predicciones absolutas.
 - No uses emojis dentro de los párrafos ni de los bullets.
@@ -634,6 +639,13 @@ def _format_market_snapshot_text(snapshot: dict) -> str:
             f"({fear_greed.get('classification', 'N/A')})"
         )
 
+    altcoin_season = snapshot.get("altcoin_season")
+    if altcoin_season and altcoin_season.get("value") is not None:
+        lines.append(
+            f"Altcoin Season Index: {altcoin_season['value']}/100 "
+            f"({altcoin_season.get('label', 'N/A')})"
+        )
+
     global_metrics = snapshot.get("global_metrics")
     if global_metrics:
         mcap = global_metrics.get("total_market_cap")
@@ -675,6 +687,15 @@ def _format_market_snapshot_text(snapshot: dict) -> str:
         lines.append("Monedas en tendencia (mas buscadas):")
         for coin in trending:
             lines.append(f"  - {coin.get('name')} ({coin.get('symbol')})")
+
+    btc_technical = snapshot.get("btc_technical")
+    if btc_technical and btc_technical.get("recommendation"):
+        lines.append(
+            f"Sesgo tecnico TradingView para BTC (1D): "
+            f"{btc_technical['recommendation']} "
+            f"(compra={btc_technical.get('buy_score', 0)}, "
+            f"venta={btc_technical.get('sell_score', 0)})"
+        )
 
     news = snapshot.get("news") or []
     if news:
