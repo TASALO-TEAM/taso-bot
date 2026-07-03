@@ -567,3 +567,212 @@ async def get_groq_price_spotlight(price_data: dict) -> str:
         logger.exception("Unexpected error in get_groq_price_spotlight")
         return f"⚠️ Error inesperado: {e}"
 
+
+# ── Prompt Template — Spotlight de Mercado (/spl) ──────────────────────────────────────
+MARKET_SPOTLIGHT_PROMPT = """Eres un analista profesional de mercado de criptomonedas.
+
+Tu tarea es generar un comentario tipo "Spotlight" de mercado, similar al
+que aparece en la portada de CoinMarketCap, pero basado UNICAMENTE en los
+datos que recibes abajo. NO es un análisis de una moneda específica, es un
+panorama general del mercado cripto.
+
+=== DATOS DE MERCADO ===
+{snapshot_text}
+=== FIN DATOS ===
+
+Instrucciones:
+- Si hay titulares de noticias reales en los datos (sección "Noticias"),
+  puedes referenciarlos brevemente.
+- Si NO aparece la sección "Noticias", NO inventes eventos ni titulares:
+  concentra el comentario en el sentimiento (Fear and Greed), la
+  dominancia de mercado, y los movimientos de gainers/losers/tendencias.
+- No inventes cifras que no aparezcan en los datos.
+- Explica qué podrían significar los datos para un inversor promedio.
+- Usa expresiones moderadas: podría indicar, sugiere, el mercado
+  muestra, los inversores parecen. Nunca uses predicciones absolutas.
+- No uses emojis dentro de los párrafos ni de los bullets.
+
+FORMATO DE SALIDA (muy importante):
+- Un párrafo de apertura de 2 a 4 frases sobre el sentimiento general y
+  el movimiento más destacado del día.
+- Una línea en blanco.
+- Una lista de 3 a 5 bullets (cada línea empieza con un guion "-") con
+  los datos o movimientos más relevantes.
+- Si hay titulares reales disponibles, cierra con una línea en blanco y
+  un mini párrafo de una o dos frases tipo pregunta-respuesta breve
+  sobre lo que transmiten esas noticias. Si no hay titulares, omite esta
+  parte por completo, no la inventes.
+- No uses títulos, encabezados ni asteriscos para negritas.
+
+La respuesta debe tener entre 100 y 220 palabras en total, en español.
+
+NO incluyas tu mismo la línea del disclaimer final — se añade
+automáticamente después de tu respuesta. Termina tu texto justo después
+de los bullets (o del cierre pregunta-respuesta si aplica).
+"""
+
+
+def _format_market_snapshot_text(snapshot: dict) -> str:
+    """Convierte el dict de CryptoApiClient.get_market_snapshot() en texto
+    plano para el prompt de /spl.
+
+    Omite por completo las secciones cuya fuente falló (None) en vez de
+    mostrar "N/A", para que el modelo no las mencione ni las eche de menos.
+
+    Args:
+        snapshot: Dict devuelto por CryptoApiClient.get_market_snapshot()
+
+    Returns:
+        Texto formateado en bloques, listo para insertarse en el prompt.
+    """
+    lines: list[str] = []
+
+    fear_greed = snapshot.get("fear_greed")
+    if fear_greed and fear_greed.get("value") is not None:
+        lines.append(
+            f"Indice Fear and Greed: {fear_greed['value']} "
+            f"({fear_greed.get('classification', 'N/A')})"
+        )
+
+    global_metrics = snapshot.get("global_metrics")
+    if global_metrics:
+        mcap = global_metrics.get("total_market_cap")
+        vol = global_metrics.get("total_volume_24h")
+        change = global_metrics.get("market_cap_change_24h")
+        btc_dom = global_metrics.get("btc_dominance")
+        eth_dom = global_metrics.get("eth_dominance")
+        if mcap:
+            lines.append(f"Capitalizacion total del mercado: ${mcap:,.0f} USD")
+        if change is not None:
+            lines.append(f"Variacion de la capitalizacion total (24h): {change:+.2f}%")
+        if vol:
+            lines.append(f"Volumen total 24h: ${vol:,.0f} USD")
+        if btc_dom is not None:
+            lines.append(f"Dominancia de Bitcoin: {btc_dom:.1f}%")
+        if eth_dom is not None:
+            lines.append(f"Dominancia de Ethereum: {eth_dom:.1f}%")
+
+    top_movers = snapshot.get("top_movers") or {}
+    gainers = top_movers.get("gainers") or []
+    losers = top_movers.get("losers") or []
+    if gainers:
+        lines.append("Mayores subidas 24h (top 200 por capitalizacion):")
+        for coin in gainers:
+            lines.append(
+                f"  - {coin.get('name')} ({coin.get('symbol')}): "
+                f"{coin.get('percent_change_24h', 0):+.2f}%"
+            )
+    if losers:
+        lines.append("Mayores bajadas 24h (top 200 por capitalizacion):")
+        for coin in losers:
+            lines.append(
+                f"  - {coin.get('name')} ({coin.get('symbol')}): "
+                f"{coin.get('percent_change_24h', 0):+.2f}%"
+            )
+
+    trending = snapshot.get("trending") or []
+    if trending:
+        lines.append("Monedas en tendencia (mas buscadas):")
+        for coin in trending:
+            lines.append(f"  - {coin.get('name')} ({coin.get('symbol')})")
+
+    news = snapshot.get("news") or []
+    if news:
+        lines.append("Noticias:")
+        for item in news:
+            title = item.get("title")
+            if title:
+                lines.append(f"  - {title}")
+
+    return "\n".join(lines)
+
+
+async def get_groq_market_spotlight(snapshot: dict) -> str:
+    """Genera un comentario "Spotlight" de MERCADO (no de una moneda
+    específica) para el comando /spl, a partir del snapshot ya obtenido de
+    CryptoApiClient.get_market_snapshot().
+
+    Args:
+        snapshot: Dict devuelto por CryptoApiClient.get_market_snapshot()
+
+    Returns:
+        Texto del comentario (español) o mensaje de error legible.
+    """
+    if not settings.groq_api_key:
+        logger.error("GROQ_API_KEY not configured")
+        return "⚠️ *Error:* Variable de entorno GROQ_API_KEY no configurada."
+
+    snapshot_text = _format_market_snapshot_text(snapshot)
+    if not snapshot_text.strip():
+        logger.warning("Snapshot de mercado vacio, no se genera spotlight")
+        return "⚠️ No hay suficientes datos de mercado disponibles en este momento. Intenta de nuevo en unos minutos."
+
+    prompt = MARKET_SPOTLIGHT_PROMPT.format(snapshot_text=snapshot_text)
+
+    payload = {
+        "model": DEFAULT_MODEL,
+        "messages": [
+            {"role": "system", "content": "Eres un analista de mercado de criptomonedas que escribe comentarios breves, claros y conversacionales en español, sin tecnicismos de trading."},
+            {"role": "user", "content": prompt},
+        ],
+        "temperature": 0.7,
+        "max_tokens": 512,
+    }
+
+    try:
+        start = asyncio.get_event_loop().time()
+        data = await _call_groq_async(payload)
+        elapsed = asyncio.get_event_loop().time() - start
+
+        choices = data.get("choices", [])
+        if not choices:
+            logger.warning("Groq (market spotlight) returned empty choices")
+            return "⚠️ La IA no genero respuesta (respuesta vacia)."
+
+        content = choices[0].get("message", {}).get("content", "").strip()
+        if not content:
+            logger.warning("Groq (market spotlight) returned empty content")
+            return "⚠️ La IA devolvio contenido vacio."
+
+        usage = data.get("usage", {})
+        prompt_tokens = usage.get("prompt_tokens", 0)
+        completion_tokens = usage.get("completion_tokens", 0)
+        logger.info(
+            "✅ Groq market spotlight OK — tokens: p=%d c=%d total=%d (%.1fs)",
+            prompt_tokens, completion_tokens,
+            prompt_tokens + completion_tokens, elapsed,
+        )
+
+        content = _sanitize_telegram_markdown_v1(content)
+        content = _truncate_smart(content, MAX_RESPONSE_CHARS)
+
+        import re as _re
+        content = _re.sub(r"\n{3,}", "\n\n", content.strip())
+
+        content += "\n\n_Análisis generado por IA. No constituye asesoramiento financiero._"
+
+        return content
+
+    except httpx.HTTPStatusError as e:
+        status = e.response.status_code if e.response else "??"
+        logger.error("Groq HTTP error %s (market spotlight): %s", status, e)
+        if status == 401:
+            return "⚠️ Error de autenticación con la IA (API key inválida)."
+        elif status == 429:
+            return "⚠️ Límite de tasa excedido en la IA. Intenta en 1 minuto."
+        else:
+            return f"⚠️ Error HTTP {status} de la IA. Intenta más tarde."
+
+    except httpx.TimeoutException:
+        logger.error("Groq timeout (market spotlight)")
+        return "⚠️ La IA tardó demasiado en responder. Intenta de nuevo."
+
+    except httpx.NetworkError:
+        logger.error("Groq network error (market spotlight)")
+        return "⚠️ Error de red al contactar la IA."
+
+    except Exception as e:
+        logger.exception("Unexpected error in get_groq_market_spotlight")
+        return f"⚠️ Error inesperado: {e}"
+
+

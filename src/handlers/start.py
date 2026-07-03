@@ -69,6 +69,9 @@ def build_start_keyboard() -> InlineKeyboardMarkup:
             InlineKeyboardButton("🔔 Alertas de Precio /alert", callback_data="start_alert_help"),
         ],
         [
+            InlineKeyboardButton("🔦 Spotlight de Mercado /spl", callback_data="start_spl"),
+        ],
+        [
             InlineKeyboardButton("🌐 Abrir TASALO Web", web_app=WebAppInfo(url=MINIAPP_URL)),
         ],
     ]
@@ -170,6 +173,19 @@ async def start_button_callback(update: Update, context: ContextTypes.DEFAULT_TY
         await query.answer()
         answer_ms = (time.time() - answer_start) * 1000
         logger.debug("Callback answered for user %d (%.0fms)", user_id, answer_ms)
+
+        # Botón de Spotlight (/spl) — a diferencia de /p, /ta y /alert, no
+        # necesita argumentos, así que en vez de mostrar un texto de ayuda
+        # se invoca el comando real directamente (mismo patrón usado antes
+        # para ToqueImg desde /start).
+        if command == "spl":
+            await _handle_spl_start(context, query)
+            duration_ms = (time.time() - cb_start) * 1000
+            logger.info(
+                "✅ Spotlight (from /start) sent to user %d (@%s) (%.0fms)",
+                user_id, username, duration_ms,
+            )
+            return
 
         # Botones de ayuda para comandos que requieren argumentos (/p, /ta,
         # /alert) — no consultan la API de tasas, solo muestran cómo usarlos.
@@ -321,6 +337,55 @@ async def start_button_callback(update: Update, context: ContextTypes.DEFAULT_TY
                 user_id,
                 exc_info=True,
             )
+
+
+async def _handle_spl_start(context: ContextTypes.DEFAULT_TYPE, query):
+    """Maneja el botón Spotlight del start — reutiliza el handler real de /spl.
+
+    Sigue el mismo patrón que _handle_toqueimg_start: crea un mensaje nuevo
+    en el chat y un FakeUpdate mínimo para invocar spl_command tal cual se
+    invocaría desde el comando de texto.
+
+    Args:
+        context: Contexto del bot
+        query: Callback query de Telegram (ya respondido por el caller)
+    """
+    handler_start = time.time()
+    user_id = query.from_user.id
+    username = query.from_user.username or "N/A"
+
+    logger.info("🔦 Spotlight handler invoked from /start by user %d (@%s)", user_id, username)
+
+    try:
+        from src.handlers.spl import spl_command
+
+        temp_message = await query.message.reply_text("🔦 Generando panorama de mercado...")
+
+        class FakeUpdate:
+            def __init__(self, message, user):
+                self.message = message
+                self.callback_query = None
+                self.effective_user = user
+                self.effective_chat = message.chat
+
+        fake_update = FakeUpdate(temp_message, query.from_user)
+        await spl_command(fake_update, context)
+
+        duration_ms = (time.time() - handler_start) * 1000
+        logger.info(
+            "✅ Spotlight handler (from /start) completed for user %d (@%s) (%.0fms)",
+            user_id, username, duration_ms,
+        )
+    except Exception as e:
+        duration_ms = (time.time() - handler_start) * 1000
+        logger.error(
+            "❌ Spotlight handler (from /start) failed for user %d (@%s) after %.0fms: %s",
+            user_id, username, duration_ms, e, exc_info=True,
+        )
+        try:
+            await query.answer("❌ Error generando panorama", show_alert=True)
+        except Exception:
+            logger.error("❌ Failed to send error alert to user %d after Spotlight exception", user_id, exc_info=True)
 
 
 def _build_tasalo_start_message(full_message_func, api_data: dict) -> str:

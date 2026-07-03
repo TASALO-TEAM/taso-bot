@@ -332,3 +332,186 @@ class CryptoApiClient:
 
         # Error técnico (todas las APIs fallaron por red/timeout)
         return None
+
+    # ── Datos de mercado (Spotlight /spl) ──
+    # Los métodos de esta sección son independientes del flujo de /p y no
+    # tocan get_crypto_data ni sus fallbacks. Se usan solo desde /spl.
+
+    async def _cmc_get(self, path: str, params: Optional[Dict[str, Any]] = None) -> Optional[Any]:
+        """Wrapper genérico para llamadas GET a CoinMarketCap Pro API.
+
+        Centraliza headers, manejo de errores/plan-insuficiente y logging
+        para los endpoints de mercado usados por /spl (Fear&Greed,
+        global-metrics, listings, trending, content).
+
+        Args:
+            path: Path relativo desde https://pro-api.coinmarketcap.com
+                (ej: "v3/fear-and-greed/latest")
+            params: Query params opcionales
+
+        Returns:
+            El campo "data" de la respuesta, o None si falla la llamada o
+            el plan de la API key no soporta el endpoint (HTTP 403).
+        """
+        if not self.settings.coinmarketcap_api_key:
+            logger.warning("⚠️ COINMARKETCAP_API_KEY no configurada (spotlight)")
+            return None
+
+        client = self._get_client()
+        url = f"https://pro-api.coinmarketcap.com/{path}"
+        try:
+            resp = await client.get(
+                url,
+                headers={
+                    "X-CMC_PRO_API_KEY": self.settings.coinmarketcap_api_key,
+                    "Accept": "application/json",
+                },
+                params=params or {},
+                timeout=10.0,
+            )
+            if resp.status_code == 403:
+                try:
+                    body = resp.json()
+                except Exception:
+                    body = {}
+                error_msg = body.get("status", {}).get("error_message", "plan insuficiente")
+                logger.info("ℹ️ CMC %s no disponible en el plan actual: %s", path, error_msg)
+                return None
+            resp.raise_for_status()
+            return resp.json().get("data")
+        except Exception as e:
+            logger.warning("⚠️ CMC %s falló: %s", path, e)
+            return None
+
+    async def get_fear_greed(self) -> Optional[Dict[str, Any]]:
+        """Índice Fear & Greed de CMC (disponible en plan Basic)."""
+        data = await self._cmc_get("v3/fear-and-greed/latest")
+        if not data:
+            return None
+        return {
+            "value": data.get("value"),
+            "classification": data.get("value_classification"),
+            "updated_at": data.get("update_time"),
+        }
+
+    async def get_global_metrics(self) -> Optional[Dict[str, Any]]:
+        """Market cap total, dominancia BTC/ETH y volumen 24h globales."""
+        data = await self._cmc_get("v1/global-metrics/quotes/latest")
+        if not data:
+            return None
+        quote_usd = data.get("quote", {}).get("USD", {})
+        return {
+            "total_market_cap": quote_usd.get("total_market_cap"),
+            "total_volume_24h": quote_usd.get("total_volume_24h"),
+            "market_cap_change_24h": quote_usd.get("total_market_cap_yesterday_percentage_change"),
+            "btc_dominance": data.get("btc_dominance"),
+            "eth_dominance": data.get("eth_dominance"),
+        }
+
+    async def get_top_movers(self, limit: int = 3) -> Dict[str, list]:
+        """Top gainers y losers de las últimas 24h.
+
+        Se limita el universo a las 200 monedas de mayor capitalización
+        para evitar que microcaps con volumen ínfimo (y variaciones %
+        engañosas) dominen el resultado.
+
+        Args:
+            limit: Cuántos gainers y cuántos losers devolver (cada uno).
+        """
+        base_params = {"start": "1", "limit": "200", "convert": "USD"}
+
+        gainers_task = self._cmc_get(
+            "v1/cryptocurrency/listings/latest",
+            {**base_params, "sort": "percent_change_24h", "sort_dir": "desc"},
+        )
+        losers_task = self._cmc_get(
+            "v1/cryptocurrency/listings/latest",
+            {**base_params, "sort": "percent_change_24h", "sort_dir": "asc"},
+        )
+        gainers_raw, losers_raw = await asyncio.gather(gainers_task, losers_task)
+
+        def _extract(raw: Optional[list]) -> list:
+            if not raw:
+                return []
+            out = []
+            for item in raw[:limit]:
+                quote = item.get("quote", {}).get("USD", {})
+                out.append({
+                    "symbol": item.get("symbol"),
+                    "name": item.get("name"),
+                    "percent_change_24h": quote.get("percent_change_24h"),
+                    "price": quote.get("price"),
+                })
+            return out
+
+        return {"gainers": _extract(gainers_raw), "losers": _extract(losers_raw)}
+
+    async def get_trending(self, limit: int = 5) -> Optional[list]:
+        """Monedas más buscadas/tendencia en CMC (últimas 24h)."""
+        data = await self._cmc_get("v1/cryptocurrency/trending/latest", {"limit": str(limit)})
+        if not data:
+            return None
+        out = []
+        for item in data[:limit]:
+            quote = item.get("quote", {}).get("USD", {})
+            out.append({
+                "symbol": item.get("symbol"),
+                "name": item.get("name"),
+                "percent_change_24h": quote.get("percent_change_24h"),
+            })
+        return out
+
+    async def get_market_news(self, limit: int = 3) -> Optional[list]:
+        """Titulares/noticias reales de CMC.
+
+        Requiere plan Standard+ — confirmado 2026-07-03 que el plan Basic
+        de este proyecto devuelve HTTP 403 (error_code 1006). Se deja
+        implementado para activarse automáticamente sin cambios de código
+        si algún día se actualiza el plan; mientras tanto siempre retorna
+        None y /spl usa solo datos de mercado (ver docs/plans/2026-07-02-comando-spl-spotlight.md).
+        """
+        data = await self._cmc_get("v1/content/latest", {"limit": str(limit)})
+        if not data:
+            return None
+        out = []
+        for item in data[:limit]:
+            out.append({
+                "title": item.get("title"),
+                "subtitle": item.get("subtitle"),
+            })
+        return out
+
+    async def get_market_snapshot(self) -> Dict[str, Any]:
+        """Arma el snapshot completo de mercado para /spl.
+
+        Dispara las 5 fuentes en paralelo; si alguna falla (excepción o
+        plan insuficiente) simplemente queda como None/vacía en el dict,
+        sin tumbar el resto — el prompt de Groq (get_groq_market_spotlight)
+        está preparado para trabajar con secciones faltantes.
+
+        Returns:
+            Dict con claves: fear_greed, global_metrics, top_movers,
+            trending, news. Cualquiera puede ser None (o dict vacío en el
+            caso de top_movers) si la fuente falló.
+        """
+        results = await asyncio.gather(
+            self.get_fear_greed(),
+            self.get_global_metrics(),
+            self.get_top_movers(),
+            self.get_trending(),
+            self.get_market_news(),
+            return_exceptions=True,
+        )
+
+        def _safe(value):
+            return None if isinstance(value, Exception) else value
+
+        fear_greed, global_metrics, top_movers, trending, news = (_safe(r) for r in results)
+
+        return {
+            "fear_greed": fear_greed,
+            "global_metrics": global_metrics,
+            "top_movers": top_movers or {"gainers": [], "losers": []},
+            "trending": trending,
+            "news": news,
+        }
