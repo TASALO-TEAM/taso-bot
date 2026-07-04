@@ -14,6 +14,7 @@ Basado en la referencia: /home/ersus/bot/test/utils/logger.py
 
 import sys
 import os
+import time
 import logging
 import traceback
 from pathlib import Path
@@ -23,11 +24,99 @@ from logging.handlers import RotatingFileHandler
 
 # --- Configuración de Rutas ---
 LOGS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "logs")
+ARCHIVE_DIR = os.path.join(LOGS_DIR, "archive")
 LOG_FILE_PATH = os.path.join(LOGS_DIR, "taso-bot.log")
 ERROR_LOG_PATH = os.path.join(LOGS_DIR, "taso-bot-errors.log")
 
-# Asegurar que la carpeta logs exista
+MAX_BYTES = 5 * 1024 * 1024  # 5 MB por archivo activo antes de rotar
+BACKUP_COUNT = 10  # tope de seguridad de archivos rotados (además de /log clear)
+
+# Asegurar que las carpetas de logs existan
 os.makedirs(LOGS_DIR, exist_ok=True)
+os.makedirs(ARCHIVE_DIR, exist_ok=True)
+
+
+class DatedRotatingFileHandler(RotatingFileHandler):
+    """RotatingFileHandler que archiva por fecha de cierre en vez de sufijo numérico.
+
+    Al superar `maxBytes`, el archivo activo se cierra y se mueve a
+    `<archive_dir>/<service_name>_<timestamp>.log`. Se mantiene como máximo
+    `backupCount` archivos por servicio en el directorio de archivo; los más
+    viejos se eliminan automáticamente. El comando /log del bot puede así
+    localizar y ofrecer un log viejo por su fecha de cierre.
+
+    Nota: esta clase se duplica en taso-api y taso-app (repos independientes
+    sin paquete compartido); mantenerlas en sync si se modifica el algoritmo.
+    """
+
+    def __init__(
+        self,
+        filename: str,
+        service_name: str,
+        archive_dir: Optional[str] = None,
+        maxBytes: int = 0,
+        backupCount: int = 0,
+        encoding: Optional[str] = None,
+        delay: bool = False,
+    ):
+        self.service_name = service_name
+        base_dir = os.path.dirname(os.path.abspath(filename))
+        self.archive_dir = archive_dir or os.path.join(base_dir, "archive")
+        os.makedirs(self.archive_dir, exist_ok=True)
+        super().__init__(
+            filename,
+            maxBytes=maxBytes,
+            backupCount=backupCount,
+            encoding=encoding,
+            delay=delay,
+        )
+
+    def doRollover(self):
+        if self.stream:
+            self.stream.close()
+            self.stream = None
+
+        if os.path.exists(self.baseFilename):
+            archive_name = self._build_archive_name()
+            try:
+                os.rename(self.baseFilename, archive_name)
+            except OSError:
+                pass
+
+        self._cleanup_old_archives()
+
+        if not self.delay:
+            self.stream = self._open()
+
+    def _build_archive_name(self) -> str:
+        timestamp = time.strftime("%Y-%m-%d_%H-%M-%S")
+        candidate = os.path.join(self.archive_dir, f"{self.service_name}_{timestamp}.log")
+        counter = 1
+        while os.path.exists(candidate):
+            candidate = os.path.join(
+                self.archive_dir, f"{self.service_name}_{timestamp}_{counter}.log"
+            )
+            counter += 1
+        return candidate
+
+    def _cleanup_old_archives(self):
+        if self.backupCount <= 0:
+            return
+        try:
+            prefix = f"{self.service_name}_"
+            archives = sorted(
+                (
+                    f
+                    for f in os.listdir(self.archive_dir)
+                    if f.startswith(prefix) and f.endswith(".log")
+                ),
+                key=lambda f: os.path.getmtime(os.path.join(self.archive_dir, f)),
+            )
+            excess = len(archives) - self.backupCount
+            for old_file in archives[: max(0, excess)]:
+                os.remove(os.path.join(self.archive_dir, old_file))
+        except OSError:
+            pass
 
 
 # --- Formatters ---
@@ -96,11 +185,13 @@ class BotLogger:
 
         # Handlers de Archivo (solo si están habilitados)
         if self.enable_file_logging:
-            # Log principal (rotación 5 MB, 5 backups)
-            file_handler = RotatingFileHandler(
+            # Log principal (rotación 5 MB, archivado por fecha)
+            file_handler = DatedRotatingFileHandler(
                 LOG_FILE_PATH,
-                maxBytes=5 * 1024 * 1024,  # 5 MB
-                backupCount=5,
+                service_name="taso-bot",
+                archive_dir=ARCHIVE_DIR,
+                maxBytes=MAX_BYTES,
+                backupCount=BACKUP_COUNT,
                 encoding="utf-8",
             )
             file_handler.setFormatter(get_file_formatter())
@@ -108,10 +199,12 @@ class BotLogger:
             self.logger.addHandler(file_handler)
 
             # Handler exclusivo para errores (retención extendida)
-            error_handler = RotatingFileHandler(
+            error_handler = DatedRotatingFileHandler(
                 ERROR_LOG_PATH,
-                maxBytes=5 * 1024 * 1024,  # 5 MB
-                backupCount=10,
+                service_name="taso-bot-errors",
+                archive_dir=ARCHIVE_DIR,
+                maxBytes=MAX_BYTES,
+                backupCount=BACKUP_COUNT,
                 encoding="utf-8",
             )
             error_handler.setFormatter(get_file_formatter())

@@ -33,6 +33,9 @@ from src.handlers.admin import (
     refresh_command,
     status_command,
 )
+from src.handlers.logs import (
+    log_command,
+)
 from src.handlers.toqueimg import (
     toqueimg_command,
 )
@@ -193,6 +196,7 @@ def create_application() -> Application:
         ("health", health_check),
         ("refresh", refresh_command),
         ("status", status_command),
+        ("log", log_command),
         ("toque", toque_command),
         ("bcc", bcc_command),
         ("cadeca", cadeca_command),

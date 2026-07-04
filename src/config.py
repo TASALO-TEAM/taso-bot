@@ -6,7 +6,7 @@ from typing import List
 
 class Settings(BaseSettings):
     """Configuración del bot cargada desde variables de entorno."""
-    
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
@@ -54,6 +54,18 @@ class Settings(BaseSettings):
         default="INFO",
         description="Nivel de logging (DEBUG, INFO, WARNING, ERROR)",
         pattern="^(DEBUG|INFO|WARNING|ERROR)$"
+    )
+
+    # Rutas de logs de los repos hermanos, usadas por el comando /log.
+    # Relativas a la raíz de taso-bot, asumiendo el layout de VPS
+    # ~/tasalo/{taso-bot,taso-api,taso-app} (directorios hermanos).
+    taso_api_log_dir: str = Field(
+        default="../taso-api/logs",
+        description="Ruta (relativa a taso-bot/) a la carpeta logs/ de taso-api",
+    )
+    taso_app_log_dir: str = Field(
+        default="../taso-app/logs",
+        description="Ruta (relativa a taso-bot/) a la carpeta logs/ de taso-app",
     )
 
     # Cryptocurrency Prices (CoinMarketCap)
