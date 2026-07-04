@@ -278,8 +278,9 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         # Extraer datos del scheduler
-        scheduler_data = scheduler_result.get("data", {})
-        scheduler_info = scheduler_data.get("scheduler", {})
+        # NOTA: AdminStatusResponse (taso-api) devuelve {ok, scheduler, updated_at}
+        # SIN envoltorio "data" -> se lee directo de la raiz del JSON.
+        scheduler_info = scheduler_result.get("scheduler", {})
 
         is_running = scheduler_info.get("is_running", False)
         last_run_at = scheduler_info.get("last_run_at")
@@ -309,10 +310,13 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if last_error:
             scheduler_lines.append(f"\n⚠️ *Último error:*\n`{last_error[:200]}`")
 
-        # Procesar estadísticas (si están disponibles)
+        # Procesar estadisticas (si estan disponibles)
+        # NOTA: BotStatsSummary (taso-api) devuelve {ok, users, commands,
+        # top_users, performance, updated_at} SIN envoltorio "data" -> se lee
+        # directo de la raiz del JSON (mismo bug que scheduler_info arriba).
         stats_lines = []
         if stats_result and isinstance(stats_result, dict) and stats_result.get("ok"):
-            stats_data = stats_result.get("data", {})
+            stats_data = stats_result
 
             # Usuarios
             users = stats_data.get("users", {})
