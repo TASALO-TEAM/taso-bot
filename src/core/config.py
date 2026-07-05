@@ -25,6 +25,3 @@ CMC_API_KEY_ALERTA = os.getenv("CMC_API_KEY_ALERTA", "")
 
 # Data directory (BBAlert expects a ./data folder). Not used heavily but kept for compatibility.
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data')
-
-# Ads path (ads.json) — used by get_random_ad_text stub will be empty anyway
-ADS_PATH = os.path.join(DATA_DIR, 'ads.json')

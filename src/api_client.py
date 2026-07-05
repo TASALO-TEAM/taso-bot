@@ -726,3 +726,97 @@ class TasaloApiClient:
         except Exception as e:
             logger.error("❌ Error en get_active_alert_coins: %s", e)
             return []
+
+    # ── Ads API methods ────────────────────────────────────────────────────────
+
+    async def get_active_ads(self) -> list:
+        """Lista los anuncios activos (endpoint público, sin admin key).
+
+        Returns:
+            Lista de dicts {id, text, is_sponsored} o [] si hay error.
+        """
+        url = f"{self.api_url}/api/v1/ads/active"
+        try:
+            data = await self._get_with_retry(url)
+            if data and data.get("ok"):
+                return data.get("data", [])
+            return []
+        except Exception as e:
+            logger.error("❌ Error en get_active_ads: %s", e)
+            return []
+
+    async def admin_list_ads(self) -> list:
+        """Lista TODOS los anuncios (activos e inactivos). Requiere admin_key."""
+        if not self.admin_key:
+            logger.error("❌ admin_list_ads requiere admin_key configurado")
+            return []
+        url = f"{self.api_url}/api/v1/ads"
+        try:
+            data = await self._get_with_retry(url, headers=self._admin_headers)
+            if data and data.get("ok"):
+                return data.get("data", [])
+            return []
+        except Exception as e:
+            logger.error("❌ Error en admin_list_ads: %s", e)
+            return []
+
+    async def admin_create_ad(
+        self, text: str, is_sponsored: bool = False, weight: int = 1,
+        created_by: Optional[int] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Crea un anuncio nuevo. Requiere admin_key."""
+        if not self.admin_key:
+            logger.error("❌ admin_create_ad requiere admin_key configurado")
+            return None
+        url = f"{self.api_url}/api/v1/ads"
+        payload = {
+            "text": text, "is_sponsored": is_sponsored,
+            "weight": weight, "created_by": created_by,
+        }
+        try:
+            data = await self._post_with_retry(url, headers=self._admin_headers, json=payload)
+            return data if data and data.get("ok") else None
+        except Exception as e:
+            logger.error("❌ Error en admin_create_ad: %s", e)
+            return None
+
+    async def admin_update_ad(self, ad_id: int, **fields) -> Optional[Dict[str, Any]]:
+        """Edita un anuncio (text/is_active/is_sponsored/weight). Requiere admin_key."""
+        if not self.admin_key:
+            logger.error("❌ admin_update_ad requiere admin_key configurado")
+            return None
+        url = f"{self.api_url}/api/v1/ads/{ad_id}"
+        try:
+            client = self._get_client()
+            resp = await client.patch(url, headers=self._admin_headers, json=fields)
+            resp.raise_for_status()
+            return resp.json()
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 404:
+                return None
+            logger.error("❌ HTTP %d en admin_update_ad id=%d", e.response.status_code, ad_id)
+            return None
+        except Exception as e:
+            logger.error("❌ Error en admin_update_ad id=%d: %s", ad_id, e)
+            return None
+
+    async def admin_delete_ad(self, ad_id: int) -> bool:
+        """Elimina un anuncio definitivamente. Requiere admin_key."""
+        if not self.admin_key:
+            logger.error("❌ admin_delete_ad requiere admin_key configurado")
+            return False
+        url = f"{self.api_url}/api/v1/ads/{ad_id}"
+        try:
+            client = self._get_client()
+            resp = await client.delete(url, headers=self._admin_headers)
+            resp.raise_for_status()
+            data = resp.json()
+            return bool(data.get("ok"))
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 404:
+                return False
+            logger.error("❌ HTTP %d en admin_delete_ad id=%d", e.response.status_code, ad_id)
+            return False
+        except Exception as e:
+            logger.error("❌ Error en admin_delete_ad id=%d: %s", ad_id, e)
+            return False

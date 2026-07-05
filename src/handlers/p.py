@@ -20,6 +20,7 @@ from src.crypto_client import CryptoApiClient
 from src.formatters import build_crypto_message, SEPARATOR_THICK
 from src.stats_tracker import track_command_usage
 from src.core.ai_logic import get_groq_price_spotlight
+from src.services.ads_manager import get_ad_block, safe_append
 
 logger = logging.getLogger(__name__)
 
@@ -277,6 +278,13 @@ async def p_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             track_command_usage(update, context, "/p", source=symbol, success=False)
         )
         return
+
+    # Inyectar bloque de anuncio (si hay alguno activo y cabe en el límite).
+    # Solo en la respuesta principal, no en el panorama IA (texto largo generado).
+    api_client_for_ad = context.bot_data.get("api_client")
+    if api_client_for_ad:
+        ad_block = await get_ad_block(api_client_for_ad)
+        mensaje = safe_append(mensaje, ad_block)
 
     # 5. Construir teclado inline (Refresh + TA + Panorama IA)
     keyboard = _build_keyboard(symbol)

@@ -95,6 +95,13 @@ class Settings(BaseSettings):
         description="Ruta a la plantilla de imagen para las tasas",
     )
 
+    # Sistema de anuncios (/ads)
+    ads_enabled: bool = Field(
+        default=True,
+        description="Kill-switch global: si es False, no se inyecta ningún anuncio "
+        "en ningún mensaje aunque haya anuncios activos en la base de datos.",
+    )
+
     @field_validator('admin_chat_ids', mode='before')
     @classmethod
     def parse_admin_chat_ids(cls, v: str) -> str:

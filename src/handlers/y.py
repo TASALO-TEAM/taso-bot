@@ -20,6 +20,7 @@ from telegram.ext import ContextTypes
 
 from src.api_client import TasaloApiClient
 from src.config import get_settings
+from src.services.ads_manager import get_ad_block, safe_append
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -170,6 +171,10 @@ async def _show_year_state(update: Update, context: ContextTypes.DEFAULT_TYPE, u
     sub_data = await _get_user_sub(user_id)
     current_hour = sub_data.get("hour") if sub_data and sub_data.get("ok") else None
     keyboard = _build_sub_keyboard(current_hour)
+
+    ad_block = await get_ad_block(_year_api)
+    msg = safe_append(msg, ad_block)
+
     await update.message.reply_text(msg, parse_mode="Markdown", reply_markup=keyboard)
 
 

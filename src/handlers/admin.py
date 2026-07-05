@@ -18,21 +18,9 @@ from telegram.ext import ContextTypes
 from src.config import settings
 from src.api_client import TasaloApiClient
 from src.formatters import SEPARATOR_THICK, parse_iso_datetime
+from src.utils.permissions import is_admin as _is_admin
 
 logger = logging.getLogger(__name__)
-
-
-def _is_admin(user_id: int) -> bool:
-    """Verifica si un user_id está en la lista de administradores.
-
-    Args:
-        user_id: ID del usuario a verificar
-
-    Returns:
-        True si el usuario es admin, False en caso contrario
-    """
-    admin_ids = settings.get_admin_chat_ids_list()
-    return user_id in admin_ids
 
 
 async def refresh_command(update: Update, context: ContextTypes.DEFAULT_TYPE):

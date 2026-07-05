@@ -28,6 +28,7 @@ from src.formatters import (
     build_toque_new_message,
 )
 from src.stats_tracker import track_command_usage
+from src.services.ads_manager import get_ad_block, safe_append
 
 logger = logging.getLogger(__name__)
 
@@ -102,6 +103,12 @@ async def send_tasalo_response(
         text = build_full_message(api_data)
         entities = None
         parse_mode = "Markdown"
+
+    # Inyectar bloque de anuncio (si hay alguno activo y cabe en el límite)
+    api_client_for_ad = context.bot_data.get("api_client")
+    if api_client_for_ad:
+        ad_block = await get_ad_block(api_client_for_ad, markdown=(parse_mode == "Markdown"))
+        text = safe_append(text, ad_block)
 
     # Enviar solo texto (sin generación de imagen)
     try:
@@ -558,6 +565,8 @@ async def _handle_source_command(
     if cached_data:
         logger.info("📦 /%s: Using cached rates", source)
         text = build_message_func(cached_data)
+        ad_block = await get_ad_block(api_client)
+        text = safe_append(text, ad_block)
         keyboard = _build_source_refresh_keyboard(source)
         
         try:
@@ -605,6 +614,8 @@ async def _handle_source_command(
 
         # Construir mensaje SOLO TEXTO (sin imagen)
         text = build_message_func(api_data)
+        ad_block = await get_ad_block(api_client)
+        text = safe_append(text, ad_block)
         keyboard = _build_source_refresh_keyboard(source)
 
         # Enviar respuesta SOLO TEXTO
@@ -680,6 +691,8 @@ async def fuel_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             return
 
         text = build_fuel_only_message(response)
+        ad_block = await get_ad_block(api_client)
+        text = safe_append(text, ad_block)
         keyboard = _build_source_refresh_keyboard("fuel")
 
         try:
@@ -739,6 +752,8 @@ async def source_refresh_callback(
                 await query.answer("⚠️ Error actualizando datos", show_alert=True)
                 return
             text = build_fuel_only_message(response)
+            ad_block = await get_ad_block(api_client)
+            text = safe_append(text, ad_block)
             keyboard = _build_source_refresh_keyboard("fuel")
             await query.edit_message_text(text=text, reply_markup=keyboard, parse_mode="Markdown")
             logger.info("✅ Refresh /fuel completado")
@@ -769,6 +784,8 @@ async def source_refresh_callback(
             return
 
         text = build_func(api_data)
+        ad_block = await get_ad_block(api_client)
+        text = safe_append(text, ad_block)
         keyboard = _build_source_refresh_keyboard(source)
 
         await query.edit_message_text(

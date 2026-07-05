@@ -17,6 +17,7 @@ from telegram.constants import ParseMode
 
 from src.crypto_client import CryptoApiClient
 from src.config import get_settings
+from src.services.ads_manager import get_ad_block, safe_append
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -209,15 +210,18 @@ async def _check_all_active_alerts(api, application: Application, prices: dict) 
         # Enviar notificación al usuario
         emoji = "📈" if condition == "ABOVE" else "📉"
         direction = "superó" if condition == "ABOVE" else "cayó por debajo de"
+        text = (
+            f"🔔 *Alerta de precio activada*\n\n"
+            f"{emoji} *{coin}* {direction} {_format_price(target)}\n\n"
+            f"💰 Precio actual: *{_format_price(current_price)}*\n\n"
+            f"_Usa /alert para gestionar tus alertas._"
+        )
+        ad_block = await get_ad_block(api)
+        text = safe_append(text, ad_block)
         try:
             await bot.send_message(
                 chat_id=user_id,
-                text=(
-                    f"🔔 *Alerta de precio activada*\n\n"
-                    f"{emoji} *{coin}* {direction} {_format_price(target)}\n\n"
-                    f"💰 Precio actual: *{_format_price(current_price)}*\n\n"
-                    f"_Usa /alert para gestionar tus alertas._"
-                ),
+                text=text,
                 parse_mode=ParseMode.MARKDOWN,
             )
             logger.info(

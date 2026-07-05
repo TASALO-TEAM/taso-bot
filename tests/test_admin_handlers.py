@@ -65,7 +65,9 @@ async def test_refresh_command_admin_success():
     context.bot_data = {"api_client": mock_api_client}
 
     # Mock settings to return user as admin
-    with patch('src.handlers.admin.settings') as mock_settings:
+    # NOTA: _is_admin ahora delega en src.utils.permissions.is_admin, que
+    # tiene su propia referencia a `settings` (ver docs/plans/2026-07-04).
+    with patch('src.utils.permissions.settings') as mock_settings:
         mock_settings.get_admin_chat_ids_list.return_value = [123, 456]
 
         # Call handler
@@ -98,7 +100,7 @@ async def test_refresh_command_admin_api_error():
     context = MagicMock()
     context.bot_data = {"api_client": mock_api_client}
 
-    with patch('src.handlers.admin.settings') as mock_settings:
+    with patch('src.utils.permissions.settings') as mock_settings:
         mock_settings.get_admin_chat_ids_list.return_value = [123]
 
         # Call handler
@@ -130,7 +132,7 @@ async def test_refresh_command_no_api_key():
     context = MagicMock()
     context.bot_data = {"api_client": mock_api_client}
 
-    with patch('src.handlers.admin.settings') as mock_settings:
+    with patch('src.utils.permissions.settings') as mock_settings:
         mock_settings.get_admin_chat_ids_list.return_value = [123]
 
         # Call handler
@@ -201,7 +203,7 @@ async def test_status_command_admin_success():
     context = MagicMock()
     context.bot_data = {"api_client": mock_api_client}
 
-    with patch('src.handlers.admin.settings') as mock_settings:
+    with patch('src.utils.permissions.settings') as mock_settings:
         mock_settings.get_admin_chat_ids_list.return_value = [123]
 
         # Call handler
@@ -246,7 +248,7 @@ async def test_status_command_scheduler_stopped():
     context = MagicMock()
     context.bot_data = {"api_client": mock_api_client}
 
-    with patch('src.handlers.admin.settings') as mock_settings:
+    with patch('src.utils.permissions.settings') as mock_settings:
         mock_settings.get_admin_chat_ids_list.return_value = [123]
 
         # Call handler
@@ -280,7 +282,7 @@ async def test_status_command_api_error():
     context = MagicMock()
     context.bot_data = {"api_client": mock_api_client}
 
-    with patch('src.handlers.admin.settings') as mock_settings:
+    with patch('src.utils.permissions.settings') as mock_settings:
         mock_settings.get_admin_chat_ids_list.return_value = [123]
 
         # Call handler
@@ -295,7 +297,7 @@ async def test_status_command_api_error():
 
 def test_is_admin_true():
     """Test _is_admin con usuario admin."""
-    with patch('src.handlers.admin.settings') as mock_settings:
+    with patch('src.utils.permissions.settings') as mock_settings:
         mock_settings.get_admin_chat_ids_list.return_value = [123, 456, 789]
         assert _is_admin(123) is True
         assert _is_admin(456) is True
@@ -303,7 +305,7 @@ def test_is_admin_true():
 
 def test_is_admin_false():
     """Test _is_admin con usuario no admin."""
-    with patch('src.handlers.admin.settings') as mock_settings:
+    with patch('src.utils.permissions.settings') as mock_settings:
         mock_settings.get_admin_chat_ids_list.return_value = [123, 456]
         assert _is_admin(999) is False
         assert _is_admin(0) is False
@@ -311,7 +313,7 @@ def test_is_admin_false():
 
 def test_is_admin_empty_list():
     """Test _is_admin con lista vacía."""
-    with patch('src.handlers.admin.settings') as mock_settings:
+    with patch('src.utils.permissions.settings') as mock_settings:
         mock_settings.get_admin_chat_ids_list.return_value = []
         assert _is_admin(123) is False
 
@@ -357,7 +359,7 @@ async def test_status_command_renders_stats_summary():
     context = MagicMock()
     context.bot_data = {"api_client": mock_api_client}
 
-    with patch('src.handlers.admin.settings') as mock_settings:
+    with patch('src.utils.permissions.settings') as mock_settings:
         mock_settings.get_admin_chat_ids_list.return_value = [123]
         await status_command(update, context)
 

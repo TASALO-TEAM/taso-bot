@@ -19,7 +19,7 @@ from src.core.ai_logic import get_groq_crypto_analysis
 from src.core.config import ADMIN_CHAT_IDS
 from src.utils.file_manager import add_log_line
 from src.utils.subscription_manager import check_feature_access, registrar_uso_comando
-from src.utils.ads_manager import get_random_ad_text
+from src.services.ads_manager import get_ad_block, safe_append
 # I18n removed – using Spanish strings directly
 from src.core.btc_advanced_analysis import BTCAdvancedAnalyzer
 
@@ -344,7 +344,14 @@ async def ta_command(update: Update, context: ContextTypes.DEFAULT_TYPE, overrid
         f"S2: `${final_data.get('S2', 0):,.4f}`\n"
         f"S3: `${final_data.get('S3', 0):,.4f}`\n"
     )
-    msg += f"\n_v2.1 Experimental_{get_random_ad_text()}"
+    msg += "\n_v2.1 Experimental_"
+
+    # Inyectar bloque de anuncio (safe_append omite el ad si el mensaje ya
+    # viene largo, así que /ta nunca se corta por esto).
+    api_client_for_ad = context.bot_data.get("api_client")
+    if api_client_for_ad:
+        ad_block = await get_ad_block(api_client_for_ad)
+        msg = safe_append(msg, ad_block)
 
     kb = []
     current_source = "TV" if used_tv else "BINANCE"

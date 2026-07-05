@@ -17,7 +17,7 @@ from datetime import timedelta, datetime
 
 from src.utils.file_manager import add_log_line
 from src.utils.subscription_manager import check_feature_access, registrar_uso_comando
-from src.utils.ads_manager import get_random_ad_text
+from src.services.ads_manager import get_ad_block, safe_append
 from src.utils.chart_generator import generate_ohlcv_chart
 from src.core.btc_advanced_analysis import BTCAdvancedAnalyzer
 from src.core.ai_logic import get_groq_crypto_analysis
@@ -318,7 +318,13 @@ async def _do_graf(
         f"——————————————————\n"
         f"📌 _EMA20 · EMA50 · EMA200 · RSI · Vol_"
     )
-    caption += get_random_ad_text()
+
+    # Inyectar bloque de anuncio respetando el límite de CAPTION de Telegram
+    # (1024 caracteres, no 4096 como un mensaje de texto normal).
+    api_client_for_ad = context.bot_data.get("api_client")
+    if api_client_for_ad:
+        ad_block = await get_ad_block(api_client_for_ad)
+        caption = safe_append(caption, ad_block, hard_limit=1024)
 
     tf_row = []
     for tf_opt in _QUICK_TFS:
@@ -440,6 +446,11 @@ async def mk_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             lines.append(f"{m['flag']}*{m['name']}*: Error Data")
     header = "🌍 *Estado de Mercados Globales*\n—————————————————\n\n"
     body = "\n".join(lines)
-    footer = get_random_ad_text()
-    full_message = header + body + footer
+    full_message = header + body
+
+    api_client_for_ad = context.bot_data.get("api_client")
+    if api_client_for_ad:
+        ad_block = await get_ad_block(api_client_for_ad)
+        full_message = safe_append(full_message, ad_block)
+
     await update.message.reply_text(full_message, parse_mode=ParseMode.MARKDOWN)
