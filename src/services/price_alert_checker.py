@@ -8,6 +8,7 @@ las alertas cuya condición se cumpla, marcándolas TRIGGERED en taso-api.
 
 import logging
 import time
+from datetime import datetime, timezone, timedelta
 from typing import Optional
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -47,6 +48,44 @@ def _format_price(price: float) -> str:
         return f"${price:,.4f}"
     else:
         return f"${price:.8f}"
+
+
+# Cuba no usa horario de verano — offset fijo UTC-4, igual que en el resto del bot.
+CUBA_OFFSET = timedelta(hours=-4)
+
+
+def _parse_iso(value: Optional[str]) -> Optional[datetime]:
+    """Parsea un string ISO (con o sin tz) a datetime aware en UTC. None si falla."""
+    if not value:
+        return None
+    try:
+        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone.utc)
+    except (ValueError, TypeError):
+        return None
+
+
+def _format_elapsed(created_at: datetime, triggered_at: datetime) -> str:
+    """'2 días, 3 horas' / '5 horas, 12 min' / '18 min' — duración en español."""
+    total_min = max(0, int((triggered_at - created_at).total_seconds() // 60))
+    dias, resto_min = divmod(total_min, 1440)
+    horas, minutos = divmod(resto_min, 60)
+    partes = []
+    if dias:
+        partes.append(f"{dias} día{'s' if dias != 1 else ''}")
+    if horas:
+        partes.append(f"{horas} hora{'s' if horas != 1 else ''}")
+    if minutos and not dias:
+        partes.append(f"{minutos} min")
+    return ", ".join(partes) if partes else "menos de 1 min"
+
+
+def _format_cuba_datetime(dt: datetime) -> str:
+    """Formatea un datetime UTC como 'DD/MM HH:MM' en hora de Cuba (UTC-4)."""
+    local = dt.astimezone(timezone.utc) + CUBA_OFFSET
+    return local.strftime("%d/%m %H:%M")
 
 
 async def check_price_alerts_job(application: Application) -> None:
@@ -210,10 +249,31 @@ async def _check_all_active_alerts(api, application: Application, prices: dict) 
         # Enviar notificación al usuario
         emoji = "📈" if condition == "ABOVE" else "📉"
         direction = "superó" if condition == "ABOVE" else "cayó por debajo de"
+
+        detalle_extra = ""
+        created_dt = _parse_iso(alerta.get("created_at"))
+        if created_dt is not None:
+            triggered_dt = datetime.now(timezone.utc)
+            elapsed = _format_elapsed(created_dt, triggered_dt)
+            detalle_extra += f"🕐 Creada: {_format_cuba_datetime(created_dt)} (Cuba)  ·  ⏱ hace {elapsed}\n"
+
+        if price_at_creation:
+            cambio_pct = (current_price - price_at_creation) / price_at_creation * 100
+            signo = "+" if cambio_pct >= 0 else ""
+            detalle_extra += (
+                f"📌 Precio al crear: {_format_price(price_at_creation)}  "
+                f"({signo}{cambio_pct:.2f}%)\n"
+            )
+
+        note = alerta.get("note")
+        if note:
+            detalle_extra += f"🏷 Origen: {note}\n"
+
         text = (
             f"🔔 *Alerta de precio activada*\n\n"
             f"{emoji} *{coin}* {direction} {_format_price(target)}\n\n"
-            f"💰 Precio actual: *{_format_price(current_price)}*\n\n"
+            f"💰 Precio actual: *{_format_price(current_price)}*\n"
+            f"{detalle_extra}\n"
             f"_Usa /alert para gestionar tus alertas._"
         )
         ad_block = await get_ad_block(api)

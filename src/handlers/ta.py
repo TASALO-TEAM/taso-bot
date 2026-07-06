@@ -20,6 +20,7 @@ from src.core.config import ADMIN_CHAT_IDS
 from src.utils.file_manager import add_log_line
 from src.utils.subscription_manager import check_feature_access, registrar_uso_comando
 from src.services.ads_manager import get_ad_block, safe_append
+from src.handlers.alert import cache_alert_levels
 # I18n removed – using Spanish strings directly
 from src.core.btc_advanced_analysis import BTCAdvancedAnalyzer
 
@@ -369,6 +370,17 @@ async def ta_command(update: Update, context: ContextTypes.DEFAULT_TYPE, overrid
 
     kb.append([
         InlineKeyboardButton("🤖 Análisis IA Profesional", callback_data=f"ai_analyze|{current_source}|{symbol_base}|{pair}|{timeframe}")
+    ])
+
+    levels_for_alert = {
+        lvl: (final_data.get(lvl, 0) or 0) for lvl in ("Pivot", "R1", "R2", "R3", "S1", "S2", "S3")
+    }
+    alert_token = cache_alert_levels(
+        context, symbol_base, pair, timeframe, levels_for_alert,
+        kind="ta", render_source=current_source,
+    )
+    kb.append([
+        InlineKeyboardButton("🔔 Crear alerta", callback_data=f"alert_menu|{alert_token}")
     ])
 
     reply_markup = InlineKeyboardMarkup(kb)

@@ -237,6 +237,12 @@ async def _handle_alert(update: Update, context: ContextTypes.DEFAULT_TYPE, call
             await price_alert.alert_back_callback(update, context)
         elif callback_data.startswith("alert_delete_") and not callback_data.startswith("alert_delete_menu"):
             await price_alert.alert_delete_single_callback(update, context)
+        elif callback_data.startswith("alert_menu|"):
+            await price_alert.alert_levels_menu_callback(update, context)
+        elif callback_data.startswith("alert_lvl|"):
+            await price_alert.alert_create_level_callback(update, context)
+        elif callback_data.startswith("alert_hint|"):
+            await price_alert.alert_hint_callback(update, context)
         # ── Image alerts (existentes, /toqueimg) ──
         elif callback_data.startswith("alert_format_"):
             logger.debug("Routing '%s' to alert_format_callback for user %d", callback_data, user_id)

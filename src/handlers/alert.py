@@ -11,10 +11,15 @@ Callbacks inline (prefijo "alert_"):
     alert_delete_{id}    → Eliminar alerta específica
     alert_delete_all     → Eliminar todas las alertas del usuario
     alert_back           → Volver al listado principal
+    alert_menu|{token}   → Abrir menú de niveles (S/R/Pivot) desde /graf o /ta
+    alert_lvl|{token}|{lvl} → Crear alerta en un nivel específico
+    alert_hint|{symbol}  → Instrucciones personalizadas desde /p
 """
 
 import logging
+import secrets
 import time
+from datetime import datetime, timezone
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from telegram.constants import ParseMode
@@ -38,6 +43,26 @@ def _format_price(price: float) -> str:
         return f"${price:,.4f}"
     else:
         return f"${price:.8f}"
+
+
+def _format_hace(created_at_str: str | None) -> str:
+    """'hace 2 días' / 'hace 5 horas' / 'hace 18 min' — a partir de un ISO string. '' si falla."""
+    if not created_at_str:
+        return ""
+    try:
+        dt = datetime.fromisoformat(created_at_str.replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        total_min = max(0, int((datetime.now(timezone.utc) - dt).total_seconds() // 60))
+        dias, resto_min = divmod(total_min, 1440)
+        horas, _ = divmod(resto_min, 60)
+        if dias:
+            return f"hace {dias} día{'s' if dias != 1 else ''}"
+        if horas:
+            return f"hace {horas} hora{'s' if horas != 1 else ''}"
+        return f"hace {resto_min} min" if resto_min else "recién creada"
+    except (ValueError, TypeError):
+        return ""
 
 
 # ── Vista principal de alertas ──
@@ -82,7 +107,10 @@ async def show_alerts_menu(
         for a in lista:
             emoji = "📈" if a["condition"] == "ABOVE" else "📉"
             signo = ">" if a["condition"] == "ABOVE" else "<"
-            texto += f"• {coin} {emoji} {signo} {precio_fmt}\n"
+            hace = _format_hace(a.get("created_at"))
+            origen = f" · {a['note']}" if a.get("note") else ""
+            sufijo = f"  ({hace})" if hace else ""
+            texto += f"• {coin} {emoji} {signo} {precio_fmt}{origen}{sufijo}\n"
 
     keyboard = [
         [InlineKeyboardButton("➕ Crear nueva alerta", callback_data="alert_create")],
@@ -300,3 +328,219 @@ async def alert_back_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
     query = update.callback_query
     await query.answer()
     await show_alerts_menu(update, context, query)
+
+
+# ── Integración con /graf y /ta — alertas por nivel de S/R/Pivot ──
+#
+# Los niveles (Pivot/R1-R3/S1-S3) se calculan en ta.py / trading.py al
+# renderizar el mensaje. Para que la alerta creada use EXACTAMENTE el mismo
+# número que el usuario vio en pantalla (sin depender de una nueva llamada
+# a TradingView/Binance que podría devolver un valor ligeramente distinto),
+# esos niveles se cachean aquí bajo un token corto que viaja en el
+# callback_data (límite de Telegram: 64 bytes).
+
+LEVEL_ORDER = ["R3", "R2", "R1", "Pivot", "S1", "S2", "S3"]
+LEVEL_EMOJI = {
+    "Pivot": "🎯", "R1": "🔴", "R2": "🔴", "R3": "🔴",
+    "S1": "🟢", "S2": "🟢", "S3": "🟢",
+}
+
+
+def cache_alert_levels(
+    context: ContextTypes.DEFAULT_TYPE,
+    symbol: str,
+    pair: str,
+    timeframe: str,
+    levels: dict,
+    kind: str,
+    render_source: str | None = None,
+) -> str:
+    """Guarda los niveles ya calculados y devuelve un token corto para el callback_data.
+
+    Args:
+        symbol: símbolo base, ej. "BTC"
+        pair: par de cotización, ej. "USDT"
+        timeframe: ej. "4h"
+        levels: dict con las claves de LEVEL_ORDER que estén disponibles
+        kind: "ta" o "graf" — determina el botón "Volver" y la etiqueta de origen
+        render_source: para kind="ta", "TV" o "BINANCE" (permite reconstruir el botón Volver)
+    """
+    token = secrets.token_hex(3)
+    cache = context.user_data.setdefault("alert_levels_cache", {})
+    order = context.user_data.setdefault("alert_levels_cache_order", [])
+    cache[token] = {
+        "symbol": symbol,
+        "pair": pair,
+        "tf": timeframe,
+        "kind": kind,
+        "render_source": render_source,
+        "levels": levels,
+        "created": set(),
+    }
+    order.append(token)
+    # Evita crecimiento indefinido: solo se guardan los últimos 5 análisis por usuario
+    while len(order) > 5:
+        old = order.pop(0)
+        cache.pop(old, None)
+    return token
+
+
+def _get_cache_entry(context: ContextTypes.DEFAULT_TYPE, token: str) -> dict | None:
+    return context.user_data.get("alert_levels_cache", {}).get(token)
+
+
+def _menu_text(entry: dict) -> str:
+    return (
+        f"🔔 *¿Alerta en qué nivel?*\n\n"
+        f"*{entry['symbol']}{entry['pair']}* · {entry['tf']}\n\n"
+        f"Toca uno o varios niveles para crear alertas de seguimiento."
+    )
+
+
+def _build_levels_keyboard(entry: dict, token: str) -> InlineKeyboardMarkup:
+    keyboard = []
+    row = []
+    for lvl in LEVEL_ORDER:
+        price = entry["levels"].get(lvl)
+        if not price:
+            continue
+        emoji = LEVEL_EMOJI[lvl]
+        label = f"✅ {lvl} creada" if lvl in entry["created"] else f"{emoji} {lvl}"
+        btn = InlineKeyboardButton(label, callback_data=f"alert_lvl|{token}|{lvl}")
+        if lvl == "Pivot":
+            if row:
+                keyboard.append(row)
+                row = []
+            keyboard.append([btn])
+        else:
+            row.append(btn)
+            if len(row) == 2:
+                keyboard.append(row)
+                row = []
+    if row:
+        keyboard.append(row)
+
+    if entry["kind"] == "ta":
+        back_cb = f"ta_switch|{entry['render_source']}|{entry['symbol']}|{entry['pair']}|{entry['tf']}"
+    else:
+        back_cb = f"graf_tf|{entry['symbol']}|{entry['pair']}|{entry['tf']}"
+    keyboard.append([InlineKeyboardButton("⬅️ Volver al análisis", callback_data=back_cb)])
+    return InlineKeyboardMarkup(keyboard)
+
+
+async def _edit_menu(query, text: str, markup: InlineKeyboardMarkup) -> None:
+    """Edita el mensaje del menú, sea texto (/ta) o foto con caption (/graf)."""
+    if query.message and query.message.photo:
+        await query.edit_message_caption(caption=text, reply_markup=markup, parse_mode=ParseMode.MARKDOWN)
+    else:
+        await query.edit_message_text(text, reply_markup=markup, parse_mode=ParseMode.MARKDOWN)
+
+
+async def alert_levels_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Abre el submenú de niveles. callback_data: 'alert_menu|{token}'"""
+    query = update.callback_query
+    try:
+        _, token = query.data.split("|", 1)
+    except ValueError:
+        await query.answer("❌ Datos inválidos", show_alert=True)
+        return
+
+    entry = _get_cache_entry(context, token)
+    if not entry:
+        await query.answer("⚠️ Este menú expiró, genera un nuevo análisis", show_alert=True)
+        return
+
+    await query.answer()
+    markup = _build_levels_keyboard(entry, token)
+    await _edit_menu(query, _menu_text(entry), markup)
+
+
+async def alert_create_level_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Crea una alerta para un nivel específico. callback_data: 'alert_lvl|{token}|{level}'"""
+    query = update.callback_query
+    try:
+        _, token, level = query.data.split("|")
+    except ValueError:
+        await query.answer("❌ Datos inválidos", show_alert=True)
+        return
+
+    entry = _get_cache_entry(context, token)
+    if not entry:
+        await query.answer("⚠️ Este menú expiró, genera un nuevo análisis", show_alert=True)
+        return
+
+    if level in entry["created"]:
+        await query.answer(f"Ya tienes una alerta activa en {level}", show_alert=True)
+        return
+
+    target_price = entry["levels"].get(level)
+    if not target_price:
+        await query.answer("❌ Nivel no disponible", show_alert=True)
+        return
+
+    symbol = entry["symbol"]
+    user_id = query.from_user.id
+    api = _get_api_client(context)
+    crypto = get_crypto_client()
+
+    current_price = None
+    try:
+        price_data = await crypto.get_crypto_data(symbol)
+        if price_data and price_data.get("price"):
+            current_price = price_data["price"]
+    except Exception as e:
+        logger.warning("⚠️ No se pudo obtener precio actual de %s: %s", symbol, e)
+
+    if current_price is None:
+        await query.answer("❌ No se pudo obtener el precio actual, intenta de nuevo", show_alert=True)
+        return
+
+    origen_label = "Análisis" if entry["kind"] == "ta" else "Gráfico"
+    note = f"{level} · {origen_label} {entry['tf']}"
+
+    created = await api.create_price_alert(user_id, symbol, target_price, current_price, note=note)
+
+    if not created:
+        await query.answer("❌ Error al crear la alerta", show_alert=True)
+        return
+
+    entry["created"].add(level)
+    logger.info(
+        "✅ Alerta por nivel creada: user=%d coin=%s nivel=%s target=%.6f (origen=%s)",
+        user_id, symbol, level, target_price, note,
+    )
+    await query.answer(f"✅ Alerta creada: {symbol} @ {_format_price(target_price)} ({level})")
+    markup = _build_levels_keyboard(entry, token)
+    await _edit_menu(query, _menu_text(entry), markup)
+
+
+async def alert_hint_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Instrucciones personalizadas desde /p. callback_data: 'alert_hint|{symbol}'"""
+    query = update.callback_query
+    try:
+        _, symbol = query.data.split("|", 1)
+    except ValueError:
+        await query.answer("❌ Datos inválidos", show_alert=True)
+        return
+
+    await query.answer()
+    crypto = get_crypto_client()
+    current_price = None
+    try:
+        price_data = await crypto.get_crypto_data(symbol)
+        if price_data and price_data.get("price"):
+            current_price = price_data["price"]
+    except Exception as e:
+        logger.warning("⚠️ No se pudo obtener precio actual de %s: %s", symbol, e)
+
+    precio_line = f"\n💰 Precio actual: {_format_price(current_price)}\n" if current_price else "\n"
+    ejemplo = f"{current_price:.0f}" if current_price and current_price >= 1 else "70000"
+
+    text = (
+        f"➕ *Crear alerta de precio para {symbol}*\n"
+        f"{precio_line}\n"
+        f"Copia y ajusta el precio objetivo:\n"
+        f"`/alert {symbol} {ejemplo}`\n\n"
+        f"_Recibirás notificación cuando el precio suba o baje del nivel indicado._"
+    )
+    await query.message.reply_text(text, parse_mode=ParseMode.MARKDOWN)

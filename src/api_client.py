@@ -611,7 +611,8 @@ class TasaloApiClient:
             return []
 
     async def create_price_alert(
-        self, user_id: int, coin: str, target_price: float, price_at_creation: float
+        self, user_id: int, coin: str, target_price: float, price_at_creation: float,
+        note: Optional[str] = None,
     ) -> Optional[list]:
         """Crea dos alertas de precio (ABOVE + BELOW) para el par user/coin/price.
 
@@ -621,6 +622,8 @@ class TasaloApiClient:
             target_price: Precio objetivo configurado por el usuario
             price_at_creation: Precio real de la moneda al momento de crear la alerta.
                 Permite al checker detectar cruces reales y evitar falsos positivos.
+            note: Origen opcional (ej: "S1 · Análisis 4h"), cuando la alerta se crea
+                desde un botón de nivel en /graf o /ta. None si se crea manualmente.
 
         Returns:
             Lista de alertas creadas o None si falla.
@@ -632,6 +635,8 @@ class TasaloApiClient:
             "target_price": target_price,
             "price_at_creation": price_at_creation,
         }
+        if note:
+            payload["note"] = note
         try:
             data = await self._post_with_retry(url, headers=self._admin_headers, json=payload)
             if data and data.get("ok"):

@@ -23,6 +23,7 @@ from src.core.btc_advanced_analysis import BTCAdvancedAnalyzer
 from src.core.ai_logic import get_groq_crypto_analysis
 
 from src.handlers.ta import get_tradingview_analysis_enhanced
+from src.handlers.alert import cache_alert_levels
 
 # ─── CONSTANTES ──────────────────────────────────────────────────────────────
 
@@ -332,9 +333,16 @@ async def _do_graf(
         tf_row.append(InlineKeyboardButton(label, callback_data=f"graf_tf|{base}|{quote}|{tf_opt}"))
 
     tv_url = f"https://www.tradingview.com/chart/?symbol=BINANCE:{symbol}&interval={_TF_TV_URL.get(timeframe, '60')}"
+
+    levels_for_alert = {"Pivot": pivot or 0, "R1": r1 or 0, "S1": s1 or 0}
+    alert_token = cache_alert_levels(
+        context, base, quote, timeframe, levels_for_alert, kind="graf",
+    )
+
     action_row = [
         InlineKeyboardButton("📊 TradingView ↗", url=tv_url),
         InlineKeyboardButton("📈 Análisis /ta", callback_data=f"ta_quick|{base}|{timeframe}"),
+        InlineKeyboardButton("🔔 Crear alerta", callback_data=f"alert_menu|{alert_token}"),
     ]
     keyboard = InlineKeyboardMarkup([tf_row, action_row])
 

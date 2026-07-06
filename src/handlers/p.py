@@ -157,8 +157,12 @@ def _build_keyboard(symbol: str) -> InlineKeyboardMarkup:
         "🌍 Panorama IA",
         callback_data=f"ai_panorama|{symbol}"
     )
+    btn_alert = InlineKeyboardButton(
+        "🔔 Crear alerta",
+        callback_data=f"alert_hint|{symbol}"
+    )
 
-    return InlineKeyboardMarkup([[btn_refresh], [btn_ta], [btn_ai_panorama]])
+    return InlineKeyboardMarkup([[btn_refresh], [btn_ta], [btn_ai_panorama], [btn_alert]])
 
 
 # ── Comando principal ──
