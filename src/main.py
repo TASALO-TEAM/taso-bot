@@ -59,6 +59,7 @@ from src.handlers.y import (
 from src.handlers.alert import alert_command
 from src.handlers.spl import spl_command
 from src.handlers.ads import ads_command
+from src.handlers.help import help_command
 from src.services.daily_image_sender import start_daily_dispatcher, stop_daily_dispatcher
 from src.services.year_alert_scheduler import start_year_scheduler, stop_year_scheduler
 from src.services.price_alert_checker import start_price_alert_checker, stop_price_alert_checker
@@ -192,6 +193,8 @@ def create_application() -> Application:
     # Registrar handlers
     command_handlers = [
         ("start", start_command),
+        ("help", help_command),
+        ("ayuda", help_command),
         ("y", y_command),
         ("tasalo", tasalo_command),
         ("health", health_check),

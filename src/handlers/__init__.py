@@ -37,6 +37,9 @@ from src.handlers.y import (
     year_sub_callback,
     handle_year_hour_input,
 )
+from src.handlers.help import (
+    help_command,
+)
 
 __all__ = [
     "tasalo_command",
@@ -65,4 +68,5 @@ __all__ = [
     "y_command",
     "year_sub_callback",
     "handle_year_hour_input",
+    "help_command",
 ]
