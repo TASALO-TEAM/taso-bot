@@ -4,7 +4,7 @@ Shows year state (progress + daily quote + sub buttons).
 
 Subcommands:
   /y add <frase>              — add a new quote
-  /y dell [id]                — delete a quote (id=1 locked; reindexes on delete)
+  /y del [id]                — delete a quote (id=1 locked; reindexes on delete)
   /y edit <id> <nueva_frase>  — edit a quote (id=1 locked)
   /y show [id] | /y show      — show a specific quote or current day quote
 
@@ -106,7 +106,7 @@ def _render_add_stats(ctx: dict, quote_text: str, slot: int, total: int, limit: 
 
 
 async def y_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle /y — year state + subcommands: add / show / edit / dell."""
+    """Handle /y — year state + subcommands: add / show / edit / del."""
     user_id = update.effective_user.id
     logger.info("📅 /y invoked by user %s", user_id)
     args = context.args or []
@@ -122,15 +122,15 @@ async def y_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await _cmd_show(update, context, args[1:])
     elif sub == "edit":
         await _cmd_edit(update, context, args[1:])
-    elif sub == "dell":
-        await _cmd_dell(update, context, args[1:])
+    elif sub == "del":
+        await _cmd_del(update, context, args[1:])
     else:
         await update.message.reply_text(
             "⚠️ Subcomandos disponibles:\n"
             "`/y add <frase>` — agregar frase\n"
             "`/y show [id]`  — mostrar frase\n"
             "`/y edit <id> <nueva_frase>` — editar frase\n"
-            "`/y dell <id>`  — eliminar frase",
+            "`/y del <id>`  — eliminar frase",
             parse_mode="Markdown",
         )
 
@@ -297,11 +297,11 @@ async def _cmd_edit(update: Update, context: ContextTypes.DEFAULT_TYPE, extra_ar
     )
 
 
-async def _cmd_dell(update: Update, context: ContextTypes.DEFAULT_TYPE, extra_args: list):
+async def _cmd_del(update: Update, context: ContextTypes.DEFAULT_TYPE, extra_args: list):
     """Delete quote position by id (id=1 locked). Reindexes afterward."""
     if not extra_args:
         await update.message.reply_text(
-            "⚠️ Usa: `/y dell <id>`\nEjemplo: `/y dell 5`",
+            "⚠️ Usa: `/y del <id>`\nEjemplo: `/y del 5`",
             parse_mode="Markdown",
         )
         return
