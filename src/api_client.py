@@ -825,3 +825,28 @@ class TasaloApiClient:
         except Exception as e:
             logger.error("❌ Error en admin_delete_ad id=%d: %s", ad_id, e)
             return False
+
+    # ── Broadcast (/ms) API methods ─────────────────────────────────────────────
+
+    async def admin_list_user_ids(self) -> list:
+        """Lista el user_id de TODOS los usuarios registrados del bot.
+
+        Endpoint admin-only (requiere admin_key). Usado por el comando /ms
+        para saber a quién enviar el broadcast. Ver
+        docs/plans/2026-07-07-comando-ms-broadcast.md.
+
+        Returns:
+            Lista de user_id (int) o [] si hay error.
+        """
+        if not self.admin_key:
+            logger.error("❌ admin_list_user_ids requiere admin_key configurado")
+            return []
+        url = f"{self.api_url}/api/v1/admin/stats/users/ids"
+        try:
+            data = await self._get_with_retry(url, headers=self._admin_headers)
+            if data and data.get("ok"):
+                return data.get("data", [])
+            return []
+        except Exception as e:
+            logger.error("❌ Error en admin_list_user_ids: %s", e)
+            return []

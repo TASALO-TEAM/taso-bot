@@ -19,7 +19,7 @@ from telegram import Update
 from telegram.ext import ContextTypes, CallbackQueryHandler
 from telegram.error import BadRequest
 
-from src.handlers import image_alerts, tasalo, start, toqueimg, p, ta, trading, y, alert as price_alert, spl
+from src.handlers import image_alerts, tasalo, start, toqueimg, p, ta, trading, y, alert as price_alert, spl, ms
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +40,7 @@ ROUTE_MAP: dict[str, str] = {
     "graf":     "_handle_graf",
     "year_sub": "_handle_year",
     "spl":      "_handle_spl",
+    "ms":       "_handle_ms",
 }
 
 # Known multi-segment namespace prefixes that must be resolved atomically
@@ -419,3 +420,40 @@ async def _handle_year(update: Update, context: ContextTypes.DEFAULT_TYPE, callb
         # Do not re-raise — callback_router has already answered this query
         # at line 80. A second answerCallbackQuery would fail with BadRequest
         # and silence the error toast. Errors are already logged above.
+
+
+# ── Broadcast (/ms) callbacks ──
+
+async def _handle_ms(update: Update, context: ContextTypes.DEFAULT_TYPE, callback_data: str) -> None:
+    """Handle ms_confirm:<admin_id> / ms_cancel:<admin_id> callbacks from /ms.
+
+    The actual implementation lives in ``handlers/ms.py``; this thin wrapper
+    dispatches to confirm_callback or cancel_callback based on the prefix,
+    following the same pattern as ``_handle_year`` above.
+    """
+    handler_start = time.time()
+    query = update.callback_query
+    user_id = query.from_user.id
+
+    logger.info("📢 Handler _handle_ms processing '%s' for user %d", callback_data, user_id)
+
+    try:
+        if callback_data.startswith("ms_confirm:"):
+            await ms.confirm_callback(update, context)
+        elif callback_data.startswith("ms_cancel:"):
+            await ms.cancel_callback(update, context)
+        else:
+            logger.warning("⚠️ _handle_ms recibió callback_data desconocido: '%s'", callback_data)
+            return
+
+        duration_ms = (time.time() - handler_start) * 1000
+        logger.info(
+            "✅ _handle_ms completed for user %d callback '%s' (%.0fms)",
+            user_id, callback_data, duration_ms,
+        )
+    except Exception as e:
+        duration_ms = (time.time() - handler_start) * 1000
+        logger.error(
+            "❌ Error in _handle_ms for user %d callback '%s' (%.0fms): %s",
+            user_id, callback_data, duration_ms, e, exc_info=True,
+        )

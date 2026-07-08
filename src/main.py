@@ -59,6 +59,7 @@ from src.handlers.y import (
 from src.handlers.alert import alert_command
 from src.handlers.spl import spl_command
 from src.handlers.ads import ads_command
+from src.handlers.ms import ms_command
 from src.handlers.help import help_command
 from src.services.daily_image_sender import start_daily_dispatcher, stop_daily_dispatcher
 from src.services.year_alert_scheduler import start_year_scheduler, stop_year_scheduler
@@ -213,6 +214,7 @@ def create_application() -> Application:
         ("alert", alert_command),
         ("spl", spl_command),
         ("ads", ads_command),
+        ("ms", ms_command),
     ]
     
     for cmd_name, handler in command_handlers:

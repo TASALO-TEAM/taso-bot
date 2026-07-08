@@ -71,7 +71,7 @@ _Ejemplos: /ta btcusdt · /graf ethusdt_
 SUMMARY_ADMIN_EXTRA = """
 
 🔑 *Administración*
-/refresh /status /health /log /ads — usa `/help admin` o `/help ads` para el detalle."""
+/refresh /status /health /log /ads /ms — usa `/help admin`, `/help ads` o `/help ms` para el detalle."""
 
 
 # Fichas detalladas — clave = tema (lo que va después de "/help ")
@@ -213,6 +213,16 @@ Uso:
 `/ads weight <id> <n>` — ajusta el peso (1-100)
 `/ads edit <id> <texto>` — edita el texto""",
 
+    "ms": """📢 */ms — Difundir mensaje a todos los usuarios* (admin)
+
+Uso:
+`/ms <texto>` — difunde ese texto a todos los usuarios registrados
+Reply a un mensaje con foto (con o sin caption) + `/ms` — difunde esa foto
+
+Siempre muestra una vista previa con botones de confirmación antes de enviar nada — nada se manda hasta que tocás ✅ Confirmar.
+
+Pensado para avisos rápidos: un comando que cambió, un bug arreglado, mantenimiento, etc.""",
+
     "admin": """🔑 *Comandos de administración*
 
 `/refresh` — fuerza un refresh manual de las tasas
@@ -230,6 +240,9 @@ TOPIC_ALIASES: dict[str, str] = {
     "cripto": "p",
     "criptomonedas": "p",
     "anuncios": "ads",
+    "broadcast": "ms",
+    "aviso": "ms",
+    "notificar": "ms",
     "logs": "admin",
     "log": "admin",
     "status": "admin",
@@ -251,7 +264,7 @@ TOPIC_ALIASES: dict[str, str] = {
     "eltoque": "toque",
 }
 
-ADMIN_ONLY_TOPICS = {"ads", "admin"}
+ADMIN_ONLY_TOPICS = {"ads", "admin", "ms"}
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
