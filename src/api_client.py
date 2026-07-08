@@ -850,3 +850,80 @@ class TasaloApiClient:
         except Exception as e:
             logger.error("❌ Error en admin_list_user_ids: %s", e)
             return []
+
+    # ── Tickets (/tkt) API methods ──────────────────────────────────────────────
+
+    async def create_ticket(
+        self, user_id: int, kind: str, message: str, username: Optional[str] = None,
+    ) -> Optional[dict]:
+        """Crea un ticket nuevo. Llamado desde /tkt en nombre del usuario.
+
+        Nota: requiere admin_key igual que el resto de endpoints admin — el
+        bot es quien sostiene la key de confianza ante taso-api, no el
+        usuario final (mismo criterio que /alerts). Ver
+        docs/plans/2026-07-07-comando-tkt-tickets.md.
+
+        Returns:
+            dict con la respuesta ({"ok": bool, "data": {...}}) o None si falla.
+        """
+        if not self.admin_key:
+            logger.error("❌ create_ticket requiere admin_key configurado")
+            return None
+        url = f"{self.api_url}/api/v1/tickets"
+        payload = {"user_id": user_id, "kind": kind, "message": message}
+        if username:
+            payload["username"] = username
+        try:
+            data = await self._post_with_retry(url, headers=self._admin_headers, json=payload)
+            return data
+        except Exception as e:
+            logger.error("❌ Error en create_ticket user_id=%d: %s", user_id, e)
+            return None
+
+    async def list_tickets(self, status: Optional[str] = None, kind: Optional[str] = None) -> list:
+        """Lista tickets, opcionalmente filtrados. Uso: /tkts."""
+        if not self.admin_key:
+            logger.error("❌ list_tickets requiere admin_key configurado")
+            return []
+        url = f"{self.api_url}/api/v1/tickets"
+        params = {}
+        if status:
+            params["status"] = status
+        if kind:
+            params["kind"] = kind
+        try:
+            client = self._get_client()
+            resp = await client.get(url, headers=self._admin_headers, params=params)
+            resp.raise_for_status()
+            data = resp.json()
+            return data.get("data", []) if data.get("ok") else []
+        except Exception as e:
+            logger.error("❌ Error en list_tickets: %s", e)
+            return []
+
+    async def update_ticket(
+        self, ticket_id: int, status: Optional[str] = None, claimed_by: Optional[int] = None,
+    ) -> Optional[dict]:
+        """Actualiza status y/o claimed_by de un ticket (botones Tomar/Resolver)."""
+        if not self.admin_key:
+            logger.error("❌ update_ticket requiere admin_key configurado")
+            return None
+        url = f"{self.api_url}/api/v1/tickets/{ticket_id}"
+        fields = {}
+        if status is not None:
+            fields["status"] = status
+        if claimed_by is not None:
+            fields["claimed_by"] = claimed_by
+        try:
+            client = self._get_client()
+            resp = await client.patch(url, headers=self._admin_headers, json=fields)
+            resp.raise_for_status()
+            return resp.json()
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 404:
+                return None
+            logger.error("❌ HTTP %d en update_ticket id=%d", e.response.status_code, ticket_id)
+            return None
+        except Exception as e:
+            logger.error("❌ Error en update_ticket id=%d: %s", ticket_id, e)
+            return None

@@ -60,6 +60,7 @@ from src.handlers.alert import alert_command
 from src.handlers.spl import spl_command
 from src.handlers.ads import ads_command
 from src.handlers.ms import ms_command
+from src.handlers.tkt import tkt_command, tkts_command, handle_tkt_message
 from src.handlers.help import help_command
 from src.services.daily_image_sender import start_daily_dispatcher, stop_daily_dispatcher
 from src.services.year_alert_scheduler import start_year_scheduler, stop_year_scheduler
@@ -215,6 +216,8 @@ def create_application() -> Application:
         ("spl", spl_command),
         ("ads", ads_command),
         ("ms", ms_command),
+        ("tkt", tkt_command),
+        ("tkts", tkts_command),
     ]
     
     for cmd_name, handler in command_handlers:
@@ -239,6 +242,12 @@ def create_application() -> Application:
         MessageHandler(filters.TEXT & ~filters.COMMAND, handle_time_input)
     )
     logger.debug("✅ MessageHandler registered for image alert time input")
+
+    # Registrar handler para el mensaje de contenido de un ticket (/tkt)
+    application.add_handler(
+        MessageHandler(filters.TEXT & ~filters.COMMAND, handle_tkt_message)
+    )
+    logger.debug("✅ MessageHandler registered for /tkt message capture")
 
     # Registrar error handler global
     application.add_error_handler(error_handler)

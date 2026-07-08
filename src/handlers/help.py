@@ -63,6 +63,7 @@ _Ejemplos: /ta btcusdt · /graf ethusdt_
 
 ℹ️ *Utilidades*
 /start — Menú principal
+/tkt — Contactar a los administradores
 
 💡 _Toca los botones de cualquier mensaje para IA, análisis técnico, gráficos o alertas._
 💡 _Usa `/help <comando>` para ver el detalle de uno en particular (ej. `/help p`)._"""
@@ -71,7 +72,7 @@ _Ejemplos: /ta btcusdt · /graf ethusdt_
 SUMMARY_ADMIN_EXTRA = """
 
 🔑 *Administración*
-/refresh /status /health /log /ads /ms — usa `/help admin`, `/help ads` o `/help ms` para el detalle."""
+/refresh /status /health /log /ads /ms /tkts — usa `/help admin`, `/help ads`, `/help ms` o `/help tkts` para el detalle."""
 
 
 # Fichas detalladas — clave = tema (lo que va después de "/help ")
@@ -201,6 +202,12 @@ Uso: `/start`
 
 Muestra el mensaje de bienvenida con botones de acceso directo a Tasalo, Toque, BCC, CADECA, precio cripto y alertas.""",
 
+    "tkt": """🎫 */tkt — Contactar a los administradores*
+
+Uso: `/tkt`
+
+Abre un menú para reportar un bug o pedir que te promocionen/publiquen un anuncio. Elegís una opción, contás en un mensaje qué pasa, y un admin te contacta directamente.""",
+
     # Solo visibles/respondidas si is_admin:
     "ads": """📢 */ads — Gestión de anuncios* (admin)
 
@@ -223,6 +230,14 @@ Siempre muestra una vista previa con botones de confirmación antes de enviar na
 
 Pensado para avisos rápidos: un comando que cambió, un bug arreglado, mantenimiento, etc.""",
 
+    "tkts": """🎫 */tkts — Ver tickets pendientes* (admin)
+
+Uso: `/tkts`
+
+Lista los tickets abiertos y en progreso creados con `/tkt` por los usuarios (bugs y pedidos de promoción), con quién los tomó si alguno ya está en curso.
+
+Cada ticket nuevo también llega como notificación directa con botones ✋ Tomar / ✅ Resolver.""",
+
     "admin": """🔑 *Comandos de administración*
 
 `/refresh` — fuerza un refresh manual de las tasas
@@ -243,6 +258,10 @@ TOPIC_ALIASES: dict[str, str] = {
     "broadcast": "ms",
     "aviso": "ms",
     "notificar": "ms",
+    "ticket": "tkt",
+    "tickets": "tkts",
+    "soporte": "tkt",
+    "contacto": "tkt",
     "logs": "admin",
     "log": "admin",
     "status": "admin",
@@ -264,7 +283,7 @@ TOPIC_ALIASES: dict[str, str] = {
     "eltoque": "toque",
 }
 
-ADMIN_ONLY_TOPICS = {"ads", "admin", "ms"}
+ADMIN_ONLY_TOPICS = {"ads", "admin", "ms", "tkts"}
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
