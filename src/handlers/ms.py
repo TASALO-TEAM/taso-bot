@@ -1,23 +1,27 @@
-"""Handler para el comando /ms — broadcast de mensajes a todos los usuarios.
+"""Handler para el comando /ms — mensaje a todos los usuarios o a uno solo.
 
 Solo disponible para administradores (ver src/utils/permissions.py).
-Ver docs/plans/2026-07-07-comando-ms-broadcast.md para el diseño completo.
+Ver docs/plans/2026-07-07-comando-ms-broadcast.md (broadcast original) y
+docs/plans/2026-07-08-ms-directo-y-tkt-mejoras.md (envío a un usuario).
 
 Uso:
     /ms <texto>                → difunde ese texto a todos los usuarios
-    (reply a foto/foto+caption) + /ms  → difunde esa foto (con o sin
-        caption) a todos los usuarios
+    /ms @usuario <texto>       → envía ese texto solo a @usuario
+    (reply a foto/foto+caption) + /ms [@usuario]  → difunde/envía esa foto
+        (con o sin caption) a todos los usuarios o solo a @usuario
 
-En ambos casos se muestra un preview con botones de confirmación antes
-de enviar nada — un broadcast es irreversible y de alto impacto.
+En todos los casos se muestra un preview con botones de confirmación antes
+de enviar nada — un envío (masivo o individual) no debe dispararse por
+error de un solo tap/enter.
 
-El estado del broadcast pendiente vive en
+El estado del envío pendiente vive en
 context.bot_data["ms_pending"][admin_id], namespaced por admin para que
-dos admins puedan preparar broadcasts distintos sin pisarse.
+dos admins puedan preparar envíos distintos sin pisarse.
 """
 
 import asyncio
 import logging
+import re
 import time
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -36,6 +40,8 @@ CONCURRENCY = 20            # envíos simultáneos máximos
 BATCH_PAUSE_SECONDS = 1.0   # pausa entre lotes (~20 msg/s, bajo el límite de Telegram)
 PROGRESS_EVERY = 50         # editar el mensaje de status cada N usuarios procesados
 
+TARGET_USERNAME_RE = re.compile(r"^@([\w]{5,32})$")
+
 
 def _get_api_client(context: ContextTypes.DEFAULT_TYPE) -> TasaloApiClient:
     return context.bot_data.get("api_client")
@@ -47,15 +53,28 @@ def _pending_store(context: ContextTypes.DEFAULT_TYPE) -> dict:
 
 
 def _extract_payload(update: Update) -> dict | None:
-    """Arma el payload a difundir desde /ms <texto> o desde un reply.
+    """Arma el payload a enviar desde /ms [@usuario] <texto> o desde un reply.
+
+    Si el primer token del texto del comando es un @username válido, se
+    guarda en payload["target_username"] y se quita del resto del texto
+    antes de armar el contenido — el @usuario nunca forma parte del
+    mensaje que se envía.
 
     Returns:
-        {"kind": "text", "text": str} o
-        {"kind": "photo", "photo_file_id": str, "caption": str | None}
+        {"kind": "text", "text": str, "target_username": str | None} o
+        {"kind": "photo", "photo_file_id": str, "caption": str | None,
+         "target_username": str | None}
         None si no hay contenido válido.
     """
     message = update.message
-    args_text = " ".join((message.text or "").split()[1:]).strip()
+    tokens = (message.text or "").split()[1:]
+
+    target_username = None
+    if tokens and TARGET_USERNAME_RE.match(tokens[0]):
+        target_username = tokens[0][1:]  # sin el "@"
+        tokens = tokens[1:]
+
+    args_text = " ".join(tokens).strip()
     source = message.reply_to_message if message.reply_to_message else None
 
     # Reply a una foto: prioridad sobre el texto plano del propio /ms,
@@ -63,14 +82,17 @@ def _extract_payload(update: Update) -> dict | None:
     if source and source.photo:
         photo_file_id = source.photo[-1].file_id  # mayor resolución disponible
         caption = args_text if args_text else source.caption
-        return {"kind": "photo", "photo_file_id": photo_file_id, "caption": caption}
+        return {
+            "kind": "photo", "photo_file_id": photo_file_id, "caption": caption,
+            "target_username": target_username,
+        }
 
     if source and source.text:
         text = args_text if args_text else source.text
-        return {"kind": "text", "text": text} if text else None
+        return {"kind": "text", "text": text, "target_username": target_username} if text else None
 
     if args_text:
-        return {"kind": "text", "text": args_text}
+        return {"kind": "text", "text": args_text, "target_username": target_username}
 
     return None
 
@@ -81,14 +103,14 @@ def _validate_payload(payload: dict) -> str | None:
         if len(payload["text"]) > MAX_TEXT_LENGTH:
             return (
                 f"⚠️ El texto supera los {MAX_TEXT_LENGTH} caracteres "
-                f"({len(payload['text'])}). Acortálo e inténtalo de nuevo."
+                f"({len(payload['text'])}). Acórtalo e inténtalo de nuevo."
             )
     elif payload["kind"] == "photo":
         caption = payload.get("caption") or ""
         if len(caption) > MAX_CAPTION_LENGTH:
             return (
                 f"⚠️ El caption supera los {MAX_CAPTION_LENGTH} caracteres "
-                f"({len(caption)}). Acortálo e inténtalo de nuevo."
+                f"({len(caption)}). Acórtalo e inténtalo de nuevo."
             )
     return None
 
@@ -101,7 +123,10 @@ def _preview_text(payload: dict, total_users: int) -> str:
         body += "\n\n🖼 _(se enviará también la foto adjunta)_"
     else:
         body = payload["text"]
-    footer = f"\n──────────────────\nSe enviará a *{total_users}* usuarios."
+    if payload.get("target_username"):
+        footer = f"\n──────────────────\nSe enviará solo a *@{payload['target_username']}*."
+    else:
+        footer = f"\n──────────────────\nSe enviará a *{total_users}* usuarios."
     return header + body + footer
 
 
@@ -138,8 +163,10 @@ async def ms_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     if payload is None:
         await update.message.reply_text(
             "⚠️ Uso:\n"
-            "`/ms <texto>` — difunde ese texto\n"
-            "o respondé (reply) con `/ms` a un mensaje con foto/texto para difundir *ese* contenido.",
+            "`/ms <texto>` — difunde ese texto a todos los usuarios\n"
+            "`/ms @usuario <texto>` — envía ese texto solo a @usuario\n"
+            "o responde (reply) con `/ms [@usuario]` a un mensaje con foto/texto "
+            "para difundir o enviar *ese* contenido.",
             parse_mode=ParseMode.MARKDOWN,
         )
         return
@@ -149,21 +176,37 @@ async def ms_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         await update.message.reply_text(error)
         return
 
-    logger.info("📢 /ms preview solicitado por admin %d (@%s), kind=%s", admin_id, username, payload["kind"])
+    target_username = payload.get("target_username")
+    logger.info(
+        "📢 /ms preview solicitado por admin %d (@%s), kind=%s, target=%s",
+        admin_id, username, payload["kind"], target_username or "todos",
+    )
 
-    user_ids = await api_client.admin_list_user_ids()
-    if not user_ids:
-        await update.message.reply_text(
-            "⚠️ No hay usuarios registrados todavía (o falló la consulta a taso-api). "
-            "No se puede difundir nada."
-        )
-        return
+    if target_username:
+        target_user_id = await api_client.lookup_user_id_by_username(target_username)
+        if target_user_id is None:
+            await update.message.reply_text(
+                f"⚠️ @{target_username} no está registrado en el bot (nunca ejecutó "
+                "ningún comando, o cambió de username). Pídele que use /start primero."
+            )
+            return
+        payload["target_user_id"] = target_user_id
+        total_users = 1
+    else:
+        user_ids = await api_client.admin_list_user_ids()
+        if not user_ids:
+            await update.message.reply_text(
+                "⚠️ No hay usuarios registrados todavía (o falló la consulta a taso-api). "
+                "No se puede difundir nada."
+            )
+            return
+        total_users = len(user_ids)
 
     payload["in_progress"] = False
     _pending_store(context)[admin_id] = payload
 
     await update.message.reply_text(
-        _preview_text(payload, len(user_ids)),
+        _preview_text(payload, total_users),
         parse_mode=ParseMode.MARKDOWN,
         reply_markup=_confirm_keyboard(admin_id),
     )
@@ -264,22 +307,46 @@ def _parse_admin_id(callback_data: str) -> int | None:
 
 
 async def confirm_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Callback ms_confirm:<admin_id> — dispara el envío masivo."""
+    """Callback ms_confirm:<admin_id> — dispara el envío (individual o masivo)."""
     query = update.callback_query
     clicker_id = query.from_user.id
     owner_id = _parse_admin_id(query.data)
 
     if owner_id is None or clicker_id != owner_id:
-        await query.answer("⚠️ Este broadcast no te pertenece.", show_alert=True)
+        await query.answer("⚠️ Este envío no te pertenece.", show_alert=True)
         return
 
     pending = _pending_store(context)
     payload = pending.get(owner_id)
     if payload is None:
-        await query.edit_message_text("⚠️ Este broadcast ya no está disponible (expirado o ya procesado).")
+        await query.edit_message_text("⚠️ Este envío ya no está disponible (expiró o ya se procesó).")
         return
     if payload.get("in_progress"):
-        await query.answer("⏳ Ya está en curso, esperá a que termine.", show_alert=True)
+        await query.answer("⏳ Ya está en curso, espera a que termine.", show_alert=True)
+        return
+
+    # Envío a un único usuario: se salta todo el motor de broadcast
+    # (semáforo, progreso, pausa entre lotes) — no aplica para 1 solo mensaje.
+    target_user_id = payload.get("target_user_id")
+    if target_user_id is not None:
+        payload["in_progress"] = True
+        logger.info("📢 /ms confirmado por admin %d — envío directo a user %d", owner_id, target_user_id)
+        semaphore = asyncio.Semaphore(1)
+        try:
+            result = await _send_one(context.bot, target_user_id, payload, semaphore)
+        finally:
+            pending.pop(owner_id, None)
+
+        if result == "ok":
+            await query.edit_message_text(f"✅ Mensaje enviado a @{payload['target_username']}.")
+        elif result == "blocked":
+            await query.edit_message_text(
+                f"🚫 No se pudo enviar: @{payload['target_username']} bloqueó al bot."
+            )
+        else:
+            await query.edit_message_text(
+                f"⚠️ Error al enviar a @{payload['target_username']}. Intenta de nuevo."
+            )
         return
 
     api_client = _get_api_client(context)
@@ -300,13 +367,13 @@ async def confirm_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
 
 async def cancel_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Callback ms_cancel:<admin_id> — descarta el broadcast pendiente."""
+    """Callback ms_cancel:<admin_id> — descarta el envío pendiente."""
     query = update.callback_query
     clicker_id = query.from_user.id
     owner_id = _parse_admin_id(query.data)
 
     if owner_id is None or clicker_id != owner_id:
-        await query.answer("⚠️ Este broadcast no te pertenece.", show_alert=True)
+        await query.answer("⚠️ Este envío no te pertenece.", show_alert=True)
         return
 
     _pending_store(context).pop(owner_id, None)

@@ -1,13 +1,22 @@
 """Handler para el comando /tkt — tickets de contacto usuario→admin.
 
 Disponible para cualquier usuario (a diferencia de /ms y /ads, que son
-solo-admin). Ver docs/plans/2026-07-07-comando-tkt-tickets.md.
+solo-admin). Ver docs/plans/2026-07-07-comando-tkt-tickets.md (diseño
+original) y docs/plans/2026-07-08-ms-directo-y-tkt-mejoras.md
+(notificaciones al usuario + separación bug/promo).
 
-Flujo:
+Flujo bug:
     /tkt → menú (🐛 Reportar bug / 📢 Pedir promoción / ❌ Cancelar)
     → el bot pide el mensaje → el usuario responde con texto
     → se crea el ticket en taso-api y se notifica a todos los admins
-      con botones ✋ Tomar / ✅ Resolver.
+      con botones ✋ Tomar / ✅ Resolver. El usuario recibe un aviso
+      cuando el ticket es tomado y cuando es resuelto.
+
+Flujo promo (pedir anuncio):
+    Mismo inicio, pero la notificación a los admins trae botones
+    ✅ Aprobar / ❌ Rechazar en vez de Tomar/Resolver — un anuncio no se
+    "toma" ni se "resuelve" como un bug, se aprueba o se rechaza
+    directamente. El usuario recibe un aviso con el resultado.
 
 El flag context.user_data["tkt_awaiting"] guarda el kind ("bug"/"promo")
 mientras se espera el mensaje del usuario — a diferencia de /ms (que usa
@@ -36,6 +45,21 @@ def _get_api_client(context: ContextTypes.DEFAULT_TYPE) -> TasaloApiClient:
     return context.bot_data.get("api_client")
 
 
+async def _notify_user(bot, user_id: int, text: str) -> None:
+    """Envía un aviso de estado al usuario dueño de un ticket.
+
+    Envuelto en try/except Forbidden porque el usuario puede haber
+    bloqueado al bot desde que abrió el ticket — no debe interrumpir el
+    flujo del admin que está tomando/resolviendo/aprobando/rechazando.
+    """
+    try:
+        await bot.send_message(user_id, text, parse_mode=ParseMode.MARKDOWN)
+    except Forbidden:
+        logger.warning("⚠️ Usuario %d bloqueó el bot, no se pudo notificar el estado del ticket", user_id)
+    except Exception as e:
+        logger.error("❌ Error notificando estado de ticket a user %d: %s", user_id, e)
+
+
 def _menu_keyboard(user_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("🐛 Reportar un bug", callback_data=f"tkt_bug:{user_id}")],
@@ -44,7 +68,18 @@ def _menu_keyboard(user_id: int) -> InlineKeyboardMarkup:
     ])
 
 
-def _ticket_admin_keyboard(ticket_id: int, claimed: bool = False) -> InlineKeyboardMarkup:
+def _ticket_admin_keyboard(ticket_id: int, kind: str, claimed: bool = False) -> InlineKeyboardMarkup:
+    """Teclado mostrado a los admins en la notificación del ticket.
+
+    Los tickets "promo" no pasan por Tomar/Resolver: se aprueban o se
+    rechazan directamente, ya que no requieren el mismo trabajo de
+    diagnóstico/arreglo que un bug.
+    """
+    if kind == "promo":
+        return InlineKeyboardMarkup([[
+            InlineKeyboardButton("✅ Aprobar", callback_data=f"tkt_approve:{ticket_id}"),
+            InlineKeyboardButton("❌ Rechazar", callback_data=f"tkt_reject:{ticket_id}"),
+        ]])
     if claimed:
         return InlineKeyboardMarkup([[
             InlineKeyboardButton("✅ Marcar resuelto", callback_data=f"tkt_resolve:{ticket_id}"),
@@ -62,7 +97,7 @@ async def tkt_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
     await update.message.reply_text(
         "🎫 *Contactar a los administradores*\n\n"
-        "¿Sobre qué querés escribirnos?",
+        "¿Sobre qué quieres escribirnos?",
         parse_mode=ParseMode.MARKDOWN,
         reply_markup=_menu_keyboard(user_id),
     )
@@ -82,7 +117,7 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     owner_id = _parse_owner_id(query.data)
 
     if owner_id is None or clicker_id != owner_id:
-        await query.answer("⚠️ Este menú no te pertenece. Usá /tkt para abrir el tuyo.", show_alert=True)
+        await query.answer("⚠️ Este menú no te pertenece. Usa /tkt para abrir el tuyo.", show_alert=True)
         return
 
     if query.data.startswith("tkt_cancel:"):
@@ -94,9 +129,9 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     context.user_data["tkt_awaiting"] = kind
 
     prompt = (
-        "🐛 Contame *en un solo mensaje* qué encontraste raro o qué no funciona."
+        "🐛 Cuéntanos *en un solo mensaje* qué encontraste raro o qué no funciona."
         if kind == "bug"
-        else "📢 Contame *en un solo mensaje* qué querés promocionar o anunciar."
+        else "📢 Cuéntanos *en un solo mensaje* qué quieres promocionar o anunciar."
     )
     await query.edit_message_text(prompt, parse_mode=ParseMode.MARKDOWN)
 
@@ -110,7 +145,7 @@ async def _notify_admins(bot, ticket_id: int, kind: str, message: str, user_id: 
         f"👤 {who}\n\n"
         f"💬 {message}"
     )
-    keyboard = _ticket_admin_keyboard(ticket_id, claimed=False)
+    keyboard = _ticket_admin_keyboard(ticket_id, kind, claimed=False)
     for admin_id in settings.get_admin_chat_ids_list():
         try:
             await bot.send_message(admin_id, text, parse_mode=ParseMode.MARKDOWN, reply_markup=keyboard)
@@ -139,19 +174,19 @@ async def handle_tkt_message(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     if len(message_text) < 3:
         await update.message.reply_text(
-            "⚠️ El mensaje es muy corto. Usá /tkt de nuevo para intentarlo otra vez."
+            "⚠️ El mensaje es muy corto. Usa /tkt de nuevo para intentarlo otra vez."
         )
         return
     if len(message_text) > MAX_MESSAGE_LENGTH:
         await update.message.reply_text(
             f"⚠️ El mensaje supera los {MAX_MESSAGE_LENGTH} caracteres. "
-            "Usá /tkt de nuevo con algo más corto."
+            "Usa /tkt de nuevo con algo más corto."
         )
         return
 
     api_client = _get_api_client(context)
     if not api_client:
-        await update.message.reply_text("⚠️ Error interno. Intentá de nuevo más tarde.")
+        await update.message.reply_text("⚠️ Error interno. Intenta de nuevo más tarde.")
         return
 
     result = await api_client.create_ticket(
@@ -159,7 +194,7 @@ async def handle_tkt_message(update: Update, context: ContextTypes.DEFAULT_TYPE)
     )
     if not result or not result.get("ok"):
         await update.message.reply_text(
-            "❌ No se pudo crear el ticket. Intentá de nuevo más tarde con /tkt."
+            "❌ No se pudo crear el ticket. Intenta de nuevo más tarde con /tkt."
         )
         return
 
@@ -173,7 +208,7 @@ async def handle_tkt_message(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 
 async def admin_action_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Callback tkt_claim:<id> / tkt_resolve:<id> — botones en la notificación de admin."""
+    """Callback tkt_claim: / tkt_resolve: / tkt_approve: / tkt_reject: — botones de admin."""
     query = update.callback_query
     admin_id = query.from_user.id
 
@@ -195,13 +230,19 @@ async def admin_action_callback(update: Update, context: ContextTypes.DEFAULT_TY
         if not result or not result.get("ok"):
             await query.answer("⚠️ No se pudo tomar el ticket.", show_alert=True)
             return
+        data = result.get("data", {})
         try:
             await query.edit_message_reply_markup(
-                reply_markup=_ticket_admin_keyboard(ticket_id, claimed=True)
+                reply_markup=_ticket_admin_keyboard(ticket_id, data.get("kind", "bug"), claimed=True)
             )
         except BadRequest:
             pass
-        await query.answer(f"✋ Ticket #{ticket_id} asignado a vos.")
+        await query.answer(f"✋ Ticket #{ticket_id} asignado a ti.")
+        if data.get("user_id"):
+            await _notify_user(
+                context.bot, data["user_id"],
+                f"✋ Tu ticket #{ticket_id} fue tomado por un administrador. En breve te contactará.",
+            )
         return
 
     if query.data.startswith("tkt_resolve:"):
@@ -223,6 +264,62 @@ async def admin_action_callback(update: Update, context: ContextTypes.DEFAULT_TY
         except BadRequest:
             pass
         await query.answer(f"✅ Ticket #{ticket_id} marcado como resuelto.")
+        if data.get("user_id"):
+            await _notify_user(
+                context.bot, data["user_id"],
+                f"✅ Tu ticket #{ticket_id} fue resuelto. ¡Gracias por avisarnos!",
+            )
+        return
+
+    if query.data.startswith("tkt_approve:"):
+        result = await api_client.update_ticket(ticket_id, status="approved")
+        if not result or not result.get("ok"):
+            await query.answer("⚠️ No se pudo aprobar el anuncio.", show_alert=True)
+            return
+        data = result.get("data", {})
+        who = f"@{data['username']}" if data.get("username") else f"ID {data.get('user_id', '—')}"
+        try:
+            await query.edit_message_text(
+                f"🎫 *Ticket #{ticket_id}* — {KIND_LABELS.get('promo')}\n\n"
+                f"👤 {who}\n\n"
+                f"💬 {data.get('message', '—')}\n\n"
+                f"✅ *Aprobado*",
+                parse_mode=ParseMode.MARKDOWN,
+            )
+        except BadRequest:
+            pass
+        await query.answer(f"✅ Anuncio #{ticket_id} aprobado.")
+        if data.get("user_id"):
+            await _notify_user(
+                context.bot, data["user_id"],
+                f"📢 Tu solicitud de anuncio #{ticket_id} fue aprobada. ¡Gracias!",
+            )
+        return
+
+    if query.data.startswith("tkt_reject:"):
+        result = await api_client.update_ticket(ticket_id, status="rejected")
+        if not result or not result.get("ok"):
+            await query.answer("⚠️ No se pudo rechazar el anuncio.", show_alert=True)
+            return
+        data = result.get("data", {})
+        who = f"@{data['username']}" if data.get("username") else f"ID {data.get('user_id', '—')}"
+        try:
+            await query.edit_message_text(
+                f"🎫 *Ticket #{ticket_id}* — {KIND_LABELS.get('promo')}\n\n"
+                f"👤 {who}\n\n"
+                f"💬 {data.get('message', '—')}\n\n"
+                f"❌ *Rechazado*",
+                parse_mode=ParseMode.MARKDOWN,
+            )
+        except BadRequest:
+            pass
+        await query.answer(f"❌ Anuncio #{ticket_id} rechazado.")
+        if data.get("user_id"):
+            await _notify_user(
+                context.bot, data["user_id"],
+                f"📢 Tu solicitud de anuncio #{ticket_id} fue rechazada. "
+                "Si quieres más detalle, contacta a un administrador.",
+            )
         return
 
 
@@ -235,7 +332,7 @@ async def tkts_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
     api_client = _get_api_client(context)
     if not api_client:
-        await update.message.reply_text("⚠️ Error interno. Intentá de nuevo más tarde.")
+        await update.message.reply_text("⚠️ Error interno. Intenta de nuevo más tarde.")
         return
 
     open_tickets = await api_client.list_tickets(status="open")

@@ -463,11 +463,12 @@ async def _handle_ms(update: Update, context: ContextTypes.DEFAULT_TYPE, callbac
 # ── Tickets (/tkt) callbacks ──
 
 async def _handle_tkt(update: Update, context: ContextTypes.DEFAULT_TYPE, callback_data: str) -> None:
-    """Handle tkt_* callbacks from /tkt: menu selection + admin claim/resolve.
+    """Handle tkt_* callbacks from /tkt: menu selection + admin claim/resolve/approve/reject.
 
     The actual implementation lives in ``handlers/tkt.py``; this thin
     wrapper dispatches to menu_callback (tkt_bug/tkt_promo/tkt_cancel) or
-    admin_action_callback (tkt_claim/tkt_resolve) based on the prefix.
+    admin_action_callback (tkt_claim/tkt_resolve/tkt_approve/tkt_reject)
+    based on the prefix.
     """
     handler_start = time.time()
     query = update.callback_query
@@ -478,7 +479,7 @@ async def _handle_tkt(update: Update, context: ContextTypes.DEFAULT_TYPE, callba
     try:
         if callback_data.startswith(("tkt_bug:", "tkt_promo:", "tkt_cancel:")):
             await tkt.menu_callback(update, context)
-        elif callback_data.startswith(("tkt_claim:", "tkt_resolve:")):
+        elif callback_data.startswith(("tkt_claim:", "tkt_resolve:", "tkt_approve:", "tkt_reject:")):
             await tkt.admin_action_callback(update, context)
         else:
             logger.warning("⚠️ _handle_tkt recibió callback_data desconocido: '%s'", callback_data)

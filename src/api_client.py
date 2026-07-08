@@ -851,6 +851,34 @@ class TasaloApiClient:
             logger.error("❌ Error en admin_list_user_ids: %s", e)
             return []
 
+    async def lookup_user_id_by_username(self, username: str) -> Optional[int]:
+        """Busca el user_id de un usuario registrado a partir de su username.
+
+        Endpoint admin-only (requiere admin_key). Usado por /ms <@usuario>
+        para enviar un mensaje a un único usuario en vez de a todos. Ver
+        docs/plans/2026-07-08-ms-directo-y-tkt-mejoras.md.
+
+        Args:
+            username: username a buscar (con o sin "@" inicial)
+
+        Returns:
+            user_id (int) si se encuentra, None si no hay match o hay error.
+        """
+        if not self.admin_key:
+            logger.error("❌ lookup_user_id_by_username requiere admin_key configurado")
+            return None
+        url = f"{self.api_url}/api/v1/admin/stats/users/lookup"
+        try:
+            data = await self._get_with_retry(
+                url, params={"username": username}, headers=self._admin_headers,
+            )
+            if data and data.get("ok") and data.get("data"):
+                return data["data"].get("user_id")
+            return None
+        except Exception as e:
+            logger.error("❌ Error en lookup_user_id_by_username(%s): %s", username, e)
+            return None
+
     # ── Tickets (/tkt) API methods ──────────────────────────────────────────────
 
     async def create_ticket(
