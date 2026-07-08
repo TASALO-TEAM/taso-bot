@@ -232,22 +232,34 @@ def create_application() -> Application:
     logger.info("✅ Callback router registered (consolidated 13+ handlers into 1)")
 
     # Registrar handler para input de hora personalizada del año
+    #
+    # IMPORTANTE: los 3 MessageHandler globales de más abajo (year hour,
+    # image alert time, tkt message) usan el mismo filtro amplio
+    # (filters.TEXT & ~filters.COMMAND) y se auto-filtran internamente por
+    # flags en user_data. python-telegram-bot solo ejecuta UN handler por
+    # grupo por update (para en el primero cuyo filtro matchee) — si los
+    # 3 quedan en el grupo 0 (default), el primero registrado "gana"
+    # SIEMPRE y los otros dos nunca se llegan a ejecutar, sin importar el
+    # flag interno. Por eso cada uno va en su propio grupo explícito.
     application.add_handler(
-        MessageHandler(filters.TEXT & ~filters.COMMAND, handle_year_hour_input)
+        MessageHandler(filters.TEXT & ~filters.COMMAND, handle_year_hour_input),
+        group=0,
     )
-    logger.debug("✅ MessageHandler registered for year hour input")
+    logger.debug("✅ MessageHandler registered for year hour input (group=0)")
 
     # Registrar handler para input de hora de alertas de imágenes
     application.add_handler(
-        MessageHandler(filters.TEXT & ~filters.COMMAND, handle_time_input)
+        MessageHandler(filters.TEXT & ~filters.COMMAND, handle_time_input),
+        group=1,
     )
-    logger.debug("✅ MessageHandler registered for image alert time input")
+    logger.debug("✅ MessageHandler registered for image alert time input (group=1)")
 
     # Registrar handler para el mensaje de contenido de un ticket (/tkt)
     application.add_handler(
-        MessageHandler(filters.TEXT & ~filters.COMMAND, handle_tkt_message)
+        MessageHandler(filters.TEXT & ~filters.COMMAND, handle_tkt_message),
+        group=2,
     )
-    logger.debug("✅ MessageHandler registered for /tkt message capture")
+    logger.debug("✅ MessageHandler registered for /tkt message capture (group=2)")
 
     # Registrar error handler global
     application.add_error_handler(error_handler)
