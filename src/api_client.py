@@ -908,8 +908,10 @@ class TasaloApiClient:
             logger.error("❌ Error en create_ticket user_id=%d: %s", user_id, e)
             return None
 
-    async def list_tickets(self, status: Optional[str] = None, kind: Optional[str] = None) -> list:
-        """Lista tickets, opcionalmente filtrados. Uso: /tkts."""
+    async def list_tickets(
+        self, status: Optional[str] = None, kind: Optional[str] = None, limit: Optional[int] = None,
+    ) -> list:
+        """Lista tickets, opcionalmente filtrados. Uso: /tkt list, /tkt active."""
         if not self.admin_key:
             logger.error("❌ list_tickets requiere admin_key configurado")
             return []
@@ -919,6 +921,8 @@ class TasaloApiClient:
             params["status"] = status
         if kind:
             params["kind"] = kind
+        if limit:
+            params["limit"] = limit
         try:
             client = self._get_client()
             resp = await client.get(url, headers=self._admin_headers, params=params)
@@ -928,6 +932,27 @@ class TasaloApiClient:
         except Exception as e:
             logger.error("❌ Error en list_tickets: %s", e)
             return []
+
+    async def get_ticket(self, ticket_id: int) -> Optional[dict]:
+        """Obtiene un ticket puntual por id. Uso: /tkt show <id>."""
+        if not self.admin_key:
+            logger.error("❌ get_ticket requiere admin_key configurado")
+            return None
+        url = f"{self.api_url}/api/v1/tickets/{ticket_id}"
+        try:
+            client = self._get_client()
+            resp = await client.get(url, headers=self._admin_headers)
+            resp.raise_for_status()
+            data = resp.json()
+            return data.get("data") if data.get("ok") else None
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 404:
+                return None
+            logger.error("❌ HTTP %d en get_ticket id=%d", e.response.status_code, ticket_id)
+            return None
+        except Exception as e:
+            logger.error("❌ Error en get_ticket id=%d: %s", ticket_id, e)
+            return None
 
     async def update_ticket(
         self, ticket_id: int, status: Optional[str] = None, claimed_by: Optional[int] = None,

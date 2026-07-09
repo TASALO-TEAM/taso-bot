@@ -40,6 +40,28 @@ logger = logging.getLogger(__name__)
 KIND_LABELS = {"bug": "🐛 Bug", "promo": "📢 Promoción"}
 MAX_MESSAGE_LENGTH = 1000  # debe coincidir con el límite del schema en taso-api
 
+STATUS_ICONS = {
+    "open": "🔵",
+    "in_progress": "🟡",
+    "resolved": "✅",
+    "closed": "⚫",
+    "approved": "✅",
+    "rejected": "❌",
+}
+STATUS_LABELS = {
+    "open": "Abierto",
+    "in_progress": "En progreso",
+    "resolved": "Resuelto",
+    "closed": "Cerrado",
+    "approved": "Aprobado",
+    "rejected": "Rechazado",
+}
+# Estados finales: un ticket en uno de estos ya no admite acciones de admin
+# (Tomar/Resolver/Aprobar/Rechazar) - /tkt show no le agrega teclado.
+TERMINAL_STATUSES = {"resolved", "closed", "approved", "rejected"}
+LIST_LIMIT = 20  # tope de /tkt list - a mensaje de Telegram le entran ~4096 caracteres
+MAX_LIST_TEXT_LENGTH = 3800  # margen bajo el limite de 4096 de Telegram para el footer
+
 
 def _get_api_client(context: ContextTypes.DEFAULT_TYPE) -> TasaloApiClient:
     return context.bot_data.get("api_client")
@@ -91,15 +113,132 @@ def _ticket_admin_keyboard(ticket_id: int, kind: str, claimed: bool = False) -> 
 
 
 async def tkt_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handler principal de /tkt — muestra el menú de contacto."""
-    user_id = update.effective_user.id
-    logger.info("🎫 /tkt invocado por user %d", user_id)
+    """Handler principal de /tkt.
 
+    Sin argumentos: muestra el menú de contacto (disponible para cualquier
+    usuario). Con subcomando (list/active/show), gestiona tickets - solo
+    para administradores:
+        /tkt list       → últimos 20 tickets (cualquier estado)
+        /tkt active     → tickets open + in_progress (reemplaza al viejo /tkts)
+        /tkt show <id>  → detalle de un ticket + botones de accion si sigue abierto
+    """
+    user_id = update.effective_user.id
+    args = context.args or []
+
+    if not args:
+        logger.info("🎫 /tkt invocado por user %d", user_id)
+        await update.message.reply_text(
+            "🎫 *Contactar a los administradores*\n\n"
+            "¿Sobre qué quieres escribirnos?",
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=_menu_keyboard(user_id),
+        )
+        return
+
+    sub = args[0].lower()
+    if sub not in ("list", "active", "show"):
+        await update.message.reply_text(
+            "⚠️ Subcomando no reconocido. Usa `/tkt`, `/tkt list`, `/tkt active` o `/tkt show <id>`.",
+            parse_mode=ParseMode.MARKDOWN,
+        )
+        return
+
+    if user_id not in settings.get_admin_chat_ids_list():
+        await update.message.reply_text("🔑 Este subcomando es solo para administradores.")
+        return
+
+    api_client = _get_api_client(context)
+    if not api_client:
+        await update.message.reply_text("⚠️ Error interno. Intenta de nuevo más tarde.")
+        return
+
+    logger.info("🎫 /tkt %s invocado por admin %d", sub, user_id)
+
+    if sub == "list":
+        tickets = await api_client.list_tickets(limit=LIST_LIMIT)
+        await update.message.reply_text(
+            _format_ticket_list(tickets, f"🎫 Últimos tickets (máx. {LIST_LIMIT})"),
+            parse_mode=ParseMode.MARKDOWN,
+        )
+        return
+
+    if sub == "active":
+        open_tickets = await api_client.list_tickets(status="open")
+        in_progress = await api_client.list_tickets(status="in_progress")
+        tickets = sorted(
+            open_tickets + in_progress, key=lambda t: t.get("created_at", ""), reverse=True,
+        )
+        await update.message.reply_text(
+            _format_ticket_list(tickets, "🎫 Tickets pendientes"),
+            parse_mode=ParseMode.MARKDOWN,
+        )
+        return
+
+    # sub == "show"
+    if len(args) < 2 or not args[1].lstrip("-").isdigit():
+        await update.message.reply_text(
+            "⚠️ Uso: `/tkt show <id>` (el id es el número que aparece como #N).",
+            parse_mode=ParseMode.MARKDOWN,
+        )
+        return
+
+    ticket_id = int(args[1])
+    ticket = await api_client.get_ticket(ticket_id)
+    if not ticket:
+        await update.message.reply_text(f"⚠️ No se encontró el ticket #{ticket_id}.")
+        return
+
+    keyboard = None
+    if ticket.get("status") not in TERMINAL_STATUSES:
+        keyboard = _ticket_admin_keyboard(
+            ticket_id, ticket.get("kind", "bug"), claimed=bool(ticket.get("claimed_by")),
+        )
     await update.message.reply_text(
-        "🎫 *Contactar a los administradores*\n\n"
-        "¿Sobre qué quieres escribirnos?",
-        parse_mode=ParseMode.MARKDOWN,
-        reply_markup=_menu_keyboard(user_id),
+        _format_ticket_detail(ticket), parse_mode=ParseMode.MARKDOWN, reply_markup=keyboard,
+    )
+
+
+def _format_ticket_list(tickets: list, title: str) -> str:
+    """Arma el texto de /tkt list o /tkt active, recortando si hace falta
+    para no pasarse del límite de 4096 caracteres de Telegram.
+    """
+    if not tickets:
+        return f"{title}\n\n✅ No hay tickets para mostrar."
+
+    lines = [f"{title}\n"]
+    shown = 0
+    for t in tickets:
+        icon = STATUS_ICONS.get(t["status"], "⚪")
+        label = KIND_LABELS.get(t["kind"], t["kind"])
+        who = f"@{t['username']}" if t.get("username") else f"ID {t['user_id']}"
+        claimed = f" (tomado por {t['claimed_by']})" if t.get("claimed_by") else ""
+        preview = t["message"][:70].replace("\n", " ")
+        line = f"{icon} #{t['id']} {label} — {who}{claimed}\n   _{preview}_"
+        # +200 de margen para el footer de "+N más" si hiciera falta
+        if sum(len(l) + 1 for l in lines) + len(line) > MAX_LIST_TEXT_LENGTH:
+            break
+        lines.append(line)
+        shown += 1
+
+    if shown < len(tickets):
+        lines.append(f"\n_(+{len(tickets) - shown} más — usa /tkt show <id> para verlos)_")
+    lines.append("\n🔍 Usa `/tkt show <id>` para ver el detalle y procesarlo.")
+    return "\n".join(lines)
+
+
+def _format_ticket_detail(t: dict) -> str:
+    """Arma el texto de detalle completo mostrado por /tkt show <id>."""
+    label = KIND_LABELS.get(t["kind"], t["kind"])
+    status_icon = STATUS_ICONS.get(t["status"], "⚪")
+    status_label = STATUS_LABELS.get(t["status"], t["status"])
+    who = f"@{t['username']}" if t.get("username") else f"ID {t['user_id']}"
+    claimed = f"\n👤 Tomado por: `{t['claimed_by']}`" if t.get("claimed_by") else ""
+    return (
+        f"🎫 *Ticket #{t['id']}* — {label}\n\n"
+        f"👤 Usuario: {who} (`{t['user_id']}`)\n"
+        f"{status_icon} Estado: {status_label}{claimed}\n"
+        f"📅 Creado: `{t.get('created_at', '—')}`\n\n"
+        f"💬 {t['message']}"
     )
 
 
@@ -321,34 +460,3 @@ async def admin_action_callback(update: Update, context: ContextTypes.DEFAULT_TY
                 "Si quieres más detalle, contacta a un administrador.",
             )
         return
-
-
-async def tkts_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handler de /tkts (admin) — lista tickets abiertos/en progreso."""
-    admin_id = update.effective_user.id
-    if admin_id not in settings.get_admin_chat_ids_list():
-        await update.message.reply_text("🔑 Este comando es solo para administradores.")
-        return
-
-    api_client = _get_api_client(context)
-    if not api_client:
-        await update.message.reply_text("⚠️ Error interno. Intenta de nuevo más tarde.")
-        return
-
-    open_tickets = await api_client.list_tickets(status="open")
-    in_progress = await api_client.list_tickets(status="in_progress")
-    tickets = open_tickets + in_progress
-
-    if not tickets:
-        await update.message.reply_text("✅ No hay tickets pendientes.")
-        return
-
-    lines = ["🎫 *Tickets pendientes*\n"]
-    for t in tickets:
-        label = KIND_LABELS.get(t["kind"], t["kind"])
-        who = f"@{t['username']}" if t.get("username") else f"ID {t['user_id']}"
-        status_icon = "🔵" if t["status"] == "open" else "🟡"
-        claimed = f" (tomado por {t['claimed_by']})" if t.get("claimed_by") else ""
-        lines.append(f"{status_icon} #{t['id']} {label} — {who}{claimed}\n   _{t['message'][:80]}_")
-
-    await update.message.reply_text("\n".join(lines), parse_mode=ParseMode.MARKDOWN)

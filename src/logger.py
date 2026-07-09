@@ -161,7 +161,16 @@ class BotLogger:
             enable_file_logging: Si False, solo logging a consola (para tests)
         """
         self.enable_file_logging = enable_file_logging
-        self.logger = logging.getLogger("taso-bot")
+        # ROOT logger (name=""), no "taso-bot": todo modulo usa
+        # logging.getLogger(__name__) (p.ej. "src.handlers.tkt"), que por
+        # jerarquia de logging NO es hijo de un logger llamado "taso-bot" -
+        # solo propaga hasta la raiz. Si los handlers se cuelgan de un
+        # logger nombrado, los logs de cualquier modulo desaparecen sin
+        # error (bug real detectado: 0 lineas de src.handlers.* en
+        # produccion pese a actividad real). Colgando los handlers de la
+        # raiz, CUALQUIER logger de la app los alcanza vía propagacion,
+        # conservando su propio nombre en %(name)s.
+        self.logger = logging.getLogger()
 
         # Configurar handlers
         self._setup_logger()

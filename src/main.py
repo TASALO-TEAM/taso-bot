@@ -60,7 +60,7 @@ from src.handlers.alert import alert_command
 from src.handlers.spl import spl_command
 from src.handlers.ads import ads_command
 from src.handlers.ms import ms_command
-from src.handlers.tkt import tkt_command, tkts_command, handle_tkt_message
+from src.handlers.tkt import tkt_command, handle_tkt_message
 from src.handlers.help import help_command
 from src.services.daily_image_sender import start_daily_dispatcher, stop_daily_dispatcher
 from src.services.year_alert_scheduler import start_year_scheduler, stop_year_scheduler
@@ -76,6 +76,10 @@ ALLOWED_UPDATE_TYPES = [
 # NO incluir: chat_member, message_reaction, poll, poll_answer, etc.
 
 # Inicializar sistema de logging profesional con archivo
+# file_logger.logger es ahora el ROOT logger (ver src/logger.py) - se usa
+# solo para fijar el nivel global. El logger propio de este modulo es
+# aparte, igual que en todos los demas modulos (logging.getLogger(__name__)),
+# para que "quien logueo que" quede claro en el archivo.
 file_logger = BotLogger(enable_file_logging=True)
 file_logger.logger.setLevel(getattr(logging, settings.log_level))
 
@@ -83,7 +87,7 @@ file_logger.logger.setLevel(getattr(logging, settings.log_level))
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
 # Logger estándar para este módulo
-logger = file_logger.logger
+logger = logging.getLogger(__name__)
 
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -217,7 +221,6 @@ def create_application() -> Application:
         ("ads", ads_command),
         ("ms", ms_command),
         ("tkt", tkt_command),
-        ("tkts", tkts_command),
     ]
     
     for cmd_name, handler in command_handlers:

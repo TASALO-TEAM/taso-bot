@@ -72,7 +72,8 @@ _Ejemplos: /ta btcusdt · /graf ethusdt_
 SUMMARY_ADMIN_EXTRA = """
 
 🔑 *Administración*
-/refresh /status /health /log /ads /ms /tkts — usa `/help admin`, `/help ads`, `/help ms` o `/help tkts` para el detalle."""
+/refresh /status /health /log /ads /ms — usa `/help admin`, `/help ads` o `/help ms` para el detalle.
+/tkt list · /tkt active · /tkt show <id> — gestión de tickets, ver `/help admin`."""
 
 
 # Fichas detalladas — clave = tema (lo que va después de "/help ")
@@ -206,7 +207,7 @@ Muestra el mensaje de bienvenida con botones de acceso directo a Tasalo, Toque, 
 
 Uso: `/tkt`
 
-Abre un menú para reportar un bug o pedir que te promocionen/publiquen un anuncio. Elegís una opción, contás en un mensaje qué pasa, y un admin te contacta directamente.""",
+Abre un menú para reportar un bug o pedir que te promocionen/publiquen un anuncio. Elegís una opción, contás en un mensaje qué pasa, y un admin te contacta directamente. Te avisamos cuando tu ticket se toma y cuando se resuelve (o se aprueba/rechaza si es un anuncio).""",
 
     # Solo visibles/respondidas si is_admin:
     "ads": """📢 */ads — Gestión de anuncios* (admin)
@@ -230,20 +231,17 @@ Siempre muestra una vista previa con botones de confirmación antes de enviar na
 
 Pensado para avisos rápidos: un comando que cambió, un bug arreglado, mantenimiento, etc.""",
 
-    "tkts": """🎫 */tkts — Ver tickets pendientes* (admin)
-
-Uso: `/tkts`
-
-Lista los tickets abiertos y en progreso creados con `/tkt` por los usuarios (bugs y pedidos de promoción), con quién los tomó si alguno ya está en curso.
-
-Cada ticket nuevo también llega como notificación directa con botones ✋ Tomar / ✅ Resolver.""",
-
     "admin": """🔑 *Comandos de administración*
 
 `/refresh` — fuerza un refresh manual de las tasas
 `/status` — estado del scheduler y última actualización
 `/health` — verifica la conexión del bot con el backend
-`/log` — logs de bot/api/web sin necesitar SSH (`/log` para ver subcomandos)""",
+`/log` — logs de bot/api/web sin necesitar SSH (`/log` para ver subcomandos)
+
+🎫 *Gestión de tickets (/tkt)*
+`/tkt list` — últimos 20 tickets, cualquier estado
+`/tkt active` — tickets abiertos o en progreso (pendientes de atender)
+`/tkt show <id>` — detalle de un ticket puntual, con los botones de Tomar/Resolver o Aprobar/Rechazar según corresponda""",
 }
 
 # Alias → tema real. Permite /help alertas, /help cripto, /help ayuda, etc.
@@ -259,7 +257,7 @@ TOPIC_ALIASES: dict[str, str] = {
     "aviso": "ms",
     "notificar": "ms",
     "ticket": "tkt",
-    "tickets": "tkts",
+    "tickets": "admin",  # /help tickets -> detalle unificado de gestion en "admin"
     "soporte": "tkt",
     "contacto": "tkt",
     "logs": "admin",
@@ -283,7 +281,7 @@ TOPIC_ALIASES: dict[str, str] = {
     "eltoque": "toque",
 }
 
-ADMIN_ONLY_TOPICS = {"ads", "admin", "ms", "tkts"}
+ADMIN_ONLY_TOPICS = {"ads", "admin", "ms"}
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
