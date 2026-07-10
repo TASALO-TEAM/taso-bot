@@ -17,6 +17,7 @@ from telegram.ext import (
 )
 
 from src.config import settings
+from src.build_info import BOT_VERSION
 from src.api_client import TasaloApiClient
 from src.bot_profile import ensure_bot_profile_photo, create_template_with_profile
 from src.handlers.tasalo import (
@@ -371,7 +372,7 @@ def main():
     logger.info("📂 Log directory: %s", LOGS_DIR)
     logger.info("📋 Log level: %s", settings.log_level)
     logger.info("🔄 API timeout: %ds", settings.api_timeout_seconds)
-    logger.info("🤖 Bot version: 0.11.1")
+    logger.info("🤖 Bot version: %s", BOT_VERSION)
     logger.info("=" * 60)
 
     # Crear aplicación

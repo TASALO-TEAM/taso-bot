@@ -144,17 +144,19 @@ async def test_admin_status_requires_api_key():
 
 @pytest.mark.asyncio
 async def test_admin_status_with_api_key():
-    """admin_status obtiene estado del scheduler."""
+    """admin_status obtiene estado del scheduler.
+
+    Forma real desde Fase 2 (docs/plans/2026-07-08-status-command-v2.md):
+    {ok, is_scheduler_running, jobs: [...]}, sin envoltorio "data".
+    """
     from src.api_client import TasaloApiClient
 
     mock_data = {
         "ok": True,
-        "data": {
-            "scheduler": {
-                "is_running": True,
-                "last_run_at": "2026-03-22T14:30:00Z",
-            }
-        }
+        "is_scheduler_running": True,
+        "jobs": [
+            {"id": "refresh_all", "name": "Refresh de tasas", "next_run_at": "2026-03-22T14:35:00Z"},
+        ],
     }
 
     client = TasaloApiClient(api_url="http://localhost:8000", admin_key="test_key")
@@ -163,7 +165,8 @@ async def test_admin_status_with_api_key():
         result = await client.admin_status()
 
         assert result is not None
-        assert result["data"]["scheduler"]["is_running"] is True
+        assert result["is_scheduler_running"] is True
+        assert result["jobs"][0]["id"] == "refresh_all"
 
 
 @pytest.mark.asyncio

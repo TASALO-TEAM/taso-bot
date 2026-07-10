@@ -410,6 +410,75 @@ class TasaloApiClient:
             logger.error("❌ Error en get_stats_summary (%.0fms): %s", duration_ms, e)
             return None
 
+    async def get_api_usage_stats(self, window: str = "24h") -> Optional[Dict[str, Any]]:
+        """Obtiene el uso de la API pública desglosado por cliente y endpoint.
+
+        Endpoint admin-only. Ver docs/plans/2026-07-08-status-command-v2.md
+        (Fase 1). Usado por /status → botón "🌐 API pública".
+
+        Args:
+            window: "24h" (default), "7d" o "30d"
+
+        Returns:
+            Dict con la respuesta (ApiUsageStats) o None si hay error.
+        """
+        if not self.admin_key:
+            logger.error("❌ get_api_usage_stats requiere admin_key configurado")
+            return None
+
+        url = f"{self.api_url}/api/v1/admin/stats/api-usage"
+        start_time = time.time()
+
+        try:
+            data = await self._get_with_retry(
+                url, headers=self._admin_headers, params={"window": window},
+            )
+            duration_ms = (time.time() - start_time) * 1000
+
+            if data and data.get('ok'):
+                logger.info("✅ Uso de API obtenido (window=%s, %.0fms)", window, duration_ms)
+                return data
+            return None
+
+        except httpx.HTTPStatusError as e:
+            duration_ms = (time.time() - start_time) * 1000
+            if e.response.status_code == 401:
+                logger.error("🔑 Error 401: API key inválida o faltante (%.0fms)", duration_ms)
+            else:
+                logger.error("❌ Error HTTP %d (%.0fms): %s", e.response.status_code, duration_ms, e)
+            return None
+        except Exception as e:
+            duration_ms = (time.time() - start_time) * 1000
+            logger.error("❌ Error en get_api_usage_stats (%.0fms): %s", duration_ms, e)
+            return None
+
+    async def get_health(self) -> Optional[Dict[str, Any]]:
+        """Obtiene el estado de salud + versión/commit de taso-api.
+
+        Endpoint público (sin admin_key). Usado por /status → botón
+        "📝 Cambios recientes" para mostrar qué commit está corriendo la API.
+
+        Returns:
+            Dict con {ok, version, git_commit, git_commit_date, db, ...} o
+            None si el backend no responde.
+        """
+        url = f"{self.api_url}/api/v1/health"
+        start_time = time.time()
+
+        try:
+            data = await self._get_with_retry(url)
+            duration_ms = (time.time() - start_time) * 1000
+
+            if data and data.get('ok'):
+                logger.debug("✅ Health de taso-api obtenido (%.0fms)", duration_ms)
+                return data
+            return None
+
+        except Exception as e:
+            duration_ms = (time.time() - start_time) * 1000
+            logger.warning("⚠️ Error en get_health (%.0fms): %s", duration_ms, e)
+            return None
+
     # ── Year API methods ───────────────────────────────────────────────────────
 
     async def get_year_state(self) -> Optional[Dict[str, Any]]:
