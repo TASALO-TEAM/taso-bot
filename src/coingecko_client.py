@@ -24,6 +24,7 @@ Distinción de resultados en _resolve_coin_id():
 """
 
 import httpx
+import itertools
 import logging
 from typing import Optional, Dict, Any
 
@@ -48,11 +49,25 @@ class CoinGeckoClient:
         # Cache en memoria de resoluciones símbolo → id (evita golpear /search
         # repetidamente por el mismo símbolo durante la vida del proceso).
         self._id_cache: Dict[str, Optional[str]] = {}
+        # Rotación de API keys (soporta varias separadas por coma en .env para
+        # repartir carga entre distintas cuentas del plan Demo, cada una con
+        # su propio límite de 30 calls/min). Con 1 sola key, cycle() siempre
+        # devuelve esa misma key: comportamiento idéntico al anterior.
+        self._keys = self.settings.coingecko_api_keys
+        self._key_cycle = itertools.cycle(self._keys) if self._keys else None
 
     @property
     def is_configured(self) -> bool:
-        """True si hay una API key de CoinGecko configurada."""
-        return bool(self.settings.coingecko_api_key)
+        """True si hay al menos una API key de CoinGecko configurada."""
+        return bool(self._keys)
+
+    def _next_key(self) -> str:
+        """Devuelve la siguiente API key en la rotación (round-robin).
+
+        Síncrono y sin puntos de suspensión (await), por lo que es seguro
+        aunque haya varias corrutinas concurrentes usando el mismo cliente.
+        """
+        return next(self._key_cycle)
 
     def _get_client(self) -> httpx.AsyncClient:
         if self._client is None or self._client.is_closed:
@@ -65,7 +80,43 @@ class CoinGeckoClient:
             logger.debug("🔌 CoinGecko client closed")
 
     def _headers(self) -> Dict[str, str]:
-        return {"x-cg-demo-api-key": self.settings.coingecko_api_key}
+        """Headers con la siguiente key de la rotación.
+
+        Cada llamada rota a la key siguiente, así que dos peticiones HTTP
+        consecutivas (incluso dentro de la misma get_enrichment_data, que
+        hace /search + /coins/{id}) usan keys distintas cuando hay varias
+        configuradas.
+        """
+        return {"x-cg-demo-api-key": self._next_key()}
+
+    async def _request_with_retry(
+        self, url: str, params: Dict[str, Any], timeout: float
+    ) -> httpx.Response:
+        """GET con reintento automático a la siguiente key si la actual da 429.
+
+        Reintenta como máximo una vez por key disponible (cada intento ya
+        rota a la siguiente key vía _headers()) antes de dejar que el 429
+        se propague como HTTPStatusError normal. Con 1 sola key configurada
+        no hay reintento posible: se comporta igual que antes.
+        """
+        client = self._get_client()
+        attempts = max(len(self._keys), 1)
+        resp: Optional[httpx.Response] = None
+        for attempt in range(attempts):
+            resp = await client.get(url, headers=self._headers(), params=params, timeout=timeout)
+            if resp.status_code == 429 and attempt < attempts - 1:
+                used_key = resp.request.headers.get("x-cg-demo-api-key", "")
+                logger.warning(
+                    "CoinGecko 429 (rate limit) con key ...%s, probando siguiente key (intento %d/%d)",
+                    used_key[-4:], attempt + 2, attempts,
+                )
+                continue
+            resp.raise_for_status()
+            return resp
+        # No debería llegar aquí (el loop siempre retorna o lanza), pero por
+        # si acaso: forzar el error del último intento.
+        resp.raise_for_status()
+        return resp
 
     # ── Resolución de IDs ──
 
@@ -91,15 +142,12 @@ class CoinGeckoClient:
             logger.debug("CoinGecko cache hit para %s: %s", symbol_upper, cached)
             return cached
 
-        client = self._get_client()
         try:
-            resp = await client.get(
+            resp = await self._request_with_retry(
                 f"{_BASE_URL}/search",
-                headers=self._headers(),
                 params={"query": symbol},
                 timeout=5.0,
             )
-            resp.raise_for_status()
             data = resp.json()
             coins = data.get("coins", [])
 
@@ -160,11 +208,9 @@ class CoinGeckoClient:
             logger.info("CoinGecko: símbolo %s no existe", symbol)
             return {"not_found": True}
 
-        client = self._get_client()
         try:
-            resp = await client.get(
+            resp = await self._request_with_retry(
                 f"{_BASE_URL}/coins/{coin_id}",
-                headers=self._headers(),
                 params={
                     "localization": "false",
                     "tickers": "false",
@@ -175,7 +221,6 @@ class CoinGeckoClient:
                 },
                 timeout=8.0,
             )
-            resp.raise_for_status()
             data = resp.json()
 
             market_data = data.get("market_data", {})

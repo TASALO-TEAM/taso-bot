@@ -76,10 +76,11 @@ class Settings(BaseSettings):
     )
 
     # Cryptocurrency Prices (CoinGecko — enriquecimiento de /p)
+    # Soporta una o varias keys separadas por coma (ver coingecko_api_keys).
     coingecko_api_key: str = Field(
         default="",
-        description="CoinGecko Demo API key, usada para enriquecer /p con ATH/ATL, supply y categoría",
-        examples=["CG-xxxxxxxxxxxxxxxxxxxxxxxx"]
+        description="CoinGecko Demo API key(s), separadas por coma si hay varias, usada(s) para enriquecer /p con ATH/ATL, supply y categoría",
+        examples=["CG-xxxxxxxxxxxxxxxxxxxxxxxx", "CG-xxxxxxxxxxxxxxxxxxxxxxxx,CG-yyyyyyyyyyyyyyyyyyyyyyyy"]
     )
 
     # AI Analysis (Groq)
@@ -126,6 +127,18 @@ class Settings(BaseSettings):
     def is_admin_configured(self) -> bool:
         """Verifica si hay al menos un admin configurado."""
         return len(self.get_admin_chat_ids_list()) > 0
+
+    @property
+    def coingecko_api_keys(self) -> List[str]:
+        """Lista de API keys de CoinGecko (soporta múltiples separadas por coma).
+
+        Un solo valor sin coma retorna una lista de 1 elemento (comportamiento
+        actual intacto). Usada por CoinGeckoClient para rotar entre keys y
+        repartir carga entre distintas cuentas del plan Demo.
+        """
+        if not self.coingecko_api_key:
+            return []
+        return [k.strip() for k in self.coingecko_api_key.split(",") if k.strip()]
 
     @property
     def template_full_path(self) -> str:
