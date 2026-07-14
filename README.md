@@ -3,7 +3,7 @@
 Bot de Telegram para consultar las tasas de cambio de Cuba (ElToque, CADECA, BCC).
 
 ![Estado](https://img.shields.io/badge/estado-completado-success)
-![Versión](https://img.shields.io/badge/versión-0.9.0-blue)
+![Versión](https://img.shields.io/badge/versión-0.12.0-blue)
 ![Python](https://img.shields.io/badge/python-3.12+-blue)
 ![Tests](https://img.shields.io/badge/tests-104%20passing-success)
 
@@ -382,6 +382,7 @@ LOG_LEVEL=WARNING  # Solo warnings y errores
 - **Progreso:** `/home/ersus/tasalo/plans/PROGRESS.md`
 - **Continuidad:** `/home/ersus/tasalo/plans/CONTINUITY.md`
 - **taso-api:** `/home/ersus/tasalo/taso-api/README.md`
+- **taso-gcg** (moderación de grupos/canales + RSS): `/home/ersus/tasalo/taso-gcg/README.md`
 
 ## Licencia
 
