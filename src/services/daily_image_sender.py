@@ -132,7 +132,10 @@ async def send_daily_images_job(application: Application):
         return
     
     # 3. Obtener última imagen capturada por el scheduler de taso-api
-    # (no capturamos aquí — la captura ocurre en taso-api a las 11:30 UTC)
+    # (no capturamos aquí — la captura diaria ocurre en taso-api vía cron
+    # fijo a las 7:05 hora de Cuba, timezone "America/Havana" — ver
+    # init_image_capture_scheduler() en taso-api/src/services/scheduler.py.
+    # Independiente de si algún usuario usó /toqueimg ese día.)
     logger.info("📸 Obteniendo última imagen capturada...")
     img_data = None
 
