@@ -21,6 +21,7 @@ from telegram.ext import ContextTypes
 from src.api_client import TasaloApiClient
 from src.config import get_settings
 from src.services.ads_manager import get_ad_block, safe_append
+from src.utils.permissions import is_admin
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -116,14 +117,20 @@ async def y_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     sub = args[0].lower()
 
-    if sub == "add":
-        await _cmd_add(update, context, args[1:])
-    elif sub == "show":
+    if sub == "show":
         await _cmd_show(update, context, args[1:])
-    elif sub == "edit":
-        await _cmd_edit(update, context, args[1:])
-    elif sub == "del":
-        await _cmd_del(update, context, args[1:])
+    elif sub in ("add", "edit", "del"):
+        if not is_admin(user_id):
+            await update.message.reply_text(
+                "🔑 Este subcomando es solo para administradores."
+            )
+            return
+        if sub == "add":
+            await _cmd_add(update, context, args[1:])
+        elif sub == "edit":
+            await _cmd_edit(update, context, args[1:])
+        else:
+            await _cmd_del(update, context, args[1:])
     else:
         await update.message.reply_text(
             "⚠️ Subcomandos disponibles:\n"
