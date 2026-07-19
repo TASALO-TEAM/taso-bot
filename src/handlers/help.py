@@ -236,7 +236,7 @@ Pensado para avisos rápidos: un comando que cambió, un bug arreglado, mantenim
 `/refresh` — fuerza un refresh manual de las tasas
 `/status` — estado del scheduler y última actualización
 `/health` — verifica la conexión del bot con el backend
-`/log` — logs de bot/api/web sin necesitar SSH (`/log` para ver subcomandos)
+`/log` — logs de bot/api/web/gcg sin necesitar SSH (`/log` para ver subcomandos)
 
 🎫 *Gestión de tickets (/tkt)*
 `/tkt list` — últimos 20 tickets, cualquier estado
