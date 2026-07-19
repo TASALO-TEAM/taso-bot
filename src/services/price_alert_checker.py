@@ -34,9 +34,14 @@ _crypto_client: Optional[CryptoApiClient] = None
 
 
 def _get_crypto_client() -> CryptoApiClient:
+    """Singleton propio del alert checker, con su propio pool de keys de CMC
+    (CMC_API_KEY_ALERTA) para no competir por cupo con /p y /spl, que usan
+    su propio singleton en src/handlers/p.py. Si CMC_API_KEY_ALERTA no está
+    configurada, settings.cmc_api_key_alerta_keys cae de vuelta al pool
+    interactivo (mismo comportamiento que antes de existir este pool)."""
     global _crypto_client
     if _crypto_client is None:
-        _crypto_client = CryptoApiClient()
+        _crypto_client = CryptoApiClient(cmc_api_keys=settings.cmc_api_key_alerta_keys)
     return _crypto_client
 
 

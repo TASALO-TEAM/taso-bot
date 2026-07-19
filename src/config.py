@@ -73,10 +73,22 @@ class Settings(BaseSettings):
     )
 
     # Cryptocurrency Prices (CoinMarketCap)
+    # Soporta una o varias keys separadas por coma (ver coinmarketcap_api_keys).
+    # Pool INTERACTIVO — usado por /p y /spl.
     coinmarketcap_api_key: str = Field(
         default="",
-        description="CoinMarketCap Pro API key for cryptocurrency price data (/p command)",
-        examples=["your_cmc_pro_api_key_here"]
+        description="CoinMarketCap Pro API key(s), separadas por coma si hay varias, para /p y /spl",
+        examples=["your_cmc_pro_api_key_here", "key1,key2,key3"]
+    )
+
+    # Pool DEDICADO al alert checker (job automático cada 5 min), separado
+    # del pool interactivo de arriba para que el polling en background no
+    # consuma el cupo de /p y /spl. Si se deja vacío, el checker cae de
+    # vuelta al pool de coinmarketcap_api_key (ver cmc_api_key_alerta_keys).
+    cmc_api_key_alerta: str = Field(
+        default="",
+        description="CMC Pro API key(s) dedicadas al alert checker, separadas por coma",
+        examples=["", "key1,key2"]
     )
 
     # Cryptocurrency Prices (CoinGecko — enriquecimiento de /p)
@@ -88,10 +100,11 @@ class Settings(BaseSettings):
     )
 
     # AI Analysis (Groq)
+    # Soporta una o varias keys separadas por coma (ver groq_api_keys).
     groq_api_key: str = Field(
         default="",
-        description="Groq API key for AI-powered technical analysis (/ta AI button)",
-        examples=["gsk_..."]
+        description="Groq API key(s), separadas por coma si hay varias, para /ta, /p y /spl",
+        examples=["gsk_...", "gsk_primera...,gsk_segunda..."]
     )
 
     # Image Generation
@@ -143,6 +156,41 @@ class Settings(BaseSettings):
         if not self.coingecko_api_key:
             return []
         return [k.strip() for k in self.coingecko_api_key.split(",") if k.strip()]
+
+    @property
+    def coinmarketcap_api_keys(self) -> List[str]:
+        """Lista de API keys de CoinMarketCap del pool INTERACTIVO (/p, /spl).
+
+        Soporta múltiples separadas por coma. Un solo valor sin coma retorna
+        una lista de 1 elemento (comportamiento actual intacto).
+        """
+        if not self.coinmarketcap_api_key:
+            return []
+        return [k.strip() for k in self.coinmarketcap_api_key.split(",") if k.strip()]
+
+    @property
+    def cmc_api_key_alerta_keys(self) -> List[str]:
+        """Lista de API keys de CoinMarketCap dedicadas al alert checker.
+
+        Si CMC_API_KEY_ALERTA no está configurada, cae de vuelta al pool
+        interactivo (coinmarketcap_api_keys) — mismo comportamiento que antes
+        de existir este pool separado.
+        """
+        if not self.cmc_api_key_alerta:
+            return self.coinmarketcap_api_keys
+        return [k.strip() for k in self.cmc_api_key_alerta.split(",") if k.strip()]
+
+    @property
+    def groq_api_keys(self) -> List[str]:
+        """Lista de API keys de Groq (soporta múltiples separadas por coma).
+
+        Un solo valor sin coma retorna una lista de 1 elemento (comportamiento
+        actual intacto). Usada por src/core/ai_logic.py para rotar entre
+        keys y repartir carga entre distintas cuentas gratuitas.
+        """
+        if not self.groq_api_key:
+            return []
+        return [k.strip() for k in self.groq_api_key.split(",") if k.strip()]
 
     @property
     def template_full_path(self) -> str:

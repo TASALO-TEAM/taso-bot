@@ -4,6 +4,7 @@
 # Requires GROQ_API_KEY environment variable.
 
 import asyncio
+import itertools
 import logging
 from typing import Optional
 import httpx
@@ -12,6 +13,25 @@ from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_excep
 from src.config import settings
 
 logger = logging.getLogger(__name__)
+
+# Rotación round-robin de keys de Groq (mismo patrón que CoinGeckoClient en
+# este repo y core/ai_client.py en taso-gcg). Se inicializa perezosamente
+# en el primer uso porque `settings` es un lazy singleton (get_settings())
+# y las keys pueden no estar disponibles todavía en tiempo de import.
+_groq_key_cycle = None
+
+
+def _next_groq_key() -> Optional[str]:
+    """Devuelve la siguiente API key de Groq en la rotación, o None si no
+    hay ninguna configurada. Con 1 sola key, siempre devuelve esa misma key
+    (comportamiento idéntico al anterior)."""
+    global _groq_key_cycle
+    if _groq_key_cycle is None:
+        keys = settings.groq_api_keys
+        if not keys:
+            return None
+        _groq_key_cycle = itertools.cycle(keys)
+    return next(_groq_key_cycle)
 
 # ── Configuration ────────────────────────────────────────────────────────────
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
@@ -212,22 +232,67 @@ class GroqAPIError(Exception):
     reraise=True,
     stop=stop_after_attempt(MAX_RETRIES),
     wait=wait_exponential(multiplier=1, min=2, max=10),
-    retry=retry_if_exception_type((httpx.TimeoutException, httpx.NetworkError, httpx.HTTPStatusError)),
+    retry=retry_if_exception_type((httpx.TimeoutException, httpx.NetworkError)),
 )
 async def _call_groq_async(payload: dict, timeout: int = DEFAULT_TIMEOUT) -> dict:
     """
-    Make async HTTP call to Groq API with retry logic.
-    Raises: GroqAPIError on failure after retries.
+    Make async HTTP call to Groq API con rotación de keys + retry logic.
+
+    Rotación: si una key devuelve 429 (rate limit) y hay más keys
+    disponibles (GROQ_API_KEY con varias separadas por coma), se reintenta
+    con la siguiente antes de rendirse (hasta len(settings.groq_api_keys)
+    intentos). Con 0 o 1 key, comportamiento idéntico al anterior.
+
+    Cualquier otro status HTTP (400, 401, 500...) se loguea con el cuerpo
+    de la respuesta (antes solo se veía el status code) y se relanza de
+    inmediato — rotar de key no arregla un bad request. Timeout/NetworkError
+    siguen usando el retry con backoff de tenacity (decorador de arriba),
+    sin rotar de key.
+
+    Raises: httpx.HTTPStatusError si todas las keys fallan o si el error
+    no es 429.
     """
-    headers = {
-        "Authorization": f"Bearer {settings.groq_api_key}",
-        "Content-Type": "application/json",
-    }
+    keys = settings.groq_api_keys
+    attempts = max(len(keys), 1)
+    last_exc: Optional[httpx.HTTPStatusError] = None
 
     async with httpx.AsyncClient(timeout=timeout) as client:
-        response = await client.post(GROQ_API_URL, headers=headers, json=payload)
-        response.raise_for_status()
-        return response.json()
+        for attempt in range(attempts):
+            api_key = _next_groq_key() or settings.groq_api_key
+            headers = {
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            }
+            try:
+                response = await client.post(GROQ_API_URL, headers=headers, json=payload)
+                response.raise_for_status()
+                return response.json()
+            except httpx.HTTPStatusError as e:
+                status = e.response.status_code if e.response is not None else None
+                if status == 429 and attempt < attempts - 1:
+                    logger.warning(
+                        "⚠️ Groq 429 (rate limit) con key ...%s, probando siguiente key (intento %d/%d)",
+                        (api_key or "")[-4:], attempt + 2, attempts,
+                    )
+                    last_exc = e
+                    continue
+                # Cualquier otro status (o 429 sin más keys disponibles):
+                # loguear el cuerpo de la respuesta para diagnóstico y
+                # relanzar de inmediato, sin gastar más intentos.
+                try:
+                    body = e.response.text[:500] if e.response is not None else ""
+                except Exception:
+                    body = ""
+                logger.error(
+                    "❌ Groq HTTP error %s (key ...%s): %s",
+                    status, (api_key or "")[-4:], body or str(e),
+                )
+                raise
+        # No debería llegar aquí (el loop siempre retorna o lanza), pero por
+        # si acaso: relanzar el último error visto.
+        if last_exc:
+            raise last_exc
+        raise RuntimeError("Groq: no se pudo completar la llamada (sin API keys configuradas)")
 
 
 # ── Public API ────────────────────────────────────────────────────────────────

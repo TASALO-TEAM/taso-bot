@@ -89,3 +89,128 @@ def test_tasalo_admin_key():
     finally:
         os.environ.pop('TELEGRAM_BOT_TOKEN', None)
         os.environ.pop('TASALO_ADMIN_KEY', None)
+
+
+def test_coinmarketcap_api_keys_empty():
+    """coinmarketcap_api_keys retorna lista vacía si no hay key configurada.
+
+    Nota: se fija la variable a '' en vez de hacer pop(), porque con pop()
+    pydantic-settings cae al valor del .env real del proyecto (que sí tiene
+    keys configuradas) en vez de quedar realmente vacía.
+    """
+    from src.config import Settings
+
+    os.environ['TELEGRAM_BOT_TOKEN'] = 'test_token'
+    os.environ['COINMARKETCAP_API_KEY'] = ''
+
+    try:
+        config = Settings()
+        assert config.coinmarketcap_api_keys == []
+    finally:
+        os.environ.pop('TELEGRAM_BOT_TOKEN', None)
+        os.environ.pop('COINMARKETCAP_API_KEY', None)
+
+
+def test_coinmarketcap_api_keys_single():
+    """Una sola key sin coma retorna lista de 1 elemento."""
+    from src.config import Settings
+
+    os.environ['TELEGRAM_BOT_TOKEN'] = 'test_token'
+    os.environ['COINMARKETCAP_API_KEY'] = 'abc123'
+
+    try:
+        config = Settings()
+        assert config.coinmarketcap_api_keys == ['abc123']
+    finally:
+        os.environ.pop('TELEGRAM_BOT_TOKEN', None)
+        os.environ.pop('COINMARKETCAP_API_KEY', None)
+
+
+def test_coinmarketcap_api_keys_multiple():
+    """Varias keys separadas por coma se parsean como lista, sin espacios."""
+    from src.config import Settings
+
+    os.environ['TELEGRAM_BOT_TOKEN'] = 'test_token'
+    os.environ['COINMARKETCAP_API_KEY'] = 'key1, key2 ,key3'
+
+    try:
+        config = Settings()
+        assert config.coinmarketcap_api_keys == ['key1', 'key2', 'key3']
+    finally:
+        os.environ.pop('TELEGRAM_BOT_TOKEN', None)
+        os.environ.pop('COINMARKETCAP_API_KEY', None)
+
+
+def test_cmc_api_key_alerta_falls_back_to_interactive_pool():
+    """Sin CMC_API_KEY_ALERTA configurada, el checker usa el pool interactivo.
+
+    Se fija CMC_API_KEY_ALERTA a '' (no pop()) por el mismo motivo que en
+    test_coinmarketcap_api_keys_empty: pop() dejaría que pydantic-settings
+    lea el valor real del .env del proyecto.
+    """
+    from src.config import Settings
+
+    os.environ['TELEGRAM_BOT_TOKEN'] = 'test_token'
+    os.environ['COINMARKETCAP_API_KEY'] = 'key1,key2,key3'
+    os.environ['CMC_API_KEY_ALERTA'] = ''
+
+    try:
+        config = Settings()
+        assert config.cmc_api_key_alerta_keys == ['key1', 'key2', 'key3']
+    finally:
+        os.environ.pop('TELEGRAM_BOT_TOKEN', None)
+        os.environ.pop('COINMARKETCAP_API_KEY', None)
+        os.environ.pop('CMC_API_KEY_ALERTA', None)
+
+
+def test_cmc_api_key_alerta_own_pool():
+    """Con CMC_API_KEY_ALERTA configurada, usa su propio pool (no el interactivo)."""
+    from src.config import Settings
+
+    os.environ['TELEGRAM_BOT_TOKEN'] = 'test_token'
+    os.environ['COINMARKETCAP_API_KEY'] = 'interactivo1,interactivo2'
+    os.environ['CMC_API_KEY_ALERTA'] = 'alerta1,alerta2'
+
+    try:
+        config = Settings()
+        assert config.cmc_api_key_alerta_keys == ['alerta1', 'alerta2']
+        # El pool interactivo no cambia
+        assert config.coinmarketcap_api_keys == ['interactivo1', 'interactivo2']
+    finally:
+        os.environ.pop('TELEGRAM_BOT_TOKEN', None)
+        os.environ.pop('COINMARKETCAP_API_KEY', None)
+        os.environ.pop('CMC_API_KEY_ALERTA', None)
+
+
+def test_groq_api_keys_empty():
+    """groq_api_keys retorna lista vacía si no hay key configurada.
+
+    Se fija GROQ_API_KEY a '' (no pop()) por el mismo motivo que en
+    test_coinmarketcap_api_keys_empty.
+    """
+    from src.config import Settings
+
+    os.environ['TELEGRAM_BOT_TOKEN'] = 'test_token'
+    os.environ['GROQ_API_KEY'] = ''
+
+    try:
+        config = Settings()
+        assert config.groq_api_keys == []
+    finally:
+        os.environ.pop('TELEGRAM_BOT_TOKEN', None)
+        os.environ.pop('GROQ_API_KEY', None)
+
+
+def test_groq_api_keys_multiple():
+    """Varias keys de Groq separadas por coma se parsean como lista."""
+    from src.config import Settings
+
+    os.environ['TELEGRAM_BOT_TOKEN'] = 'test_token'
+    os.environ['GROQ_API_KEY'] = 'gsk_uno,gsk_dos'
+
+    try:
+        config = Settings()
+        assert config.groq_api_keys == ['gsk_uno', 'gsk_dos']
+    finally:
+        os.environ.pop('TELEGRAM_BOT_TOKEN', None)
+        os.environ.pop('GROQ_API_KEY', None)

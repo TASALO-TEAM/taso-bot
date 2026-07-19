@@ -8,8 +8,9 @@ Implementa la misma lógica de BBAlert /p: consulta CMC con múltiples símbolos
 
 import asyncio
 import httpx
+import itertools
 import logging
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 
 from tradingview_ta import TA_Handler, Interval
 
@@ -22,11 +23,28 @@ logger = logging.getLogger(__name__)
 class CryptoApiClient:
     """Cliente para datos de criptomonedas (CoinMarketCap + fallbacks)."""
 
-    def __init__(self):
-        """Inicializar cliente."""
+    def __init__(self, cmc_api_keys: Optional[List[str]] = None):
+        """Inicializar cliente.
+
+        Args:
+            cmc_api_keys: Pool de API keys de CoinMarketCap a rotar. Si se
+                omite, usa el pool interactivo por defecto
+                (settings.coinmarketcap_api_keys, usado por /p y /spl).
+                El alert checker pasa aquí su propio pool
+                (settings.cmc_api_key_alerta_keys) para no compartir cupo
+                con los comandos interactivos.
+        """
         self.settings = get_settings()
         self._client: Optional[httpx.AsyncClient] = None
         self.coingecko = CoinGeckoClient()
+        self._cmc_keys = cmc_api_keys if cmc_api_keys is not None else self.settings.coinmarketcap_api_keys
+        self._cmc_key_cycle = itertools.cycle(self._cmc_keys) if self._cmc_keys else None
+
+    def _next_cmc_key(self) -> Optional[str]:
+        """Siguiente API key de CMC en la rotación de esta instancia, o None
+        si no hay ninguna configurada. Síncrono, sin await — seguro con
+        corrutinas concurrentes usando el mismo cliente."""
+        return next(self._cmc_key_cycle) if self._cmc_key_cycle else None
 
     def _get_client(self) -> httpx.AsyncClient:
         """Crear o retornar cliente HTTP compartido."""
@@ -118,22 +136,55 @@ class CryptoApiClient:
 
     # ── Datos principales (CoinMarketCap) ──
 
+    async def _cmc_request_with_retry(
+        self, url: str, params: Optional[Dict[str, Any]] = None, timeout: float = 10.0,
+    ) -> httpx.Response:
+        """GET a CoinMarketCap Pro API con rotación de keys de esta instancia.
+
+        Centraliza la autenticación (X-CMC_PRO_API_KEY) para los dos puntos
+        de entrada a CMC (_get_from_cmc y _cmc_get). Reintenta con la
+        siguiente key del pool si la respuesta es 429 (rate limit), hasta
+        len(self._cmc_keys) intentos. Un 403 (plan insuficiente) o
+        cualquier otro status se propaga tal cual — cada caller decide qué
+        hacer (rotar de key no arregla ninguno de los dos casos).
+
+        Con 0 o 1 key configurada, comportamiento idéntico al actual (sin
+        reintento posible).
+        """
+        client = self._get_client()
+        attempts = max(len(self._cmc_keys), 1)
+        resp: Optional[httpx.Response] = None
+        for attempt in range(attempts):
+            api_key = self._next_cmc_key() or self.settings.coinmarketcap_api_key
+            resp = await client.get(
+                url,
+                headers={
+                    "X-CMC_PRO_API_KEY": api_key,
+                    "Accept": "application/json",
+                },
+                params=params or {},
+                timeout=timeout,
+            )
+            if resp.status_code == 429 and attempt < attempts - 1:
+                logger.warning(
+                    "⚠️ CMC 429 (rate limit) con key ...%s, probando siguiente key (intento %d/%d)",
+                    (api_key or "")[-4:], attempt + 2, attempts,
+                )
+                continue
+            return resp
+        # No debería llegar aquí (el loop siempre retorna), pero por si acaso:
+        return resp
+
     async def _get_from_cmc(self, symbols: list[str]) -> Optional[Dict[str, Any]]:
         """Obtener datos desde CoinMarketCap Pro API."""
-        if not self.settings.coinmarketcap_api_key:
+        if not self._cmc_keys:
             logger.warning("⚠️ COINMARKETCAP_API_KEY no configurada")
             return None
 
-        client = self._get_client()
         try:
-            resp = await client.get(
+            resp = await self._cmc_request_with_retry(
                 "https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest",
-                headers={
-                    "X-CMC_PRO_API_KEY": self.settings.coinmarketcap_api_key,
-                    "Accept": "application/json",
-                },
                 params={"symbol": ",".join(symbols), "convert": "USD"},
-                timeout=10.0,
             )
             resp.raise_for_status()
             full_data = resp.json().get("data", {})
@@ -355,22 +406,13 @@ class CryptoApiClient:
             El campo "data" de la respuesta, o None si falla la llamada o
             el plan de la API key no soporta el endpoint (HTTP 403).
         """
-        if not self.settings.coinmarketcap_api_key:
+        if not self._cmc_keys:
             logger.warning("⚠️ COINMARKETCAP_API_KEY no configurada (spotlight)")
             return None
 
-        client = self._get_client()
         url = f"https://pro-api.coinmarketcap.com/{path}"
         try:
-            resp = await client.get(
-                url,
-                headers={
-                    "X-CMC_PRO_API_KEY": self.settings.coinmarketcap_api_key,
-                    "Accept": "application/json",
-                },
-                params=params or {},
-                timeout=10.0,
-            )
+            resp = await self._cmc_request_with_retry(url, params=params or {})
             if resp.status_code == 403:
                 try:
                     body = resp.json()

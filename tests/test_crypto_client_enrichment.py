@@ -19,6 +19,7 @@ def _settings_stub():
     from unittest.mock import MagicMock
     s = MagicMock()
     s.coinmarketcap_api_key = "cmc-key"
+    s.coinmarketcap_api_keys = ["cmc-key"]
     s.coingecko_api_key = "cg-key"
     return s
 
