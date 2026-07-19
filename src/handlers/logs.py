@@ -1,11 +1,11 @@
-"""Handler para el comando /log — logs de bot, api y web sin necesidad de SSH.
+"""Handler para el comando /log — logs de bot, api, web y gcg sin necesidad de SSH.
 
 Uso:
-    /log                        Resumen de los 3 servicios (bot, api, web)
-    /log bot|api|web            Envía el log activo de ese servicio (documento)
-    /log bot|api|web <fecha>    Envía el archivo archivado de esa fecha (YYYY-MM-DD)
-    /log clear                  Borra los archivos archivados de los 3 servicios
-    /log clear bot|api|web      Borra los archivados de un solo servicio
+    /log                            Resumen de los 4 servicios (bot, api, web, gcg)
+    /log bot|api|web|gcg            Envía el log activo de ese servicio (documento)
+    /log bot|api|web|gcg <fecha>    Envía el archivo archivado de esa fecha (YYYY-MM-DD)
+    /log clear                      Borra los archivos archivados de los 4 servicios
+    /log clear bot|api|web|gcg      Borra los archivados de un solo servicio
 
 Los logs activos NUNCA se envían pegados en el texto del mensaje (por el
 límite de caracteres de Telegram): siempre se mandan como documento adjunto.
@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 DATE_HINT = "Formato de fecha esperado: `YYYY-MM-DD` (ej. 2026-07-01)."
 USAGE_HINT = (
-    "Usa `/log`, `/log bot`, `/log api`, `/log web` o `/log clear`."
+    "Usa `/log`, `/log bot`, `/log api`, `/log web`, `/log gcg` o `/log clear`."
 )
 
 
@@ -82,7 +82,7 @@ async def _handle_clear(update: Update, extra_args: list):
         if service is None:
             await update.message.reply_text(
                 f"⚠️ Servicio desconocido: `{extra_args[0]}`.\n"
-                "Usa: `bot`, `api` o `web`.",
+                "Usa: `bot`, `api`, `web` o `gcg`.",
                 parse_mode="Markdown",
             )
             return
@@ -130,7 +130,7 @@ async def _send_summary(update: Update):
 
         lines.append("")
 
-    lines.append("Usa `/log bot`, `/log api` o `/log web` para descargar el log activo.")
+    lines.append("Usa `/log bot`, `/log api`, `/log web` o `/log gcg` para descargar el log activo.")
     lines.append("Usa `/log clear` para borrar los archivos archivados.")
 
     await update.message.reply_text("\n".join(lines), parse_mode="Markdown")

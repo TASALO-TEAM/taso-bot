@@ -67,6 +67,10 @@ class Settings(BaseSettings):
         default="../taso-app/logs",
         description="Ruta (relativa a taso-bot/) a la carpeta logs/ de taso-app",
     )
+    taso_gcg_log_dir: str = Field(
+        default="../taso-gcg/logs",
+        description="Ruta (relativa a taso-bot/) a la carpeta logs/ de taso-gcg",
+    )
 
     # Cryptocurrency Prices (CoinMarketCap)
     coinmarketcap_api_key: str = Field(

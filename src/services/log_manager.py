@@ -1,8 +1,9 @@
 """Gestión de logs multi-servicio para el comando /log.
 
 Permite al bot inspeccionar y administrar los logs de sí mismo (taso-bot) y
-de sus repos hermanos taso-api y taso-app, que viven como directorios
-hermanos en el VPS (~/tasalo/taso-bot, ~/tasalo/taso-api, ~/tasalo/taso-app).
+de sus repos hermanos taso-api, taso-app y taso-gcg, que viven como
+directorios hermanos en el VPS (~/tasalo/taso-bot, ~/tasalo/taso-api,
+~/tasalo/taso-app, ~/tasalo/taso-gcg).
 
 No se toca journalctl ni systemd: todo se basa en los archivos de log que
 cada servicio escribe con su propio `logging_config`/`logger` (rotación por
@@ -27,6 +28,7 @@ SERVICE_DISPLAY_NAMES = {
     "bot": "taso-bot",
     "api": "taso-api",
     "web": "taso-app",
+    "gcg": "taso-gcg",
 }
 
 # Alias que el usuario puede escribir en /log
@@ -36,6 +38,7 @@ SERVICE_ALIASES = {
     "web": "web",
     "app": "web",
     "miniapp": "web",
+    "gcg": "gcg",
 }
 
 
@@ -83,6 +86,8 @@ def _service_logs_dir(service: str) -> str:
         return os.path.normpath(os.path.join(BOT_BASE_DIR, settings.taso_api_log_dir))
     if service == "web":
         return os.path.normpath(os.path.join(BOT_BASE_DIR, settings.taso_app_log_dir))
+    if service == "gcg":
+        return os.path.normpath(os.path.join(BOT_BASE_DIR, settings.taso_gcg_log_dir))
     raise ValueError(f"Servicio desconocido: {service}")
 
 
@@ -193,7 +198,7 @@ def clear_archives(service: Optional[str] = None) -> dict:
     Los logs activos NUNCA se tocan, solo los ya rotados.
 
     Args:
-        service: 'bot' | 'api' | 'web', o None para limpiar los 3.
+        service: 'bot' | 'api' | 'web' | 'gcg', o None para limpiar todos.
 
     Returns:
         dict {service: {"removed": int, "bytes_freed": int, "error": str|None}}

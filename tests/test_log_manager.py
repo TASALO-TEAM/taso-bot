@@ -29,6 +29,7 @@ def test_normalize_service_aliases():
     assert log_manager.normalize_service("web") == "web"
     assert log_manager.normalize_service("app") == "web"
     assert log_manager.normalize_service("miniapp") == "web"
+    assert log_manager.normalize_service("gcg") == "gcg"
     assert log_manager.normalize_service("wat") is None
 
 
@@ -133,6 +134,9 @@ def test_clear_archives_all_services(tmp_path, monkeypatch):
             tmp_path / "api", "taso-api", archive_files={"taso-api_2026-07-01_00-00-00.log": "x"}
         ),
         "web": _make_service_tree(tmp_path / "web", "taso-app"),
+        "gcg": _make_service_tree(
+            tmp_path / "gcg", "taso-gcg", archive_files={"taso-gcg_2026-07-01_00-00-00.log": "x"}
+        ),
     }
     monkeypatch.setattr(log_manager, "_service_logs_dir", lambda service: str(dirs[service]))
 
@@ -141,3 +145,4 @@ def test_clear_archives_all_services(tmp_path, monkeypatch):
     assert results["bot"]["removed"] == 1
     assert results["api"]["removed"] == 1
     assert results["web"]["removed"] == 0
+    assert results["gcg"]["removed"] == 1
