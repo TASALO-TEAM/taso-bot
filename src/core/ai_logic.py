@@ -5,6 +5,7 @@
 
 import asyncio
 import itertools
+import json
 import logging
 from typing import Optional
 import httpx
@@ -860,5 +861,179 @@ async def get_groq_market_spotlight(snapshot: dict) -> str:
     except Exception as e:
         logger.exception("Unexpected error in get_groq_market_spotlight")
         return f"⚠️ Error inesperado: {e}"
+
+
+# ── Prompt Template — Digest de Noticias (/tspl) ────────────────────────────
+TSPL_DIGEST_PROMPT = """Eres un editor de un newsletter cripto diario en espanol,
+estilo "TASALO Spotlight". Tu trabajo es curar y redactar un resumen de las
+noticias del dia a partir de titulares y descripciones crudas, siempre en
+espanol, sin importar en que idioma vengan los articulos originales.
+
+=== ARTICULOS CRUDOS (titulo + descripcion, pueden venir en espanol o ingles) ===
+{articulos_text}
+=== FIN ARTICULOS ===
+
+TAREA:
+1. Elegi entre 4 y 6 articulos realmente relevantes (regulacion, mercados,
+   instituciones, tecnologia cripto) - ignora contenido irrelevante o
+   generico (ej. articulos de bolsa/petroleo/acciones que solo mencionan
+   cripto de pasada).
+2. Para cada uno, escribi un titulo breve en espanol (si el original esta
+   en ingles, traducilo) y un parrafo de 2-4 frases con el contexto real
+   (cifras, nombres, cargos, instituciones) tal como aparecen en la
+   descripcion original - no inventes datos que no esten ahi.
+3. Elegi un emoji representativo para cada noticia (regulacion, internacional,
+   legislacion, mercados/exchanges, IA/tecnologia, institucional/ETF,
+   seguridad, etc.).
+4. Escribi un "lede" de 3-4 frases con el panorama general del dia,
+   basado en las noticias elegidas.
+5. Escribi un "radar" de 1-2 frases sobre que vigilar en los proximos dias
+   segun lo que sugieren estas noticias.
+
+Responde EXCLUSIVAMENTE con un objeto JSON valido, sin texto antes ni
+despues, sin bloque de codigo markdown, con esta forma exacta:
+
+{{"lede": "...", "items": [{{"emoji": "string", "titulo": "...", "parrafo": "..."}}], "radar": "..."}}
+
+Reglas del JSON:
+- Todo el contenido (lede, titulo, parrafo, radar) en espanol.
+- "items" debe tener entre 4 y 6 elementos.
+- No uses asteriscos, guiones bajos ni ningun formato Markdown dentro de
+  los textos - solo texto plano.
+- No inventes cifras, nombres ni cargos que no esten en los articulos
+  originales.
+"""
+
+
+def _extract_json_object(raw: str) -> Optional[dict]:
+    """Extrae y parsea el primer objeto JSON de una respuesta de Groq.
+
+    El modelo a veces envuelve el JSON en un bloque de codigo markdown
+    (```json ... ```) pese a que se le pide no hacerlo - esta funcion lo
+    tolera igual, quedandose solo con el fragmento entre la primera '{'
+    y la ultima '}'.
+
+    Returns:
+        El dict parseado, o None si no se pudo extraer/parsear JSON valido.
+    """
+    if not raw:
+        return None
+
+    text = raw.strip()
+    if text.startswith("```"):
+        text = text.strip("`")
+        if text.lower().startswith("json"):
+            text = text[4:]
+        text = text.strip()
+
+    start = text.find("{")
+    end = text.rfind("}")
+    if start == -1 or end == -1 or end < start:
+        return None
+
+    try:
+        return json.loads(text[start:end + 1])
+    except json.JSONDecodeError:
+        return None
+
+
+def _format_tspl_articles_text(articles: list[dict]) -> str:
+    """Convierte la lista de articulos normalizados de NewsData.io en texto
+    plano para el prompt del digest."""
+    lines = []
+    for i, art in enumerate(articles, start=1):
+        title = art.get("title") or ""
+        desc = art.get("description") or ""
+        source = art.get("source_name") or "Fuente desconocida"
+        lines.append(f"{i}. [{source}] {title}\n   {desc}")
+    return "\n\n".join(lines)
+
+
+async def get_groq_tspl_digest(articles: list[dict]) -> Optional[dict]:
+    """Genera el digest curado de noticias para /tspl a partir de articulos
+    crudos de NewsData.io (title + description).
+
+    A diferencia del resto de funciones de este modulo, esta pide una
+    respuesta en JSON estructurado (no texto/Markdown para Telegram), ya
+    que el resultado se cachea y se usa para armar la plantilla completa
+    de /tspl (ver src/handlers/tspl.py).
+
+    Reintenta UNA vez si el JSON viene invalido (Groq a veces agrega texto
+    extra pese a las instrucciones); si la segunda vez tambien falla,
+    retorna None para que el caller use el fallback de "solo datos de
+    mercado, sin seccion de noticias" en vez de romper /tspl.
+
+    Args:
+        articles: Lista de dicts normalizados (title, description, ...)
+            devueltos por NewsDataClient.get_crypto_news().
+
+    Returns:
+        Dict con forma {"lede": str, "items": [{"emoji", "titulo",
+        "parrafo"}], "radar": str}, o None si no hay key configurada,
+        no hay articulos, o Groq no devolvio JSON valido tras el reintento.
+    """
+    if not settings.groq_api_key:
+        logger.error("GROQ_API_KEY not configured (tspl digest)")
+        return None
+
+    if not articles:
+        logger.warning("Sin articulos para generar digest de /tspl")
+        return None
+
+    articulos_text = _format_tspl_articles_text(articles)
+    prompt = TSPL_DIGEST_PROMPT.format(articulos_text=articulos_text)
+
+    payload = {
+        "model": DEFAULT_MODEL,
+        "messages": [
+            {"role": "system", "content": "Eres un editor de noticias cripto que responde exclusivamente con JSON valido, sin texto adicional."},
+            {"role": "user", "content": prompt},
+        ],
+        "temperature": 0.5,
+        "max_tokens": 1536,
+    }
+
+    for attempt in range(2):
+        try:
+            start = asyncio.get_event_loop().time()
+            data = await _call_groq_async(payload)
+            elapsed = asyncio.get_event_loop().time() - start
+
+            choices = data.get("choices", [])
+            if not choices:
+                logger.warning("Groq (tspl digest) returned empty choices (intento %d)", attempt + 1)
+                continue
+
+            content = choices[0].get("message", {}).get("content", "").strip()
+            parsed = _extract_json_object(content)
+
+            if parsed is None or "items" not in parsed:
+                logger.warning(
+                    "Groq (tspl digest) devolvio JSON invalido/incompleto (intento %d): %r",
+                    attempt + 1, content[:300],
+                )
+                continue
+
+            usage = data.get("usage", {})
+            logger.info(
+                "OK Groq tspl digest - items=%d tokens=%d (%.1fs)",
+                len(parsed.get("items", [])),
+                usage.get("total_tokens", 0),
+                elapsed,
+            )
+            return parsed
+
+        except httpx.HTTPStatusError as e:
+            status = e.response.status_code if e.response else "??"
+            logger.error("Groq HTTP error %s (tspl digest, intento %d): %s", status, attempt + 1, e)
+        except httpx.TimeoutException:
+            logger.error("Groq timeout (tspl digest, intento %d)", attempt + 1)
+        except httpx.NetworkError:
+            logger.error("Groq network error (tspl digest, intento %d)", attempt + 1)
+        except Exception:
+            logger.exception("Unexpected error in get_groq_tspl_digest (intento %d)", attempt + 1)
+
+    logger.error("Groq tspl digest fallo tras 2 intentos, retornando None")
+    return None
 
 

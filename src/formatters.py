@@ -1265,6 +1265,49 @@ def build_market_spotlight_data_block(snapshot: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def build_tspl_market_bullets(snapshot: Dict[str, Any]) -> str:
+    """Construye el bloque "Resumen del mercado" en formato de bullets
+    para /tspl (a diferencia de build_market_spotlight_data_block, usado
+    por /spl, que arma bloques de texto separados en vez de una lista).
+
+    Reutiliza el mismo snapshot de CryptoApiClient.get_market_snapshot()
+    que ya usa /spl — no agrega ninguna llamada nueva a la API.
+
+    Args:
+        snapshot: Dict devuelto por CryptoApiClient.get_market_snapshot()
+
+    Returns:
+        Bloque de texto con bullets (Markdown v1), listo para insertarse
+        en la plantilla de /tspl.
+    """
+    lines: list[str] = []
+
+    global_metrics = snapshot.get("global_metrics")
+    if global_metrics:
+        mcap = global_metrics.get("total_market_cap")
+        vol = global_metrics.get("total_volume_24h")
+        btc_dom = global_metrics.get("btc_dominance")
+        if mcap:
+            lines.append(f"• 💰 *Capitalización:* {format_supply(mcap)} USD{_fmt_pct_change(global_metrics.get('market_cap_change_24h'))}")
+        if vol:
+            lines.append(f"• 📉 *Volumen 24h:* {format_supply(vol)} USD{_fmt_pct_change(global_metrics.get('volume_change_24h'))}")
+        if btc_dom is not None:
+            lines.append(f"• ₿ *Dominancia BTC:* {btc_dom:.2f}%{_fmt_pct_change(global_metrics.get('btc_dominance_change_24h'))}")
+
+    fear_greed = snapshot.get("fear_greed")
+    if fear_greed and fear_greed.get("value") is not None:
+        lines.append(f"• 😨 *Fear & Greed:* {fear_greed['value']} ({fear_greed.get('classification', 'N/A')})")
+
+    altcoin_season = snapshot.get("altcoin_season")
+    if altcoin_season and altcoin_season.get("value") is not None:
+        lines.append(f"• 🔄 *Altcoin Season Index:* {altcoin_season['value']}/100")
+
+    if not lines:
+        lines.append("• ⚠️ Datos de mercado no disponibles en este momento.")
+
+    return "\n".join(lines)
+
+
 # =============================================================================
 # CRIPTOMONEDAS — COMANDO /p
 # =============================================================================

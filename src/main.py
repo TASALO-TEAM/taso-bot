@@ -60,6 +60,7 @@ from src.handlers.y import (
 from src.handlers.alert import alert_command
 from src.handlers.spl import spl_command
 from src.handlers.news import news_command
+from src.handlers.tspl import tspl_command
 from src.handlers.ads import ads_command
 from src.handlers.ms import ms_command
 from src.handlers.tkt import tkt_command, handle_tkt_message
@@ -67,6 +68,7 @@ from src.handlers.help import help_command
 from src.services.daily_image_sender import start_daily_dispatcher, stop_daily_dispatcher
 from src.services.year_alert_scheduler import start_year_scheduler, stop_year_scheduler
 from src.services.price_alert_checker import start_price_alert_checker, stop_price_alert_checker
+from src.services.tspl_digest_scheduler import start_tspl_digest_scheduler, stop_tspl_digest_scheduler
 from src.logger import BotLogger, LOGS_DIR, LOG_FILE_PATH
 
 # Tipos de update que el bot realmente maneja (eficiencia)
@@ -221,6 +223,7 @@ def create_application() -> Application:
         ("alert", alert_command),
         ("spl", spl_command),
         ("news", news_command),
+        ("tspl", tspl_command),
         ("ads", ads_command),
         ("ms", ms_command),
         ("tkt", tkt_command),
@@ -323,6 +326,13 @@ async def post_init(application: Application):
     except Exception as e:
         logger.error("❌ Failed to start price alert checker: %s", e, exc_info=True)
 
+    # Iniciar scheduler del digest diario de noticias para /tspl
+    try:
+        start_tspl_digest_scheduler(application)
+        logger.info("✅ /tspl digest scheduler started (11:00 UTC / ~7:00 AM Cuba)")
+    except Exception as e:
+        logger.error("❌ Failed to start /tspl digest scheduler: %s", e, exc_info=True)
+
     # Obtener y cachear foto de perfil del bot
     try:
         logger.info("📸 Fetching bot profile photo...")
@@ -395,6 +405,9 @@ def main():
 
         stop_price_alert_checker()
         logger.info("✅ Price alert checker stopped")
+
+        stop_tspl_digest_scheduler()
+        logger.info("✅ /tspl digest scheduler stopped")
         
         # Cerrar cliente HTTP para liberar conexiones
         api_client: TasaloApiClient = app.bot_data.get("api_client")
