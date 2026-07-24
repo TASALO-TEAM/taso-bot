@@ -19,7 +19,7 @@ from telegram import Update
 from telegram.ext import ContextTypes, CallbackQueryHandler
 from telegram.error import BadRequest
 
-from src.handlers import image_alerts, tasalo, start, toqueimg, p, ta, trading, y, alert as price_alert, spl, ms, tkt, admin
+from src.handlers import image_alerts, tasalo, start, toqueimg, p, ta, trading, y, alert as price_alert, spl, ms, tkt, admin, news
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +40,7 @@ ROUTE_MAP: dict[str, str] = {
     "graf":     "_handle_graf",
     "year_sub": "_handle_year",
     "spl":      "_handle_spl",
+    "news":     "_handle_news",
     "ms":       "_handle_ms",
     "tkt":      "_handle_tkt",
     "status":   "_handle_status",
@@ -388,6 +389,30 @@ async def _handle_spl(update: Update, context: ContextTypes.DEFAULT_TYPE, callba
 def get_callback_handler() -> CallbackQueryHandler:
     """Return the router as a CallbackQueryHandler for registration in main.py."""
     return CallbackQueryHandler(callback_router)
+
+
+# ── News (/news) callbacks ──
+
+async def _handle_news(update: Update, context: ContextTypes.DEFAULT_TYPE, callback_data: str) -> None:
+    """Handle news_refresh_* callbacks (refresh button from /news)."""
+    handler_start = time.time()
+    query = update.callback_query
+    user_id = query.from_user.id
+    logger.info("📰 Handler _handle_news processing '%s' for user %d", callback_data, user_id)
+    try:
+        if callback_data.startswith("news_refresh_"):
+            await news.news_refresh_callback(update, context)
+        else:
+            logger.warning("Unknown news callback: %s for user %d", callback_data, user_id)
+            duration_ms = (time.time() - handler_start) * 1000
+            logger.info("⚠️ _handle_news unknown callback '%s' for user %d (%.0fms)", callback_data, user_id, duration_ms)
+            return
+        duration_ms = (time.time() - handler_start) * 1000
+        logger.info("✅ _handle_news completed for user %d callback '%s' (%.0fms)", user_id, callback_data, duration_ms)
+    except Exception as e:
+        duration_ms = (time.time() - handler_start) * 1000
+        logger.error("❌ Error in _handle_news for user %d callback '%s' (%.0fms): %s", user_id, callback_data, duration_ms, e, exc_info=True)
+        raise
 
 
 # ── Year subscription callbacks ──

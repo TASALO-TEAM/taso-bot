@@ -107,6 +107,17 @@ class Settings(BaseSettings):
         examples=["gsk_...", "gsk_primera...,gsk_segunda..."]
     )
 
+    # Noticias (NewsData.io) — usado por /news y /tspl
+    # Plan gratis vigente (200 créditos/día, endpoint Crypto & Coin News,
+    # uso comercial permitido) — confirmado en newsdata.io/pricing jun 2026.
+    # CryptoPanic y CoinDesk Data (ex-CryptoCompare) se descartaron: ninguno
+    # tiene ya un plan gratis real (ver docs/plans/2026-07-23-tspl-news-newsdata.md).
+    newsdata_api_key: str = Field(
+        default="",
+        description="NewsData.io API key (plan gratis) para /news y /tspl",
+        examples=["pub_1234567890abcdef1234567890abcdef"]
+    )
+
     # Image Generation
     template_path: str = Field(
         default="data/template.png",

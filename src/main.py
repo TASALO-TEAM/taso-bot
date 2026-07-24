@@ -59,6 +59,7 @@ from src.handlers.y import (
 )
 from src.handlers.alert import alert_command
 from src.handlers.spl import spl_command
+from src.handlers.news import news_command
 from src.handlers.ads import ads_command
 from src.handlers.ms import ms_command
 from src.handlers.tkt import tkt_command, handle_tkt_message
@@ -219,6 +220,7 @@ def create_application() -> Application:
         ("mk", mk_command),
         ("alert", alert_command),
         ("spl", spl_command),
+        ("news", news_command),
         ("ads", ads_command),
         ("ms", ms_command),
         ("tkt", tkt_command),
