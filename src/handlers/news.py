@@ -7,18 +7,31 @@ NewsData.io y muestra los artículos tal cual, con cache corto para no
 gastar de más los 200 créditos/día del plan gratis.
 
 Subcomandos (por tema/moneda, ya que el plan gratis de NewsData.io no
-tiene filtros de sentimiento como hot/important/bullish — ver
+tiene filtros de sentimiento nativos — ver
 docs/plans/2026-07-23-tspl-news-newsdata.md):
 
     /news              → feed general "Crypto & Coin News", sin acotar
+    /news headlines    → alias de /news (mismo feed, mismo caché)
     /news btc          → coin=btc
     /news eth          → coin=eth
     /news sol          → coin=sol
     /news defi         → q="DeFi"
     /news regulacion   → q="regulación OR SEC OR ley"
+    /news hot          → "tendencias" aproximadas (ver más abajo)
+    /news trending     → alias de /news hot
 
 Cualquier otro argumento se usa como query libre (ej. "/news halving"
 → q="halving") en vez de fallar.
+
+Sobre /news hot y /news trending: NO son un ranking de popularidad real
+(el plan gratis de NewsData.io no expone views/shares/sentiment). Es una
+aproximación por cobertura mediática: se pide un lote más grande del feed
+general (30 artículos en vez de 8) y se reordena por _score_trending
+según cuántas keywords se repiten entre artículos distintos — si un tema
+aparece mencionado con las mismas keywords en varias notas recientes,
+sube en el ranking. El mensaje final se lo aclara al usuario en el
+título ("Tendencias — por cobertura mediática") para no generar
+expectativa de un ranking social que esta fuente no puede dar.
 """
 
 import asyncio
@@ -47,6 +60,23 @@ _QUERY_SUBCOMMANDS = {
     "mineria": "minería OR mining",
 }
 
+# Alias que apuntan al feed general (mismo resultado que /news sin argumento)
+_HEADLINES_ALIASES = {"headlines", "titulares"}
+
+# Alias que activan el scoring de tendencias aproximado (ver _score_trending)
+_TRENDING_ALIASES = {"hot", "trending"}
+
+# Sentinel interno: se usa como valor de "query" para que
+# _get_or_build_news_body sepa que debe pedir un lote grande y escorarlo,
+# en vez de pasarlo tal cual a NewsData.io como texto de búsqueda.
+_TRENDING_SENTINEL = "__trending__"
+
+# Cuántos artículos trae el feed general normal vs. el lote para tendencias
+_LIMIT_NORMAL = 8
+_LIMIT_TRENDING_POOL = 30
+
+CACHE_TTL_TRENDING_SECONDS = 1800  # 30 min — el lote de 30 gasta más créditos
+
 
 def _resolve_subcommand(arg: str | None) -> tuple[list[str] | None, str | None, str]:
     """Traduce el argumento de /news a (coin, query, etiqueta_para_mostrar).
@@ -60,6 +90,12 @@ def _resolve_subcommand(arg: str | None) -> tuple[list[str] | None, str | None, 
         return None, None, "general"
 
     arg_lower = arg.lower().strip()
+
+    if arg_lower in _HEADLINES_ALIASES:
+        return None, None, "general"
+
+    if arg_lower in _TRENDING_ALIASES:
+        return None, _TRENDING_SENTINEL, "trending"
 
     if arg_lower in _COIN_SUBCOMMANDS:
         return [arg_lower], None, arg_lower.upper()
@@ -103,24 +139,74 @@ def _format_articles(articles: list[dict], label: str) -> str:
     return "\n".join(lines).rstrip()
 
 
+def _score_trending(articles: list[dict]) -> list[dict]:
+    """Reordena artículos por un score aproximado de "tendencia".
+
+    No es un ranking social real (el plan gratis de NewsData.io no expone
+    views/shares/sentiment) — es una aproximación por cobertura mediática:
+    cuenta cuántas veces se repite cada keyword entre TODOS los artículos
+    del lote, y le da más puntaje a los artículos cuyas keywords aparecen
+    también en otras notas distintas (un tema cubierto por varias fuentes
+    en el mismo lote sube en el ranking).
+
+    Empates se resuelven manteniendo el orden original (la fuente ya
+    entrega los artículos con los más recientes primero).
+    """
+    if not articles:
+        return []
+
+    freq: dict[str, int] = {}
+    for art in articles:
+        for kw in art.get("keywords") or []:
+            kw_norm = kw.strip().lower()
+            if kw_norm:
+                freq[kw_norm] = freq.get(kw_norm, 0) + 1
+
+    def _score(art: dict) -> int:
+        kws = [kw.strip().lower() for kw in (art.get("keywords") or []) if kw.strip()]
+        # -1 por keyword para no puntuar al propio artículo contra sí mismo
+        return sum(freq.get(kw, 0) - 1 for kw in kws)
+
+    scored = sorted(enumerate(articles), key=lambda pair: (-_score(pair[1]), pair[0]))
+    return [art for _, art in scored]
+
+
 async def _get_or_build_news_body(coin: list[str] | None, query: str | None, cache_key: str) -> str | None:
     """Retorna el cuerpo del feed desde caché, o lo genera si expiró.
+
+    Si query == _TRENDING_SENTINEL, pide un lote más grande del feed
+    general y lo reordena con _score_trending en vez de pasar la query
+    tal cual a NewsData.io (ver docstring del módulo).
 
     Returns:
         El texto ya formateado, o None si NewsData.io no está configurado
         o la llamada falló (para que el caller decida el mensaje de error).
     """
-    cached = cache.get(cache_key, ttl=CACHE_TTL_SECONDS)
+    es_trending = query == _TRENDING_SENTINEL
+    ttl = CACHE_TTL_TRENDING_SECONDS if es_trending else CACHE_TTL_SECONDS
+
+    cached = cache.get(cache_key, ttl=ttl)
     if cached:
         return cached
 
     client = get_newsdata_client()
-    articles = await client.get_crypto_news(query=query, coin=coin, language="es", limit=8)
 
-    if not articles:
-        return None
+    if es_trending:
+        articles = await client.get_crypto_news(
+            query=None, coin=None, language="es", limit=_LIMIT_TRENDING_POOL
+        )
+        if not articles:
+            return None
+        articulos_top = _score_trending(articles)[:_LIMIT_NORMAL]
+        body = _format_articles(articulos_top, "Tendencias — por cobertura mediática")
+    else:
+        articles = await client.get_crypto_news(
+            query=query, coin=coin, language="es", limit=_LIMIT_NORMAL
+        )
+        if not articles:
+            return None
+        body = _format_articles(articles, cache_key.replace("news_", ""))
 
-    body = _format_articles(articles, cache_key.replace("news_", ""))
     cache.set(cache_key, body)
     return body
 

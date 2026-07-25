@@ -1,34 +1,42 @@
 # TASALO-Bot
 
-Bot de Telegram para consultar las tasas de cambio de Cuba (ElToque, CADECA, BCC).
+Bot de Telegram para consultar tasas de cambio de Cuba, precios y análisis cripto, y noticias del mercado — con alertas, panel admin y sistema de tickets.
 
-![Estado](https://img.shields.io/badge/estado-completado-success)
-![Versión](https://img.shields.io/badge/versión-0.12.0-blue)
+![Estado](https://img.shields.io/badge/estado-activo-success)
+![Versión](https://img.shields.io/badge/versión-0.11.1-blue)
 ![Python](https://img.shields.io/badge/python-3.12+-blue)
-![Tests](https://img.shields.io/badge/tests-104%20passing-success)
-
-## Estado
-
-**Fase 6:** ✅ Hardening y README — **COMPLETADA**
-**Feature:** /toqueimg con alertas diarias — **COMPLETADA**
-**Tag:** `v0.6.0-fase6`, `v0.9.0-toqueimg`
+![Tests](https://img.shields.io/badge/tests-344%2B%20passing-success)
 
 ## Features
 
-- ✅ Comando `/tasalo` con imagen + texto formateado + botones inline
-- ✅ Botón 🔄 Actualizar para refresh inmediato
-- ✅ Botón 🗺 Ver provincias (placeholder para datos futuros)
-- ✅ Botón 🔙 Volver para navegación entre vistas
-- ✅ Histórico de tasas por moneda y fuente
-- ✅ Comandos admin `/refresh` y `/status` protegidos
-- ✅ Fallback automático a texto si la imagen falla
-- ✅ Timeouts configurables para todas las operaciones
-- ✅ Error handling global con notificación al usuario
-- ✅ Logging estructurado para debugging y producción
-- ✅ **NUEVO:** Comando `/toqueimg` con imagen de ElToque
-- ✅ **NUEVO:** Alertas diarias configurables (default 7:15 AM)
-- ✅ **NUEVO:** Hora personalizada para alertas
-- ✅ **NUEVO:** Formato configurable (foto/documento)
+### 💱 Tasas de cambio
+- ✅ `/tasalo` — El Toque, BCC y CADECA juntas, con botones de actualizar/provincias/históricos
+- ✅ `/toque`, `/bcc`, `/cadeca` — tasas individuales con flecha de tendencia
+- ✅ `/fuel` — precio del combustible en el mercado informal
+- ✅ `/toqueimg` — imagen diaria de El Toque, con alertas configurables (hora personalizada, foto/documento)
+
+### 🪙 Cripto y trading
+- ✅ `/p` — precio detallado (CoinGecko + CoinMarketCap con rotación de fuentes), ATH/ATL, supply
+- ✅ `/ta` y `/graf` — análisis técnico y gráficos de velas con indicadores, por temporalidad
+- ✅ `/mk` — resumen rápido del mercado
+- ✅ `/spl` — spotlight del mercado (Fear & Greed, Altcoin Season, dominancia, top gainers/losers, narrativa IA vía Groq), cacheado 15 min para todos los usuarios
+- ✅ `/tspl` — spotlight completo estilo newsletter (lede + noticias curadas por IA + resumen de mercado + radar), digest diario vía scheduler
+- ✅ `/news` — noticias cripto directas (por moneda, tópico o texto libre) vía NewsData.io, sin curación de IA
+- ✅ `/alert` — alertas de precio, creables también desde botones de `/p`, `/ta` y `/graf`
+
+### 🔑 Administración
+- ✅ `/refresh`, `/status` (panel con botones + métricas + jobs del scheduler), `/health`
+- ✅ `/log` — logs de bot/api/web/gcg sin necesitar SSH, con rotación y entrega por Telegram
+- ✅ `/ads` — gestión de anuncios inyectados (crear/activar/desactivar/patrocinar/peso)
+- ✅ `/ms` — difusión de mensajes o fotos a todos los usuarios, con vista previa y confirmación
+- ✅ `/tkt list` / `/tkt active` / `/tkt show <id>` — gestión de tickets de usuarios
+
+### ℹ️ Utilidades
+- ✅ `/start` — menú principal con accesos directos
+- ✅ `/help` / `/ayuda` — ayuda en dos niveles (resumen + ficha por comando), con alias en lenguaje natural
+- ✅ `/tkt` — reportar bugs o pedir promoción/anuncio, con notificaciones de estado
+- ✅ `/y` — progreso del año y frase del día
+- ✅ Fallback automático a texto si falla la generación de imagen; timeouts configurables; error handling global; logging estructurado
 
 ## Requisitos del Sistema
 
@@ -119,14 +127,50 @@ python src/main.py
 
 ## Comandos Disponibles
 
+**Tasas de cambio**
+
 | Comando | Descripción | Disponibilidad |
 |---------|-------------|----------------|
-| `/start` | Mensaje de bienvenida | Todos los usuarios |
-| `/tasalo` | Ver tasas de cambio actuales | Todos los usuarios |
-| `/toqueimg` | Ver imagen de ElToque con alertas | Todos los usuarios **NUEVO** |
+| `/tasalo` | Todas las tasas juntas (El Toque, BCC, CADECA) | Todos los usuarios |
+| `/toque` | Tasa de El Toque | Todos los usuarios |
+| `/bcc` | Tasa oficial del Banco Central de Cuba | Todos los usuarios |
+| `/cadeca` | Tasas de CADECA | Todos los usuarios |
+| `/fuel` | Precio del combustible | Todos los usuarios |
+| `/toqueimg` | Imagen diaria de El Toque, con alertas configurables | Todos los usuarios |
+
+**Criptomonedas y trading**
+
+| Comando | Descripción | Disponibilidad |
+|---------|-------------|----------------|
+| `/p` | Precio detallado, ej. /p btc | Todos los usuarios |
+| `/ta` | Análisis técnico, ej. /ta btcusdt | Todos los usuarios |
+| `/graf` | Gráfico de velas con indicadores | Todos los usuarios |
+| `/mk` | Resumen rápido del mercado | Todos los usuarios |
+| `/spl` | Spotlight del mercado, datos y narrativa IA | Todos los usuarios |
+| `/tspl` | Spotlight completo tipo newsletter | Todos los usuarios |
+| `/news` | Noticias cripto directas, por moneda, tema o texto libre | Todos los usuarios |
+| `/alert` | Ver o crear alertas de precio | Todos los usuarios |
+
+**Año y utilidades**
+
+| Comando | Descripción | Disponibilidad |
+|---------|-------------|----------------|
+| `/y` | Progreso del año y frase del día | Todos los usuarios |
+| `/start` | Menú principal | Todos los usuarios |
+| `/help` | Ayuda por categorías o detalle de un comando | Todos los usuarios |
+| `/tkt` | Reportar un bug o pedir una promoción o anuncio | Todos los usuarios |
+
+**Administración**
+
+| Comando | Descripción | Disponibilidad |
+|---------|-------------|----------------|
 | `/health` | Verificar conexión con el backend | Solo administradores |
 | `/refresh` | Forzar refresco inmediato en backend | Solo administradores |
-| `/status` | Ver estado del scheduler | Solo administradores | |
+| `/status` | Panel de estado del scheduler y métricas | Solo administradores |
+| `/log` | Logs de bot, api, web y gcg sin SSH | Solo administradores |
+| `/ads` | Gestión de anuncios inyectados | Solo administradores |
+| `/ms` | Difundir mensaje o foto a todos los usuarios | Solo administradores |
+| `/tkt list` `/tkt active` `/tkt show` | Gestión de tickets de usuarios | Solo administradores |
 
 ## Botones Inline
 
@@ -201,6 +245,9 @@ pytest tests/test_formatters.py -v
 pytest tests/test_image_generator.py -v
 pytest tests/test_handlers.py -v
 pytest tests/test_admin_handlers.py -v
+pytest tests/test_news.py -v
+pytest tests/test_help_handler.py -v
+pytest tests/test_log_handler.py -v
 
 # Con coverage
 pytest --cov=src --cov-report=term-missing
@@ -220,14 +267,39 @@ taso-bot/
 ├── docs/plans/           # Documentos de diseño y planes
 └── src/
     ├── __init__.py
-    ├── main.py           # Entry point, error handler global
-    ├── config.py         # Configuración con pydantic-settings
-    ├── api_client.py     # Cliente HTTP para taso-api
-    ├── formatters.py     # Formateo de texto Markdown
-    ├── image_generator.py # Generación de imágenes Pillow
+    ├── main.py             # Entry point, registro de handlers, error handler global
+    ├── config.py           # Configuración con pydantic-settings
+    ├── build_info.py       # Versión del bot + info de build (commit/fecha)
+    ├── api_client.py       # Cliente HTTP para taso-api
+    ├── crypto_client.py    # Cliente de precios cripto (CoinMarketCap/CryptoCompare/CoinGecko)
+    ├── coingecko_client.py # Cliente específico de CoinGecko
+    ├── newsdata_client.py  # Cliente de NewsData.io para /news y /tspl
+    ├── formatters.py       # Formateo de texto Markdown
+    ├── image_generator.py  # Generación de imágenes Pillow
+    ├── cache.py            # Cache compartido (ej. /spl, /tspl)
+    ├── logger.py           # Logging estructurado por archivo
+    ├── core/               # i18n, config compartida, análisis avanzado de BTC
+    ├── services/           # Schedulers y jobs de fondo (alertas, digest diario, logs)
+    ├── utils/               # Permisos, manejo de archivos, suscripciones
     └── handlers/
-        ├── tasalo.py     # Comando /tasalo y callbacks inline
-        └── admin.py      # Comandos /refresh y /status
+        ├── start.py        # /start
+        ├── help.py         # /help, /ayuda
+        ├── tasalo.py       # /tasalo, /toque, /bcc, /cadeca, /fuel + callbacks
+        ├── toqueimg.py      # /toqueimg + alertas de imagen diaria
+        ├── admin.py         # /refresh, /status
+        ├── logs.py          # /log
+        ├── p.py             # /p
+        ├── ta.py            # /ta
+        ├── trading.py       # /graf, /mk
+        ├── alert.py         # /alert
+        ├── spl.py           # /spl
+        ├── tspl.py          # /tspl
+        ├── news.py          # /news
+        ├── ads.py           # /ads
+        ├── ms.py            # /ms
+        ├── tkt.py           # /tkt
+        ├── y.py             # /y
+        └── callback_router.py # Router consolidado de callbacks inline
 ```
 
 ## Guía de Producción
