@@ -45,8 +45,10 @@ Bienvenido 👋 Estos son los principales comandos del bot.
 
 🪙 *Criptomonedas*
 /p <cripto> — Precio detallado
-/spl — Panorama del mercado
-_Ejemplos: /p btc · /p eth · /p hive_
+/spl — Panorama rápido del mercado
+/tspl — Spotlight completo (noticias + mercado)
+/news — Noticias cripto directas
+_Ejemplos: /p btc · /p eth · /p hive · /news btc_
 
 📈 *Trading*
 /ta <par> — Análisis técnico
@@ -176,7 +178,31 @@ Panorama general del mercado cripto: Fear & Greed Index, Altcoin Season Index, d
 
 Botón: 🔄 Actualizar Spotlight
 
-_El panorama es el mismo para todos los usuarios y se actualiza cada 15 minutos._""",
+_El panorama es el mismo para todos los usuarios y se actualiza cada 15 minutos. Para el resumen completo con noticias del día, usá `/tspl`._""",
+
+    "tspl": """📊 */tspl — TASALO Spotlight completo*
+
+Uso: `/tspl`
+
+Versión completa del panorama diario, estilo newsletter: un resumen (lede) del día, las 4-6 noticias más importantes curadas por IA a partir de fuentes reales, el resumen de mercado (capitalización, volumen, dominancia BTC, Fear & Greed, Altcoin Season) y una sección de qué vigilar en los próximos días.
+
+Las noticias se curan una vez al día (no en cada consulta); los datos de mercado se actualizan cada 15 minutos.
+
+Botón: 🔄 Actualizar
+
+_Para una consulta más rápida sin noticias, usá `/spl`._""",
+
+    "news": """📰 */news — Noticias cripto directas*
+
+Uso:
+`/news` — feed general de noticias cripto
+`/news btc` / `/news eth` / `/news sol` — noticias de una moneda específica
+`/news defi` / `/news regulacion` / `/news etf` / `/news mineria` — noticias por tema
+`/news <palabra>` — cualquier otra palabra se busca como texto libre
+
+A diferencia de `/tspl`, esto es una consulta directa (sin curación de IA): te muestra los artículos tal cual, con título, fuente y link.
+
+Botón: 🔄 Actualizar""",
 
     "alert": """🔔 */alert — Alertas de precio*
 
@@ -273,7 +299,10 @@ TOPIC_ALIASES: dict[str, str] = {
     "tecnico": "ta",
     "analisis": "ta",
     "spotlight": "spl",
-    "panorama": "spl",
+    "panorama": "tspl",
+    "newsletter": "tspl",
+    "noticias": "news",
+    "noticia": "news",
     "mercado": "mk",
     "combustible": "fuel",
     "gasolina": "fuel",
