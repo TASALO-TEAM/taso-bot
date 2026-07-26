@@ -1049,3 +1049,93 @@ class TasaloApiClient:
         except Exception as e:
             logger.error("❌ Error en update_ticket id=%d: %s", ticket_id, e)
             return None
+
+    # ── Tspl subscription API methods (suscripción a horarios de /tspl) ──────────
+
+    async def get_tspl_subscriptions(self, user_id: int) -> list:
+        """Retorna las horas (UTC, int) a las que el usuario está suscrito.
+
+        A diferencia de get_year_subscription, siempre devuelve 200 con una
+        lista (0, 1 o 2 elementos) en vez de 404 cuando no hay ninguna.
+
+        Returns:
+            Lista de horas (int, 0-23), [] si no hay ninguna o hay error.
+        """
+        url = f"{self.api_url}/api/v1/tspl/subscriptions/me/{user_id}"
+        try:
+            data = await self._get_with_retry(url)
+            if data and data.get("ok"):
+                return [row["hour"] for row in data.get("data", [])]
+            return []
+        except Exception as e:
+            logger.error("❌ Error en get_tspl_subscriptions user=%d: %s", user_id, e)
+            return []
+
+    async def add_tspl_subscription(self, user_id: int, hour: int) -> Optional[Dict[str, Any]]:
+        """Agrega un horario a la suscripción de /tspl del usuario (máx 2).
+
+        Returns:
+            Dict con la fila creada/existente, o un dict
+            {"error": "max_subscriptions_reached"} si ya tenía 2, o None
+            si hay un error de red/servidor.
+        """
+        url = f"{self.api_url}/api/v1/tspl/subscriptions/me/{user_id}"
+        try:
+            client = self._get_client()
+            resp = await client.post(url, json={"user_id": user_id, "hour": hour})
+            if resp.status_code == 409:
+                return {"error": "max_subscriptions_reached"}
+            resp.raise_for_status()
+            return resp.json()
+        except Exception as e:
+            logger.error("❌ Error en add_tspl_subscription user=%d hour=%d: %s", user_id, hour, e)
+            return None
+
+    async def delete_tspl_subscription(self, user_id: int, hour: int) -> bool:
+        """Elimina un horario puntual de la suscripción de /tspl del usuario."""
+        url = f"{self.api_url}/api/v1/tspl/subscriptions/me/{user_id}/{hour}"
+        try:
+            client = self._get_client()
+            resp = await client.delete(url)
+            resp.raise_for_status()
+            data = resp.json()
+            return bool(data.get("ok"))
+        except Exception as e:
+            logger.error("❌ Error en delete_tspl_subscription user=%d hour=%d: %s", user_id, hour, e)
+            return False
+
+    async def delete_all_tspl_subscriptions(self, user_id: int) -> bool:
+        """Elimina TODOS los horarios de la suscripción de /tspl del usuario."""
+        url = f"{self.api_url}/api/v1/tspl/subscriptions/me/{user_id}"
+        try:
+            client = self._get_client()
+            resp = await client.delete(url)
+            resp.raise_for_status()
+            data = resp.json()
+            return bool(data.get("ok"))
+        except Exception as e:
+            logger.error("❌ Error en delete_all_tspl_subscriptions user=%d: %s", user_id, e)
+            return False
+
+    async def admin_list_tspl_subscriptions(self) -> list:
+        """Lista TODAS las suscripciones de /tspl (admin, requiere X-API-Key).
+
+        Usado por tspl_alert_dispatcher.py para saber a quién despachar
+        cada hora en punto.
+
+        Returns:
+            Lista de dicts {id, user_id, hour, created_at} o [] si hay error.
+        """
+        if not self.admin_key:
+            logger.error("❌ admin_list_tspl_subscriptions requiere admin_key configurado")
+            return []
+        url = f"{self.api_url}/api/v1/tspl/subscriptions"
+        try:
+            data = await self._get_with_retry(url, headers=self._admin_headers)
+            if data and data.get("ok"):
+                return data.get("data", [])
+            return []
+        except Exception as e:
+            logger.error("❌ Error en admin_list_tspl_subscriptions: %s", e)
+            return []
+

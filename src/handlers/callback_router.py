@@ -395,7 +395,8 @@ def get_callback_handler() -> CallbackQueryHandler:
 # ── TASALO Spotlight completo (/tspl) callbacks ──
 
 async def _handle_tspl(update: Update, context: ContextTypes.DEFAULT_TYPE, callback_data: str) -> None:
-    """Handle tspl_refresh callback (refresh button from /tspl)."""
+    """Handle tspl_refresh y tspl_sub_* callbacks (refresh + suscripción a
+    horarios de /tspl)."""
     handler_start = time.time()
     query = update.callback_query
     user_id = query.from_user.id
@@ -403,6 +404,8 @@ async def _handle_tspl(update: Update, context: ContextTypes.DEFAULT_TYPE, callb
     try:
         if callback_data == "tspl_refresh":
             await tspl.tspl_refresh_callback(update, context)
+        elif callback_data.startswith("tspl_sub_"):
+            await tspl.tspl_sub_callback(update, context)
         else:
             logger.warning("Unknown tspl callback: %s for user %d", callback_data, user_id)
             duration_ms = (time.time() - handler_start) * 1000
@@ -413,7 +416,9 @@ async def _handle_tspl(update: Update, context: ContextTypes.DEFAULT_TYPE, callb
     except Exception as e:
         duration_ms = (time.time() - handler_start) * 1000
         logger.error("❌ Error in _handle_tspl for user %d callback '%s' (%.0fms): %s", user_id, callback_data, duration_ms, e, exc_info=True)
-        raise
+        # No re-raise para tspl_sub_* — tspl_sub_callback ya llama a
+        # query.answer() por su cuenta (mismo criterio que _handle_year);
+        # un segundo intento de responder acá fallaría con BadRequest.
 
 
 # ── News (/news) callbacks ──

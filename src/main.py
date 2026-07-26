@@ -60,7 +60,7 @@ from src.handlers.y import (
 from src.handlers.alert import alert_command
 from src.handlers.spl import spl_command
 from src.handlers.news import news_command
-from src.handlers.tspl import tspl_command
+from src.handlers.tspl import tspl_command, handle_tspl_hour_input
 from src.handlers.ads import ads_command
 from src.handlers.ms import ms_command
 from src.handlers.tkt import tkt_command, handle_tkt_message
@@ -69,6 +69,7 @@ from src.services.daily_image_sender import start_daily_dispatcher, stop_daily_d
 from src.services.year_alert_scheduler import start_year_scheduler, stop_year_scheduler
 from src.services.price_alert_checker import start_price_alert_checker, stop_price_alert_checker
 from src.services.tspl_digest_scheduler import start_tspl_digest_scheduler, stop_tspl_digest_scheduler
+from src.services.tspl_alert_dispatcher import start_tspl_alert_dispatcher, stop_tspl_alert_dispatcher
 from src.logger import BotLogger, LOGS_DIR, LOG_FILE_PATH
 
 # Tipos de update que el bot realmente maneja (eficiencia)
@@ -270,6 +271,13 @@ def create_application() -> Application:
     )
     logger.debug("✅ MessageHandler registered for /tkt message capture (group=2)")
 
+    # Registrar handler para input de hora personalizada de /tspl
+    application.add_handler(
+        MessageHandler(filters.TEXT & ~filters.COMMAND, handle_tspl_hour_input),
+        group=3,
+    )
+    logger.debug("✅ MessageHandler registered for /tspl hour input (group=3)")
+
     # Registrar error handler global
     application.add_error_handler(error_handler)
     logger.info("✅ Global error handler registered")
@@ -332,6 +340,13 @@ async def post_init(application: Application):
         logger.info("✅ /tspl digest scheduler started (11:00 UTC / ~7:00 AM Cuba)")
     except Exception as e:
         logger.error("❌ Failed to start /tspl digest scheduler: %s", e, exc_info=True)
+
+    # Iniciar dispatcher de suscripciones a horarios de /tspl
+    try:
+        start_tspl_alert_dispatcher(application)
+        logger.info("✅ /tspl subscription dispatcher started (runs at :00 UTC every hour)")
+    except Exception as e:
+        logger.error("❌ Failed to start /tspl subscription dispatcher: %s", e, exc_info=True)
 
     # Obtener y cachear foto de perfil del bot
     try:
@@ -408,6 +423,9 @@ def main():
 
         stop_tspl_digest_scheduler()
         logger.info("✅ /tspl digest scheduler stopped")
+
+        stop_tspl_alert_dispatcher()
+        logger.info("✅ /tspl subscription dispatcher stopped")
         
         # Cerrar cliente HTTP para liberar conexiones
         api_client: TasaloApiClient = app.bot_data.get("api_client")
