@@ -133,12 +133,20 @@ def _build_message(digest: dict | None, snapshot: dict | None) -> str:
         "Panorama del mercado cripto de hoy — la sección de noticias no "
         "está disponible en este momento, pero los datos de mercado sí."
     )
+    teaser = (digest or {}).get("teaser")
     radar = (digest or {}).get("radar")
 
     partes = [
         f"📊 *TASALO Spotlight — {fecha}*",
         "",
         lede,
+    ]
+
+    if teaser:
+        partes.append("")
+        partes.append(teaser)
+
+    partes.extend([
         "",
         "📰 *Lo más importante del día*",
         "",
@@ -147,7 +155,7 @@ def _build_message(digest: dict | None, snapshot: dict | None) -> str:
         "📊 *Resumen del mercado*",
         "",
         build_tspl_market_bullets(snapshot or {}),
-    ]
+    ])
 
     if radar:
         partes.append("")

@@ -869,6 +869,10 @@ estilo "TASALO Spotlight". Tu trabajo es curar y redactar un resumen de las
 noticias del dia a partir de titulares y descripciones crudas, siempre en
 espanol, sin importar en que idioma vengan los articulos originales.
 
+=== DATOS DE MERCADO REALES (usalos tal cual, no inventes otras cifras) ===
+{market_context}
+=== FIN DATOS DE MERCADO ===
+
 === ARTICULOS CRUDOS (titulo + descripcion, pueden venir en espanol o ingles) ===
 {articulos_text}
 === FIN ARTICULOS ===
@@ -885,24 +889,75 @@ TAREA:
 3. Elegi un emoji representativo para cada noticia (regulacion, internacional,
    legislacion, mercados/exchanges, IA/tecnologia, institucional/ETF,
    seguridad, etc.).
-4. Escribi un "lede" de 3-4 frases con el panorama general del dia,
-   basado en las noticias elegidas.
-5. Escribi un "radar" de 1-2 frases sobre que vigilar en los proximos dias
+4. Escribi un "lede" de 3-4 frases con el panorama general del dia. Si hay
+   DATOS DE MERCADO REALES arriba, la PRIMERA frase tiene que abrir con el
+   Fear & Greed y el precio de BTC de esos datos (forma: "El indicador
+   Miedo y Codicia se situa en {{valor}} ({{clasificacion}}) y el BTC en
+   {{precio}} dolares {{momento del dia}}."), y seguir con 2-3 frases de
+   color sobre el movimiento del mercado segun el signo/magnitud del
+   cambio 24h y las noticias elegidas - sin inventar otros niveles de
+   precio. Si NO hay datos de mercado, arranca el lede directo con el
+   panorama de las noticias, sin mencionar Fear & Greed ni precio de BTC.
+5. Escribi un "teaser" de 2-3 frases cortas tipo gancho (una por cada
+   noticia mas fuerte del dia, sin el detalle completo - eso va en
+   "items") y cerra siempre con la frase exacta "Vamos a empezar." como
+   ultima oracion.
+6. Escribi un "radar" de 1-2 frases sobre que vigilar en los proximos dias
    segun lo que sugieren estas noticias.
 
 Responde EXCLUSIVAMENTE con un objeto JSON valido, sin texto antes ni
 despues, sin bloque de codigo markdown, con esta forma exacta:
 
-{{"lede": "...", "items": [{{"emoji": "string", "titulo": "...", "parrafo": "..."}}], "radar": "..."}}
+{{"lede": "...", "teaser": "...", "items": [{{"emoji": "string", "titulo": "...", "parrafo": "..."}}], "radar": "..."}}
 
 Reglas del JSON:
-- Todo el contenido (lede, titulo, parrafo, radar) en espanol.
+- Todo el contenido (lede, teaser, titulo, parrafo, radar) en espanol.
 - "items" debe tener entre 4 y 6 elementos.
 - No uses asteriscos, guiones bajos ni ningun formato Markdown dentro de
   los textos - solo texto plano.
 - No inventes cifras, nombres ni cargos que no esten en los articulos
-  originales.
+  originales ni en los DATOS DE MERCADO REALES.
 """
+
+
+def _format_tspl_market_context(market_data: Optional[dict]) -> str:
+    """Convierte Fear & Greed + precio de BTC (datos reales, no generados
+    por IA) en texto plano para el prompt del digest de /tspl.
+
+    Se deja explicito cuando no hay datos disponibles para que el prompt
+    (paso 4 de TAREA) sepa que debe omitir la apertura numerica en vez de
+    inventarla.
+
+    Args:
+        market_data: Dict con fng_value, fng_classification, btc_price,
+            btc_change_24h, momento_dia (ver
+            services/tspl_digest_scheduler.py), o None si la consulta de
+            mercado fallo por completo.
+    """
+    sin_datos = "(no disponibles - no menciones Fear & Greed ni precio de BTC en el lede)"
+    if not market_data:
+        return sin_datos
+
+    lines = []
+
+    fng_value = market_data.get("fng_value")
+    if fng_value is not None:
+        lines.append(f"Fear & Greed: {fng_value} ({market_data.get('fng_classification') or 'N/A'})")
+
+    btc_price = market_data.get("btc_price")
+    if btc_price:
+        lines.append(f"Precio BTC: ${btc_price:,.0f} dolares")
+
+    btc_change = market_data.get("btc_change_24h")
+    if btc_change is not None:
+        signo = "sube" if btc_change >= 0 else "baja"
+        lines.append(f"Cambio BTC 24h: {signo} {abs(btc_change):.2f}%")
+
+    momento_dia = market_data.get("momento_dia")
+    if momento_dia:
+        lines.append(f"Momento del dia a usar en la frase de apertura: {momento_dia}")
+
+    return "\n".join(lines) if lines else sin_datos
 
 
 def _extract_json_object(raw: str) -> Optional[dict]:
@@ -949,7 +1004,7 @@ def _format_tspl_articles_text(articles: list[dict]) -> str:
     return "\n\n".join(lines)
 
 
-async def get_groq_tspl_digest(articles: list[dict]) -> Optional[dict]:
+async def get_groq_tspl_digest(articles: list[dict], market_data: Optional[dict] = None) -> Optional[dict]:
     """Genera el digest curado de noticias para /tspl a partir de articulos
     crudos de NewsData.io (title + description).
 
@@ -966,11 +1021,17 @@ async def get_groq_tspl_digest(articles: list[dict]) -> Optional[dict]:
     Args:
         articles: Lista de dicts normalizados (title, description, ...)
             devueltos por NewsDataClient.get_crypto_news().
+        market_data: Fear & Greed + precio BTC reales (ver
+            services/tspl_digest_scheduler.py._fetch_tspl_market_context),
+            usados para anclar la primera frase del "lede" a cifras reales
+            en vez de dejar que Groq las invente. None si la consulta de
+            mercado fallo (el lede sale sin la apertura numerica).
 
     Returns:
-        Dict con forma {"lede": str, "items": [{"emoji", "titulo",
-        "parrafo"}], "radar": str}, o None si no hay key configurada,
-        no hay articulos, o Groq no devolvio JSON valido tras el reintento.
+        Dict con forma {"lede": str, "teaser": str, "items": [{"emoji",
+        "titulo", "parrafo"}], "radar": str}, o None si no hay key
+        configurada, no hay articulos, o Groq no devolvio JSON valido tras
+        el reintento.
     """
     if not settings.groq_api_key:
         logger.error("GROQ_API_KEY not configured (tspl digest)")
@@ -981,7 +1042,8 @@ async def get_groq_tspl_digest(articles: list[dict]) -> Optional[dict]:
         return None
 
     articulos_text = _format_tspl_articles_text(articles)
-    prompt = TSPL_DIGEST_PROMPT.format(articulos_text=articulos_text)
+    market_context = _format_tspl_market_context(market_data)
+    prompt = TSPL_DIGEST_PROMPT.format(articulos_text=articulos_text, market_context=market_context)
 
     payload = {
         "model": DEFAULT_MODEL,

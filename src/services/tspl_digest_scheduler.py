@@ -9,20 +9,70 @@ solo genera el digest y lo deja en cache (src/cache.py, key "tspl_digest")
 para que /tspl lo lea sin tener que llamar a Groq en cada invocacion.
 """
 
+import asyncio
 import logging
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 from src.newsdata_client import get_newsdata_client
 from src.core.ai_logic import get_groq_tspl_digest
+from src.handlers.p import get_crypto_client
 from src.cache import cache
 
 logger = logging.getLogger(__name__)
 
 TSPL_DIGEST_CACHE_KEY = "tspl_digest"
 _MIN_ARTICLES = 4
+CUBA_TZ = ZoneInfo("America/Havana")
 
 _scheduler: AsyncIOScheduler | None = None
+
+
+def _momento_dia_cuba() -> str:
+    """Bucket del momento del dia en hora de Cuba, para que el "lede" no
+    tenga que adivinarlo (evita que Groq escriba "esta noche" cuando en
+    Cuba son las 7 de la mañana, por ejemplo)."""
+    hora = datetime.now(CUBA_TZ).hour
+    if 5 <= hora < 12:
+        return "esta mañana"
+    if 12 <= hora < 19:
+        return "esta tarde"
+    return "esta noche"
+
+
+async def _fetch_tspl_market_context() -> dict | None:
+    """Junta Fear & Greed + precio de BTC en paralelo para anclar la
+    apertura del "lede" a cifras reales en vez de dejar que Groq las
+    invente. Reusa el mismo cliente singleton que /p
+    (src.handlers.p.get_crypto_client) — no agrega ninguna llamada nueva
+    a ninguna API que el bot no use ya.
+
+    Si una de las dos consultas falla, se sigue con lo que si respondio
+    (el prompt sabe omitir lo que falte); si ambas fallan retorna None.
+    """
+    client = get_crypto_client()
+    fng_result, btc_result = await asyncio.gather(
+        client.get_fear_greed(),
+        client.get_crypto_data("BTC"),
+        return_exceptions=True,
+    )
+
+    fear_greed = None if isinstance(fng_result, Exception) else fng_result
+    btc_data = None if isinstance(btc_result, Exception) else btc_result
+
+    if not fear_greed and not btc_data:
+        logger.warning("⚠️ Digest /tspl: no se pudo obtener Fear & Greed ni precio BTC")
+        return None
+
+    return {
+        "fng_value": (fear_greed or {}).get("value"),
+        "fng_classification": (fear_greed or {}).get("classification"),
+        "btc_price": (btc_data or {}).get("price"),
+        "btc_change_24h": (btc_data or {}).get("percent_change_24h"),
+        "momento_dia": _momento_dia_cuba(),
+    }
 
 
 def _dedup_by_title(articles: list[dict]) -> list[dict]:
@@ -78,7 +128,9 @@ async def generate_and_cache_tspl_digest() -> dict | None:
 
         articles = _dedup_by_title(articles)
 
-        digest = await get_groq_tspl_digest(articles)
+        market_data = await _fetch_tspl_market_context()
+
+        digest = await get_groq_tspl_digest(articles, market_data)
         if digest is None:
             logger.warning("⚠️ Digest /tspl: Groq no devolvio un digest valido, se conserva el cache anterior (si existe)")
             return None
