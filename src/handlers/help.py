@@ -41,6 +41,7 @@ Bienvenido 👋 Estos son los principales comandos del bot.
 /bcc — Tasas del BCC
 /cadeca — Tasas de CADECA
 /fuel — Combustible
+/qp — Tasas P2P de QvaPay
 /toqueimg — Imagen diaria de El Toque
 
 🪙 *Criptomonedas*
@@ -120,6 +121,16 @@ Uso: `/fuel`
 Precio del combustible en el mercado informal, tomado del mismo feed de El Toque.
 
 _Se actualiza junto con el resto de las tasas, cada 5 minutos aprox._""",
+
+    "qp": """💱 */qp — Tasas P2P de QvaPay*
+
+Uso: `/qp`
+
+Tasa de cambio promedio (compra+venta)/2 del mercado P2P de QvaPay.com x USD, para CUP, MLC, TROPIPAY, ETECSA, ZELLE, CLASICA, BOLSATM, BANDECPREPAGO y SBERBANK.
+
+Botón: 🔄 Actualizar
+
+_El resultado es el mismo para todos los usuarios y se actualiza cada 5 minutos._""",
 
     "toqueimg": """🖼 */toqueimg — Imagen diaria de El Toque*
 
@@ -308,6 +319,8 @@ TOPIC_ALIASES: dict[str, str] = {
     "gasolina": "fuel",
     "imagen": "toqueimg",
     "eltoque": "toque",
+    "qvapay": "qp",
+    "p2p": "qp",
 }
 
 ADMIN_ONLY_TOPICS = {"ads", "admin", "ms"}

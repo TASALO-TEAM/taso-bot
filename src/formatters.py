@@ -12,6 +12,7 @@ import logging
 import time
 from datetime import datetime
 from typing import Dict, Any, Optional, Tuple, List
+from zoneinfo import ZoneInfo
 
 from telegram import MessageEntity
 
@@ -1059,6 +1060,54 @@ def build_fuel_only_message(api_data: Dict[str, Any]) -> str:
         date_str = parse_iso_datetime(updated_at)
         lines.append(f"📆 {date_str}")
     lines.append("🔗 eltoque.com")
+
+    return "\n".join(lines)
+
+
+# Zona horaria de Cuba para el timestamp de /qp — mismo patrón que
+# CUBA_TZ en toqueimg.py / daily_image_sender.py / tspl_digest_scheduler.py
+_QP_CUBA_TZ = ZoneInfo("America/Havana")
+
+# Etiqueta -> emoji mostrado en /qp (orden = orden de aparición)
+QVAPAY_EMOJIS: Dict[str, str] = {
+    "CUP": "💰",
+    "MLC": "💵",
+    "TROPIPAY": "💶",
+    "ETECSA": "📱",
+    "ZELLE": "🏦",
+    "CLASICA": "💷",
+    "BOLSATM": "💸",
+    "BANDECPREPAGO": "🏦",
+    "SBERBANK": "🏦",
+}
+
+
+def build_qvapay_message(rates: Dict[str, Optional[float]]) -> str:
+    """Construye el mensaje de /qp — tasas promedio P2P de QvaPay x USD.
+
+    Args:
+        rates: Dict {etiqueta: promedio_o_None}, tal como lo devuelve
+            QvaPayClient.get_p2p_rates(). None (sin operaciones recientes
+            o error de esa moneda puntual) se muestra como "$0.00".
+
+    Formato:
+        Tasa de cambio promedio P2P QvaPay.com x USD:
+
+        💰 CUP: $977.73
+        ...
+
+        Última actualización: 29/7/2026, 14:50:24
+    """
+    lines = ["Tasa de cambio promedio P2P QvaPay.com x USD:", ""]
+
+    for label, value in rates.items():
+        emoji = QVAPAY_EMOJIS.get(label, "💱")
+        monto = value if value is not None else 0.0
+        lines.append(f"{emoji} {label}: ${monto:,.2f}")
+
+    ahora = datetime.now(_QP_CUBA_TZ)
+    lines.append("")
+    lines.append(f"Última actualización: {ahora.day}/{ahora.month}/{ahora.year}, {ahora.hour:02d}:{ahora.minute:02d}:{ahora.second:02d}")
 
     return "\n".join(lines)
 

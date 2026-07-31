@@ -59,6 +59,7 @@ from src.handlers.y import (
 )
 from src.handlers.alert import alert_command
 from src.handlers.spl import spl_command
+from src.handlers.qp import qp_command
 from src.handlers.news import news_command
 from src.handlers.tspl import tspl_command, handle_tspl_hour_input
 from src.handlers.ads import ads_command
@@ -216,6 +217,7 @@ def create_application() -> Application:
         ("bcc", bcc_command),
         ("cadeca", cadeca_command),
         ("fuel", fuel_command),
+        ("qp", qp_command),
         ("toqueimg", toqueimg_command),
         ("p", p_command),
         ("ta", ta_command),
