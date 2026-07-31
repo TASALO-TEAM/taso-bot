@@ -5,9 +5,9 @@ en memoria (reutilizando el SimpleCache compartido de src/cache.py, el mismo
 mecanismo que ya usa /spl) y arma el bloque de texto a inyectar en los
 mensajes aprobados en docs/plans/2026-07-04-sistema-anuncios.md.
 
-Usado por los 9 puntos de inyección aprobados: /tasalo, /toque, /bcc, /cadeca,
-/fuel (+ sus respectivos refresh), /p, /y, /ta, /graf (caption) y /mk, además
-de la notificación de price_alert_checker.py.
+Usado por los 10 puntos de inyección aprobados: /tasalo, /toque, /bcc, /cadeca,
+/fuel (+ sus respectivos refresh), /p, /y, /ta, /graf (caption), /mk y /qp,
+además de la notificación de price_alert_checker.py.
 
 (El stub legacy `src/utils/ads_manager.py` que usaban ta.py/trading.py fue
 eliminado — ya no queda ninguna referencia a él en el proyecto.)

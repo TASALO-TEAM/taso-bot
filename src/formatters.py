@@ -1088,26 +1088,39 @@ def build_qvapay_message(rates: Dict[str, Optional[float]]) -> str:
     Args:
         rates: Dict {etiqueta: promedio_o_None}, tal como lo devuelve
             QvaPayClient.get_p2p_rates(). None (sin operaciones recientes
-            o error de esa moneda puntual) se muestra como "$0.00".
+            o error de esa moneda puntual) se OMITE del mensaje en vez de
+            mostrarse como "$0.00" — una moneda sin datos no aporta nada
+            al usuario y "$0.00" se lee como una tasa real (confuso).
 
-    Formato:
-        Tasa de cambio promedio P2P QvaPay.com x USD:
-
-        💰 CUP: $977.73
+    Formato (estilo legacy, igual que /bcc, /cadeca, /toque):
+        💱 *QVAPAY P2P — Promedio x USD*
+        ————————————————————
+        💰 *CUP:*   $977.73
         ...
 
-        Última actualización: 29/7/2026, 14:50:24
+        ————————————————————
+        📆 29/7/2026, 14:50:24
+        🔗 qvapay.com
     """
-    lines = ["Tasa de cambio promedio P2P QvaPay.com x USD:", ""]
+    lines = ["💱 *QVAPAY P2P — Promedio x USD*", SEPARATOR_THICK]
 
+    hay_datos = False
     for label, value in rates.items():
+        if value is None:
+            logger.debug("QvaPay %s: omitida en /qp (sin datos disponibles)", label)
+            continue
+        hay_datos = True
         emoji = QVAPAY_EMOJIS.get(label, "💱")
-        monto = value if value is not None else 0.0
-        lines.append(f"{emoji} {label}: ${monto:,.2f}")
+        lines.append(f"{emoji} *{label}:*   ${value:,.2f}")
+
+    if not hay_datos:
+        lines.append("⚠️ Datos no disponibles")
 
     ahora = datetime.now(_QP_CUBA_TZ)
     lines.append("")
-    lines.append(f"Última actualización: {ahora.day}/{ahora.month}/{ahora.year}, {ahora.hour:02d}:{ahora.minute:02d}:{ahora.second:02d}")
+    lines.append(SEPARATOR_THICK)
+    lines.append(f"📆 {ahora.day}/{ahora.month}/{ahora.year}, {ahora.hour:02d}:{ahora.minute:02d}:{ahora.second:02d}")
+    lines.append("🔗 qvapay.com")
 
     return "\n".join(lines)
 

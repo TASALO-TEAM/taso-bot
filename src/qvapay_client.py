@@ -9,14 +9,14 @@ que usa QvaPay para su propio proyecto CambioCUP
 
 No requiere API key: es el mismo endpoint público que consume cambiocup.com.
 
-⚠️ Códigos de moneda: CambioCUP solo confirma 5 de los 9 que usa /qp
-(BANK_CUP, BANK_MLC, CLASICA, ETECSA, BANDECPREPAGO). TROPIPAY, ZELLE,
-BOLSATM y SBERBANK son la mejor estimación a partir de las páginas
-públicas de monedas de QvaPay (ej. qvapay.com/coins/TROPIPAY) pero NO
-están verificados contra la API real — si alguno da 404 o un payload
-distinto, get_p2p_rates() lo trata como "sin datos" (None) en vez de
-tumbar el resto del comando. Verificar y ajustar QVAPAY_COINS ni bien
-se confirmen los códigos reales.
+✅ Códigos de moneda verificados (30/7/2026) contra la API real de QvaPay:
+los 9 códigos de QVAPAY_COINS responden con payload válido. SBERBANK es
+la única que devuelve `average_buy`/`average_sell` nulos habitualmente
+(sin operaciones P2P recientes registradas) — no es un código incorrecto,
+simplemente esa forma de pago tiene poco volumen. get_p2p_rates() la
+trata como "sin datos" (None) igual que cualquier otra moneda sin
+operaciones, y el formatter (build_qvapay_message) la omite del mensaje
+en vez de mostrarla como $0.00.
 """
 
 import asyncio
@@ -95,8 +95,8 @@ class QvaPayClient:
         Returns:
             Dict {etiqueta: promedio_o_None} en el mismo orden que
             QVAPAY_COINS. None indica moneda sin datos disponibles ahora
-            mismo (el formatter la muestra como "$0.00", igual que hace
-            el bot oficial de QvaPay).
+            mismo — el formatter (build_qvapay_message) omite esas
+            monedas del mensaje en vez de mostrarlas.
         """
         labels = list(QVAPAY_COINS.keys())
         codes = list(QVAPAY_COINS.values())
