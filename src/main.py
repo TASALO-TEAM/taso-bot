@@ -131,6 +131,18 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
         exc_info=error,
     )
 
+    # Avisar al grupo de soporte (mismo patrón que taso-gcg). Si esto
+    # también falla, ya quedó registrado en el log de archivo arriba.
+    if settings.log_chat_id:
+        try:
+            resumen = f"{error_type}: {error}"[:300]
+            await context.bot.send_message(
+                settings.log_chat_id,
+                f"⚠️ Error no controlado en taso-bot: {resumen}",
+            )
+        except Exception:
+            pass
+
     # Notificar al usuario si es posible
     if isinstance(update, Update) and update.effective_message:
         try:
@@ -298,6 +310,15 @@ async def post_init(application: Application):
     logger.info("🤖 Bot initialized. Verifying connection to taso-api...")
     init_start = time.time()
 
+    # Aviso de arranque al grupo de soporte (mismo patrón que taso-gcg)
+    if settings.log_chat_id:
+        try:
+            await application.bot.send_message(
+                settings.log_chat_id, f"🚀 taso-bot v{BOT_VERSION} en línea."
+            )
+        except Exception as e:
+            logger.warning("⚠️ No se pudo notificar el arranque al LOG_CHAT_ID: %s", e)
+
     # Verificar conexión con el backend
     try:
         api_start = time.time()
@@ -414,6 +435,16 @@ def main():
     async def post_shutdown(app: Application) -> None:
         """Detener el dispatcher de alertas diarias y limpiar recursos."""
         logger.info("🛑 Bot shutting down...")
+
+        # Aviso de apagado al grupo de soporte (mismo patrón que taso-gcg)
+        if settings.log_chat_id:
+            try:
+                await app.bot.send_message(
+                    settings.log_chat_id, "👋 taso-bot detenido."
+                )
+            except Exception as e:
+                logger.warning("⚠️ No se pudo notificar el apagado al LOG_CHAT_ID: %s", e)
+
         stop_daily_dispatcher()
         logger.info("✅ Daily dispatcher stopped")
 

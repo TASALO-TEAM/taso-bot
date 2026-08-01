@@ -56,6 +56,14 @@ class Settings(BaseSettings):
         pattern="^(DEBUG|INFO|WARNING|ERROR)$"
     )
 
+    # (Opcional) Chat/grupo donde el bot avisa cuando arranca/se detiene y
+    # cuando ocurre un error no controlado (mismo patrón que taso-gcg).
+    # Si se deja vacío, el bot sigue funcionando igual, solo que sin avisar.
+    log_chat_id: str = Field(
+        default="",
+        description="Chat ID de Telegram donde se mandan avisos de arranque/errores",
+    )
+
     # Rutas de logs de los repos hermanos, usadas por el comando /log.
     # Relativas a la raíz de taso-bot, asumiendo el layout de VPS
     # ~/tasalo/{taso-bot,taso-api,taso-app} (directorios hermanos).
