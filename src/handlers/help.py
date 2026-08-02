@@ -75,7 +75,7 @@ _Ejemplos: /ta btcusdt · /graf ethusdt_
 SUMMARY_ADMIN_EXTRA = """
 
 🔑 *Administración*
-/refresh /status /health /log /ads /ms — usa `/help admin`, `/help ads` o `/help ms` para el detalle.
+/refresh /status /health /log /db /ads /ms — usa `/help admin`, `/help ads` o `/help ms` para el detalle.
 /tkt list · /tkt active · /tkt show <id> — gestión de tickets, ver `/help admin`."""
 
 
@@ -274,6 +274,7 @@ Pensado para avisos rápidos: un comando que cambió, un bug arreglado, mantenim
 `/status` — estado del scheduler y última actualización
 `/health` — verifica la conexión del bot con el backend
 `/log` — logs de bot/api/web/gcg sin necesitar SSH (`/log` para ver subcomandos)
+`/db` — backups de la base de datos: `/db backup`, `/db list`, `/db prune-rates` (restauración solo por CLI en el VPS, por seguridad)
 
 🎫 *Gestión de tickets (/tkt)*
 `/tkt list` — últimos 20 tickets, cualquier estado
@@ -299,6 +300,9 @@ TOPIC_ALIASES: dict[str, str] = {
     "contacto": "tkt",
     "logs": "admin",
     "log": "admin",
+    "db": "admin",
+    "backup": "admin",
+    "backups": "admin",
     "status": "admin",
     "refresh": "admin",
     "health": "admin",

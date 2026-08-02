@@ -1139,3 +1139,74 @@ class TasaloApiClient:
             logger.error("❌ Error en admin_list_tspl_subscriptions: %s", e)
             return []
 
+    # ── Gestión de base de datos (/db) API methods ──────────────────────────────
+    # Ver docs/plans/2026-08-01-comando-db-gestion-retencion-tasas.md.
+    # Restore NO tiene método aquí — esa operación vive solo en la CLI del
+    # VPS (taso-api/src/cli/db.py), nunca por HTTP ni por Telegram.
+
+    async def admin_db_backup(self) -> Optional[Dict[str, Any]]:
+        """Dispara un backup manual de la DB. Requiere admin_key."""
+        if not self.admin_key:
+            logger.error("❌ admin_db_backup requiere admin_key configurado")
+            return None
+        url = f"{self.api_url}/api/v1/admin/db/backup"
+        try:
+            data = await self._post_with_retry(url, headers=self._admin_headers)
+            return data if data and data.get("ok") else None
+        except httpx.HTTPStatusError as e:
+            logger.error("❌ HTTP %d en admin_db_backup: %s", e.response.status_code, e)
+            return None
+        except Exception as e:
+            logger.error("❌ Error en admin_db_backup: %s", e)
+            return None
+
+    async def admin_db_list_backups(self) -> list:
+        """Lista los backups existentes. Requiere admin_key."""
+        if not self.admin_key:
+            logger.error("❌ admin_db_list_backups requiere admin_key configurado")
+            return []
+        url = f"{self.api_url}/api/v1/admin/db/backups"
+        try:
+            data = await self._get_with_retry(url, headers=self._admin_headers)
+            if data and data.get("ok"):
+                return data.get("data", [])
+            return []
+        except Exception as e:
+            logger.error("❌ Error en admin_db_list_backups: %s", e)
+            return []
+
+    async def admin_db_download_backup(self, filename: str) -> Optional[bytes]:
+        """Descarga el contenido binario de un backup para reenviarlo por
+        Telegram (mismo patrón que /log). Requiere admin_key."""
+        if not self.admin_key:
+            logger.error("❌ admin_db_download_backup requiere admin_key configurado")
+            return None
+        url = f"{self.api_url}/api/v1/admin/db/backups/{filename}/download"
+        try:
+            client = self._get_client()
+            resp = await client.get(url, headers=self._admin_headers, timeout=httpx.Timeout(60.0, connect=5.0))
+            resp.raise_for_status()
+            return resp.content
+        except httpx.HTTPStatusError as e:
+            logger.error("❌ HTTP %d descargando backup %s: %s", e.response.status_code, filename, e)
+            return None
+        except Exception as e:
+            logger.error("❌ Error en admin_db_download_backup(%s): %s", filename, e)
+            return None
+
+    async def admin_db_prune_rates(self) -> Optional[Dict[str, Any]]:
+        """Dispara on-demand la poda de tasas históricas (>1 año). Requiere admin_key."""
+        if not self.admin_key:
+            logger.error("❌ admin_db_prune_rates requiere admin_key configurado")
+            return None
+        url = f"{self.api_url}/api/v1/admin/db/prune-rates"
+        try:
+            data = await self._post_with_retry(url, headers=self._admin_headers)
+            return data if data and data.get("ok") else None
+        except httpx.HTTPStatusError as e:
+            logger.error("❌ HTTP %d en admin_db_prune_rates: %s", e.response.status_code, e)
+            return None
+        except Exception as e:
+            logger.error("❌ Error en admin_db_prune_rates: %s", e)
+            return None
+

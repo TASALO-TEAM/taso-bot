@@ -37,6 +37,9 @@ from src.handlers.admin import (
 from src.handlers.logs import (
     log_command,
 )
+from src.handlers.db import (
+    db_command,
+)
 from src.handlers.toqueimg import (
     toqueimg_command,
 )
@@ -225,6 +228,7 @@ def create_application() -> Application:
         ("refresh", refresh_command),
         ("status", status_command),
         ("log", log_command),
+        ("db", db_command),
         ("toque", toque_command),
         ("bcc", bcc_command),
         ("cadeca", cadeca_command),
