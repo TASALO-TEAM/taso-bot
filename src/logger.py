@@ -28,8 +28,8 @@ ARCHIVE_DIR = os.path.join(LOGS_DIR, "archive")
 LOG_FILE_PATH = os.path.join(LOGS_DIR, "taso-bot.log")
 ERROR_LOG_PATH = os.path.join(LOGS_DIR, "taso-bot-errors.log")
 
-MAX_BYTES = 5 * 1024 * 1024  # 5 MB por archivo activo antes de rotar
-BACKUP_COUNT = 10  # tope de seguridad de archivos rotados (además de /log clear)
+MAX_BYTES = 2 * 1024 * 1024  # 2 MB por archivo activo antes de rotar
+BACKUP_COUNT = 4  # + el activo = 5 logs totales por servicio (ver docs/plans/2026-07-28-log-rotation-2mb.md)
 
 # Asegurar que las carpetas de logs existan
 os.makedirs(LOGS_DIR, exist_ok=True)
