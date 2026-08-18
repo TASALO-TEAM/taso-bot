@@ -36,7 +36,7 @@ def _next_groq_key() -> Optional[str]:
 
 # ── Configuration ────────────────────────────────────────────────────────────
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
-DEFAULT_MODEL = "llama-3.3-70b-versatile"  # Modelo válido en Groq
+DEFAULT_MODEL = "openai/gpt-oss-120b"  # llama-3.3-70b-versatile deprecado por Groq (17-jun-2026)
 DEFAULT_TIMEOUT = 15
 MAX_RETRIES = 3
 
