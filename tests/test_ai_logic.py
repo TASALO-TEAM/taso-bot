@@ -49,6 +49,7 @@ class _FakeAsyncClient:
     def __init__(self, responses):
         self._responses = iter(responses)
         self.post_calls = []
+        self.post_json = []
 
     async def __aenter__(self):
         return self
@@ -58,6 +59,7 @@ class _FakeAsyncClient:
 
     async def post(self, url, headers=None, json=None):
         self.post_calls.append(headers)
+        self.post_json.append(json)
         return next(self._responses)
 
 
@@ -149,3 +151,74 @@ async def test_call_groq_async_raises_after_exhausting_all_keys_on_429():
         with pytest.raises(httpx.HTTPStatusError):
             await ai_logic._call_groq_async({"model": "x"})
         assert len(fake_client.post_calls) == 2
+
+
+# ── Forma del payload enviado a Groq (gpt-oss-120b: reasoning_effort +
+# max_completion_tokens en vez de max_tokens deprecado) ─────────────────────
+
+def _assert_gpt_oss_payload_shape(payload: dict, expected_max_completion_tokens: int):
+    """Chequeos comunes a las 4 funciones públicas: reasoning_effort seteado
+    explícitamente a 'low', max_completion_tokens presente con el valor
+    esperado, y max_tokens (deprecado) ausente."""
+    assert payload["reasoning_effort"] == "low"
+    assert payload["max_completion_tokens"] == expected_max_completion_tokens
+    assert "max_tokens" not in payload
+
+
+@pytest.mark.asyncio
+async def test_crypto_analysis_payload_uses_low_reasoning_and_max_completion_tokens():
+    responses = [_mock_response({"choices": [{"message": {"content": "análisis ok"}}], "usage": {}})]
+    patcher, fake_client = _patch_client(responses)
+    with patch("src.core.ai_logic.settings", _mock_settings(keys=["gsk_aaa"])), patcher:
+        await ai_logic.get_groq_crypto_analysis("BTCUSDT", "4h", "reporte de prueba")
+        _assert_gpt_oss_payload_shape(fake_client.post_json[0], expected_max_completion_tokens=1024)
+
+
+@pytest.mark.asyncio
+async def test_price_spotlight_payload_uses_low_reasoning_and_max_completion_tokens():
+    responses = [_mock_response({"choices": [{"message": {"content": "comentario ok"}}], "usage": {}})]
+    patcher, fake_client = _patch_client(responses)
+    with patch("src.core.ai_logic.settings", _mock_settings(keys=["gsk_aaa"])), patcher:
+        await ai_logic.get_groq_price_spotlight({"symbol": "BTC", "price": 65000})
+        _assert_gpt_oss_payload_shape(fake_client.post_json[0], expected_max_completion_tokens=512)
+
+
+@pytest.mark.asyncio
+async def test_market_spotlight_payload_uses_low_reasoning_and_max_completion_tokens():
+    responses = [_mock_response({"choices": [{"message": {"content": "panorama ok"}}], "usage": {}})]
+    patcher, fake_client = _patch_client(responses)
+    with patch("src.core.ai_logic.settings", _mock_settings(keys=["gsk_aaa"])), patcher:
+        await ai_logic.get_groq_market_spotlight({"fear_greed": {"value": 50, "classification": "Neutral"}})
+        _assert_gpt_oss_payload_shape(fake_client.post_json[0], expected_max_completion_tokens=512)
+
+
+@pytest.mark.asyncio
+async def test_tspl_digest_payload_uses_low_reasoning_and_max_completion_tokens():
+    digest_json = (
+        '{"lede": "lede", "teaser": "teaser. Vamos a empezar.", '
+        '"items": [{"emoji": "📰", "titulo": "t", "parrafo": "p"}], "radar": "radar"}'
+    )
+    responses = [_mock_response({"choices": [{"message": {"content": digest_json}, "finish_reason": "stop"}], "usage": {}})]
+    patcher, fake_client = _patch_client(responses)
+    with patch("src.core.ai_logic.settings", _mock_settings(keys=["gsk_aaa"])), patcher:
+        await ai_logic.get_groq_tspl_digest([{"title": "t", "description": "d", "source_name": "s"}])
+        _assert_gpt_oss_payload_shape(fake_client.post_json[0], expected_max_completion_tokens=2048)
+
+
+@pytest.mark.asyncio
+async def test_call_groq_async_uses_default_timeout_25s():
+    """DEFAULT_TIMEOUT subió de 15 a 25s — verificar que se propaga a
+    httpx.AsyncClient cuando no se pasa un timeout explícito."""
+    responses = [_mock_response({"choices": [{"message": {"content": "ok"}}]})]
+    captured_kwargs = {}
+
+    class _CapturingAsyncClient(_FakeAsyncClient):
+        def __init__(self, *args, **kwargs):
+            captured_kwargs.update(kwargs)
+            super().__init__(responses)
+
+    with patch("src.core.ai_logic.settings", _mock_settings(keys=["gsk_aaa"])), \
+         patch("src.core.ai_logic.httpx.AsyncClient", _CapturingAsyncClient):
+        await ai_logic._call_groq_async({"model": "x"}, timeout=ai_logic.DEFAULT_TIMEOUT)
+        assert ai_logic.DEFAULT_TIMEOUT == 25
+        assert captured_kwargs.get("timeout") == 25

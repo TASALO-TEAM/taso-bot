@@ -37,8 +37,14 @@ def _next_groq_key() -> Optional[str]:
 # ── Configuration ────────────────────────────────────────────────────────────
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 DEFAULT_MODEL = "openai/gpt-oss-120b"  # llama-3.3-70b-versatile deprecado por Groq (17-jun-2026)
-DEFAULT_TIMEOUT = 15
+DEFAULT_TIMEOUT = 25  # antes 15 — margen para razonamiento + generación en gpt-oss-120b
 MAX_RETRIES = 3
+# gpt-oss-120b es un modelo de razonamiento; sin este parámetro Groq aplica
+# 'medium' por defecto y los tokens de chain-of-thought compiten por el
+# mismo presupuesto que max_completion_tokens. Las 4 tareas de este módulo
+# son redacción/curación a partir de datos ya resueltos, no razonamiento
+# multi-paso, así que 'low' libera presupuesto para el contenido real.
+DEFAULT_REASONING_EFFORT = "low"
 
 # ── Prompt Template — Análisis Técnico Profesional (/ta) ─────────────────────
 CRYPTO_ANALYSIS_PROMPT = """Eres un analista técnico senior con experiencia en mesas de trading
@@ -334,7 +340,8 @@ async def get_groq_crypto_analysis(
             {"role": "user", "content": prompt},
         ],
         "temperature": 0.6,
-        "max_tokens": 1024,
+        "max_completion_tokens": 1024,
+        "reasoning_effort": DEFAULT_REASONING_EFFORT,
     }
 
     try:
@@ -562,7 +569,8 @@ async def get_groq_price_spotlight(price_data: dict) -> str:
             {"role": "user", "content": prompt},
         ],
         "temperature": 0.7,
-        "max_tokens": 512,
+        "max_completion_tokens": 512,
+        "reasoning_effort": DEFAULT_REASONING_EFFORT,
     }
 
     try:
@@ -803,7 +811,8 @@ async def get_groq_market_spotlight(snapshot: dict) -> str:
             {"role": "user", "content": prompt},
         ],
         "temperature": 0.7,
-        "max_tokens": 512,
+        "max_completion_tokens": 512,
+        "reasoning_effort": DEFAULT_REASONING_EFFORT,
     }
 
     try:
@@ -1052,7 +1061,8 @@ async def get_groq_tspl_digest(articles: list[dict], market_data: Optional[dict]
             {"role": "user", "content": prompt},
         ],
         "temperature": 0.5,
-        "max_tokens": 2048,
+        "max_completion_tokens": 2048,
+        "reasoning_effort": DEFAULT_REASONING_EFFORT,
     }
 
     for attempt in range(2):
