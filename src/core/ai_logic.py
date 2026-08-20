@@ -1052,7 +1052,7 @@ async def get_groq_tspl_digest(articles: list[dict], market_data: Optional[dict]
             {"role": "user", "content": prompt},
         ],
         "temperature": 0.5,
-        "max_tokens": 1536,
+        "max_tokens": 2048,
     }
 
     for attempt in range(2):
@@ -1068,11 +1068,12 @@ async def get_groq_tspl_digest(articles: list[dict], market_data: Optional[dict]
 
             content = choices[0].get("message", {}).get("content", "").strip()
             parsed = _extract_json_object(content)
+            finish_reason = choices[0].get("finish_reason", "??")
 
             if parsed is None or "items" not in parsed:
                 logger.warning(
-                    "Groq (tspl digest) devolvio JSON invalido/incompleto (intento %d): %r",
-                    attempt + 1, content[:300],
+                    "Groq (tspl digest) devolvio JSON invalido/incompleto (intento %d, finish_reason=%s): %r",
+                    attempt + 1, finish_reason, content[:300],
                 )
                 continue
 
