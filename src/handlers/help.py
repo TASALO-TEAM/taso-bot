@@ -194,10 +194,13 @@ _El panorama es el mismo para todos los usuarios y se actualiza cada 15 minutos.
     "tspl": """📊 */tspl — TASALO Spotlight completo*
 
 Uso: `/tspl`
+Uso: `/tspl blog` — versión ampliada en Markdown estándar, lista para pegar en el blog (mensaje listo para copiar, o archivo .txt si es muy largo)
 
 Versión completa del panorama diario, estilo newsletter: un resumen (lede) del día, las 4-6 noticias más importantes curadas por IA a partir de fuentes reales, el resumen de mercado (capitalización, volumen, dominancia BTC, Fear & Greed, Altcoin Season) y una sección de qué vigilar en los próximos días.
 
 Las noticias se curan una vez al día (no en cada consulta); los datos de mercado se actualizan cada 15 minutos.
+
+`/tspl blog` reutiliza el mismo digest y snapshot, pero suma sesgo técnico BTC, mayores subidas/bajadas y tendencia — datos que no entran en el mensaje corto de Telegram.
 
 Botón: 🔄 Actualizar
 

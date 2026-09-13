@@ -1327,7 +1327,7 @@ def build_market_spotlight_data_block(snapshot: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def build_tspl_market_bullets(snapshot: Dict[str, Any]) -> str:
+def build_tspl_market_bullets(snapshot: Dict[str, Any], extended: bool = False, bold: str = "*") -> str:
     """Construye el bloque "Resumen del mercado" en formato de bullets
     para /tspl (a diferencia de build_market_spotlight_data_block, usado
     por /spl, que arma bloques de texto separados en vez de una lista).
@@ -1337,10 +1337,17 @@ def build_tspl_market_bullets(snapshot: Dict[str, Any]) -> str:
 
     Args:
         snapshot: Dict devuelto por CryptoApiClient.get_market_snapshot()
+        extended: Si True, suma gainers/losers, tendencia y sesgo técnico
+            BTC (mismos campos que build_market_spotlight_data_block, solo
+            que en formato de bullet en vez de mini-bloques con título).
+            Pensado para la versión blog de /tspl, que tiene más espacio
+            que un mensaje de Telegram — ver src/handlers/tspl.py.
+        bold: Marcador de negrita a usar. Telegram Markdown v1 usa "*";
+            Markdown estándar (blogs) usa "**".
 
     Returns:
-        Bloque de texto con bullets (Markdown v1), listo para insertarse
-        en la plantilla de /tspl.
+        Bloque de texto con bullets, listo para insertarse en la plantilla
+        de /tspl (Telegram) o en el post de blog.
     """
     lines: list[str] = []
 
@@ -1350,19 +1357,47 @@ def build_tspl_market_bullets(snapshot: Dict[str, Any]) -> str:
         vol = global_metrics.get("total_volume_24h")
         btc_dom = global_metrics.get("btc_dominance")
         if mcap:
-            lines.append(f"• 💰 *Capitalización:* {format_supply(mcap)} USD{_fmt_pct_change(global_metrics.get('market_cap_change_24h'))}")
+            lines.append(f"• 💰 {bold}Capitalización:{bold} {format_supply(mcap)} USD{_fmt_pct_change(global_metrics.get('market_cap_change_24h'))}")
         if vol:
-            lines.append(f"• 📉 *Volumen 24h:* {format_supply(vol)} USD{_fmt_pct_change(global_metrics.get('volume_change_24h'))}")
+            lines.append(f"• 📉 {bold}Volumen 24h:{bold} {format_supply(vol)} USD{_fmt_pct_change(global_metrics.get('volume_change_24h'))}")
         if btc_dom is not None:
-            lines.append(f"• ₿ *Dominancia BTC:* {btc_dom:.2f}%{_fmt_pct_change(global_metrics.get('btc_dominance_change_24h'))}")
+            lines.append(f"• ₿ {bold}Dominancia BTC:{bold} {btc_dom:.2f}%{_fmt_pct_change(global_metrics.get('btc_dominance_change_24h'))}")
 
     fear_greed = snapshot.get("fear_greed")
     if fear_greed and fear_greed.get("value") is not None:
-        lines.append(f"• 😨 *Fear & Greed:* {fear_greed['value']} ({fear_greed.get('classification', 'N/A')})")
+        lines.append(f"• 😨 {bold}Fear & Greed:{bold} {fear_greed['value']} ({fear_greed.get('classification', 'N/A')})")
 
     altcoin_season = snapshot.get("altcoin_season")
     if altcoin_season and altcoin_season.get("value") is not None:
-        lines.append(f"• 🔄 *Altcoin Season Index:* {altcoin_season['value']}/100")
+        lines.append(f"• 🔄 {bold}Altcoin Season Index:{bold} {altcoin_season['value']}/100")
+
+    if extended:
+        btc_technical = snapshot.get("btc_technical")
+        if btc_technical and btc_technical.get("recommendation"):
+            rec_label = TV_RECOMMENDATION_LABELS.get(btc_technical["recommendation"], btc_technical["recommendation"])
+            lines.append(
+                f"• 📈 {bold}Sesgo técnico BTC (TradingView, 1D):{bold} {rec_label} "
+                f"({btc_technical.get('buy_score', 0)} 🆚 {btc_technical.get('sell_score', 0)})"
+            )
+
+        top_movers = snapshot.get("top_movers") or {}
+        gainers = top_movers.get("gainers") or []
+        losers = top_movers.get("losers") or []
+        if gainers:
+            texto = ", ".join(
+                f"{c.get('name')} ({c.get('symbol')}) +{c.get('percent_change_24h', 0):.2f}%" for c in gainers
+            )
+            lines.append(f"• 🔺 {bold}Mayores subidas 24h:{bold} {texto}")
+        if losers:
+            texto = ", ".join(
+                f"{c.get('name')} ({c.get('symbol')}) {c.get('percent_change_24h', 0):.2f}%" for c in losers
+            )
+            lines.append(f"• 🔻 {bold}Mayores bajadas 24h:{bold} {texto}")
+
+        trending = snapshot.get("trending") or []
+        if trending:
+            texto = ", ".join(f"{c.get('name')} ({c.get('symbol')})" for c in trending)
+            lines.append(f"• 🔥 {bold}Tendencia:{bold} {texto}")
 
     if not lines:
         lines.append("• ⚠️ Datos de mercado no disponibles en este momento.")
