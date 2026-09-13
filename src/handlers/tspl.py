@@ -11,6 +11,8 @@ Ver docs/plans/2026-07-23-tspl-news-newsdata.md para el diseño completo.
 """
 
 import asyncio
+import html
+import io
 import logging
 import time
 from datetime import datetime
@@ -44,6 +46,27 @@ _tspl_api = TasaloApiClient(
 )
 
 MAX_SUBSCRIPTIONS = 2
+
+# ── /tspl blog ───────────────────────────────────────────────────────────
+# Plantilla fija del post de blog (imagen de cabecera + separador + firma
+# de cierre) — según lo acordado, esto no cambia entre posts; lo único que
+# varía de un Spotlight a otro es el contenido (lede, noticias, datos de
+# mercado, radar), armado en _build_blog_content(). Todo en Markdown
+# estándar, sin HTML embebido — el editor del blog acepta HTML puro por
+# ahora pero ya avisa que puede dejar de ser compatible.
+BLOG_HEADER_IMAGE_URL = "https://i.ecency.com/DQmZ3vUBg22bWXVqrhFt9py6s1HVdh9RzbEjcLcYzz4ZGSV/img_2286.png"
+BLOG_FOOTER = (
+    "---\n\n"
+    "*📲 TASALO Spotlight es tomado directamente de mi bot de "
+    "Telegram: [@tasalobot](https://t.me/tasalobot)*"
+)
+
+# Límite real de Telegram: 4096 caracteres (UTF-16 code units) tras el
+# parseo de entidades del mensaje. Dejamos margen porque len() de Python
+# cuenta codepoints, no UTF-16 code units — los emojis fuera del BMP (la
+# mayoría de los que usa este post) ocupan 2 code units en Telegram pero
+# 1 en len() de Python.
+BLOG_MESSAGE_SAFE_LIMIT = 3500
 
 # Horas UTC preestablecidas — 11 UTC coincide con el horario del digest
 # diario (tspl_digest_scheduler.py), así el primer envío del día siempre
@@ -127,8 +150,14 @@ async def _get_or_build_digest() -> dict | None:
     return await generate_and_cache_tspl_digest()
 
 
+def _fecha_hoy() -> str:
+    """Fecha en formato corto (ej. '13 sep 2026'), compartida entre el
+    mensaje de Telegram y el post de blog para que ambos queden iguales."""
+    return datetime.now().strftime("%d %b %Y").lower()
+
+
 def _build_message(digest: dict | None, snapshot: dict | None) -> str:
-    fecha = datetime.now().strftime("%d %b %Y").lower()
+    fecha = _fecha_hoy()
     lede = (digest or {}).get("lede") or (
         "Panorama del mercado cripto de hoy — la sección de noticias no "
         "está disponible en este momento, pero los datos de mercado sí."
@@ -162,6 +191,167 @@ def _build_message(digest: dict | None, snapshot: dict | None) -> str:
         partes.append(f"👀 *En el radar:* {radar}")
 
     return "\n".join(partes)
+
+
+def _build_blog_news_section(digest: dict | None) -> str:
+    """Versión blog de _build_news_section(): cada noticia como encabezado
+    H3 (### emoji titulo) en vez de una línea en negrita — mismo digest,
+    solo cambia el marcado para Markdown estándar en vez de Telegram."""
+    if not digest or not digest.get("items"):
+        return "_(noticias no disponibles en este momento)_"
+
+    lines = []
+    for item in digest["items"]:
+        emoji = item.get("emoji", "📰")
+        titulo = item.get("titulo", "").strip()
+        parrafo = item.get("parrafo", "").strip()
+        if not titulo:
+            continue
+        lines.append(f"### {emoji} {titulo}")
+        lines.append("")
+        if parrafo:
+            lines.append(parrafo)
+        lines.append("")
+
+    return "\n".join(lines).rstrip() if lines else "_(noticias no disponibles en este momento)_"
+
+
+def _telegram_text_length(text: str) -> int:
+    """Longitud en UTF-16 code units, la unidad que Telegram usa para el
+    límite de 4096 caracteres — distinta de len() de Python (codepoints)
+    cuando hay emojis fuera del BMP (la mayoría de los de este post)."""
+    return len(text.encode("utf-16-le")) // 2
+
+
+def _build_blog_content(digest: dict | None, snapshot: dict | None) -> str:
+    """Arma el post de blog completo del TASALO Spotlight, para /tspl blog.
+
+    Reutiliza el mismo digest y snapshot que la versión de Telegram
+    (_build_message) — no dispara ninguna llamada nueva a Groq ni a las
+    APIs de mercado. La diferencia es de formato y de cantidad de datos:
+    Markdown estándar (## / ### / **negrita**) en vez de Markdown v1 de
+    Telegram, y el bloque de mercado en su variante "extended" (suma
+    sesgo técnico BTC, gainers/losers y tendencia — datos que ya vienen
+    en el snapshot pero que no entraban en el mensaje corto de Telegram).
+
+    La imagen de cabecera y la firma de cierre son fijos
+    (BLOG_HEADER_IMAGE_URL / BLOG_FOOTER) — solo el contenido varía. Sin
+    HTML embebido: todo en Markdown estándar, para que el editor del blog
+    lo trate como contenido nativo en vez de "HTML puro".
+    """
+    fecha = _fecha_hoy()
+    lede = (digest or {}).get("lede") or (
+        "Panorama del mercado cripto de hoy — la sección de noticias no "
+        "está disponible en este momento, pero los datos de mercado sí."
+    )
+    teaser = (digest or {}).get("teaser")
+    radar = (digest or {}).get("radar")
+
+    cuerpo = [
+        f"# 📊 TASALO Spotlight — {fecha}",
+        "",
+        lede,
+    ]
+
+    if teaser:
+        cuerpo.append("")
+        cuerpo.append(teaser)
+
+    cuerpo.extend([
+        "",
+        "## 📰 Lo más importante del día",
+        "",
+        _build_blog_news_section(digest),
+        "",
+        "## 📊 Resumen del mercado",
+        "",
+        build_tspl_market_bullets(snapshot or {}, extended=True, bold="**"),
+    ])
+
+    if radar:
+        cuerpo.extend([
+            "",
+            "## 👀 En el radar",
+            "",
+            radar,
+        ])
+
+    return "\n".join([
+        f"![]({BLOG_HEADER_IMAGE_URL})",
+        "",
+        "\n".join(cuerpo),
+        "",
+        BLOG_FOOTER,
+    ])
+
+
+async def tspl_blog_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Subcomando `/tspl blog` — arma el mismo Spotlight en Markdown
+    estándar listo para pegar en el blog, con más datos de mercado que la
+    versión de Telegram.
+
+    Entrega:
+    - Si el contenido entra en el límite de Telegram (4096 caracteres tras
+      el parseo de entidades), lo manda como mensaje HTML envuelto en
+      <pre>...</pre> — dentro de un bloque <pre> Telegram no aplica ningún
+      formato, así que el markdown queda literal y se copia con un tap en
+      móvil, sin la fricción de tener que abrir un archivo.
+    - Si no entra, cae a un documento .txt (nunca .md: abrir un .md en el
+      teléfono puede disparar un visor que lo renderice en vez de mostrarlo
+      como texto plano, justo el problema que se quiere evitar)."""
+    cmd_start = time.time()
+    user_id = update.effective_user.id
+    username = update.effective_user.username or "N/A"
+    logger.info("📊 /tspl blog invoked by user %d (@%s)", user_id, username)
+
+    if not update.message:
+        return
+
+    await update.message.reply_chat_action("typing")
+
+    try:
+        digest, snapshot = await asyncio.gather(
+            _get_or_build_digest(),
+            _get_or_build_market_snapshot(),
+        )
+    except Exception as e:
+        logger.error("❌ Error generando /tspl blog: %s", e, exc_info=True)
+        digest, snapshot = None, None
+
+    if not digest and not snapshot:
+        await update.message.reply_text(
+            "⚠️ No se pudo generar el Spotlight en este momento. Intenta de nuevo en unos minutos."
+        )
+        asyncio.create_task(track_command_usage(update, context, "/tspl", source="blog", success=False))
+        return
+
+    contenido = _build_blog_content(digest, snapshot)
+
+    try:
+        if _telegram_text_length(contenido) <= BLOG_MESSAGE_SAFE_LIMIT:
+            await update.message.reply_text(
+                f"<pre>{html.escape(contenido)}</pre>",
+                parse_mode=ParseMode.HTML,
+            )
+        else:
+            filename = f"tasalo-spotlight-{datetime.now().strftime('%Y-%m-%d')}.txt"
+            await update.message.reply_document(
+                document=io.BytesIO(contenido.encode("utf-8")),
+                filename=filename,
+                caption=(
+                    "📄 Spotlight en Markdown — muy largo para un mensaje de "
+                    "Telegram, va como archivo .txt. Ábrelo y copia el contenido."
+                ),
+            )
+    except Exception as e:
+        logger.error("❌ Error enviando /tspl blog: %s", e, exc_info=True)
+        await update.message.reply_text("⚠️ No se pudo generar el post. Intenta de nuevo en unos minutos.")
+        asyncio.create_task(track_command_usage(update, context, "/tspl", source="blog", success=False))
+        return
+
+    total_duration_ms = (time.time() - cmd_start) * 1000
+    logger.info("✅ /tspl blog completed for user %d (%.0fms)", user_id, total_duration_ms)
+    asyncio.create_task(track_command_usage(update, context, "/tspl", source="blog", success=True))
 
 
 async def tspl_refresh_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -300,6 +490,11 @@ async def handle_tspl_hour_input(update: Update, context: ContextTypes.DEFAULT_T
 async def tspl_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Muestra el TASALO Spotlight completo: lede + noticias del día
     (curadas por Groq 1x/día) + resumen de mercado + en el radar."""
+    args = context.args or []
+    if args and args[0].lower() == "blog":
+        await tspl_blog_command(update, context)
+        return
+
     cmd_start = time.time()
     user_id = update.effective_user.id
     username = update.effective_user.username or "N/A"
