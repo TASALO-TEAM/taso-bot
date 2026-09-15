@@ -36,7 +36,13 @@ logger = logging.getLogger(__name__)
 settings = get_settings()
 
 MARKET_CACHE_TTL_SECONDS = 900  # 15 min — mismo TTL que /spl
-DIGEST_CACHE_TTL_SECONDS = 72000  # 20h — se regenera solo o vía el cron diario
+# El cron diario (tspl_digest_scheduler.py) corre a las 11:00 UTC, cada
+# 24h. El TTL tiene que ser MAYOR a ese ciclo (no menor) para que el
+# cache nunca se dé por "expirado" antes de que el cron vuelva a correr
+# — si no, cualquier /tspl o /tspl blog que caiga en ese hueco dispara
+# una regeneración bajo demanda con Groq (no determinístico), pudiendo
+# quedar un digest distinto entre Telegram y el blog el mismo día.
+DIGEST_CACHE_TTL_SECONDS = 90000  # 25h (24h del ciclo + 1h de margen)
 MARKET_CACHE_KEY = "tspl_market_snapshot"
 
 _tspl_api = TasaloApiClient(
@@ -265,7 +271,7 @@ def _build_blog_content(digest: dict | None, snapshot: dict | None) -> str:
         "",
         "## 📊 Resumen del mercado",
         "",
-        build_tspl_market_bullets(snapshot or {}, extended=True, bold="**"),
+        build_tspl_market_bullets(snapshot or {}, extended=True, bold="**", bullet="-"),
     ])
 
     if radar:

@@ -200,6 +200,16 @@ def test_build_blog_content_is_pure_markdown_no_html():
     assert "---" in contenido  # separador antes de la firma
 
 
+def test_build_blog_content_uses_real_markdown_bullets():
+    """El resumen de mercado del blog debe usar "- " (lista real de
+    Markdown, se ve como <ul> en el editor) en vez de "• " (carácter
+    literal que Telegram muestra bien pero que el editor del blog no
+    interpreta como lista, quedando todo apiñado)."""
+    contenido = _build_blog_content(DIGEST_COMPLETO, SNAPSHOT_COMPLETO)
+    assert "- 💰 **Capitalización:**" in contenido
+    assert "•" not in contenido
+
+
 def test_build_blog_content_falls_back_without_digest():
     """Sin digest (Groq/NewsData fallaron), igual arma el post solo con
     datos de mercado, sin romper."""
@@ -253,6 +263,23 @@ def test_market_bullets_extended_adds_movers_and_technical():
     assert "Solana (SOL) +8.20%" in bloque
     assert "Xyz Coin (XYZ) -6.40%" in bloque
     assert "**Tendencia:** Solana (SOL)" in bloque
+
+
+def test_market_bullets_default_bullet_marker_is_literal_dot():
+    """Por defecto (uso en Telegram) el marcador sigue siendo "•",
+    porque Telegram no interpreta "-" como lista, solo lo muestra literal."""
+    bloque = build_tspl_market_bullets(SNAPSHOT_COMPLETO)
+    assert bloque.startswith("• ")
+    assert "\n- " not in bloque
+
+
+def test_market_bullets_custom_bullet_marker():
+    """bullet="-" (uso en el blog) reemplaza el "•" por un guion real de
+    lista de Markdown en todas las líneas, incluidas las de extended."""
+    bloque = build_tspl_market_bullets(SNAPSHOT_COMPLETO, extended=True, bold="**", bullet="-")
+    assert "•" not in bloque
+    assert "- 💰 **Capitalización:**" in bloque
+    assert "- 📈 **Sesgo técnico BTC" in bloque
 
 
 def test_market_bullets_extended_handles_missing_optional_sources():
