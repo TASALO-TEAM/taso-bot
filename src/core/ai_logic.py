@@ -941,9 +941,12 @@ TAREA:
    generico (ej. articulos de bolsa/petroleo/acciones que solo mencionan
    cripto de pasada).
 2. Para cada uno, escribi un titulo breve en espanol (si el original esta
-   en ingles, traducilo) y un parrafo de 2-4 frases con el contexto real
+   en ingles, traducilo) y un parrafo de 2 a 5 frases con el contexto real
    (cifras, nombres, cargos, instituciones) tal como aparecen en la
-   descripcion original - no inventes datos que no esten ahi.
+   descripcion original - no inventes datos que no esten ahi, y no
+   rellenes ni repitas la misma idea con otras palabras solo para alargar:
+   usa 5 frases solo si la descripcion original realmente sostiene esa
+   extension, menos esta bien si no.
 3. Elegi un emoji representativo para cada noticia (regulacion, internacional,
    legislacion, mercados/exchanges, IA/tecnologia, institucional/ETF,
    seguridad, etc.).
@@ -953,9 +956,13 @@ TAREA:
    Miedo y Codicia se situa en {{valor}} ({{clasificacion}}) y el BTC en
    {{precio}} dolares {{momento del dia}}."), y seguir con 2-3 frases de
    color sobre el movimiento del mercado segun el signo/magnitud del
-   cambio 24h y las noticias elegidas - sin inventar otros niveles de
-   precio. Si NO hay datos de mercado, arranca el lede directo con el
-   panorama de las noticias, sin mencionar Fear & Greed ni precio de BTC.
+   cambio 24h y las noticias elegidas - podes sumar la dominancia BTC, el
+   cambio del market cap total o el Altcoin Season Index si estan
+   presentes en los DATOS DE MERCADO REALES y aportan al hilo de esta
+   edicion en particular (no hace falta forzarlos todos siempre) - sin
+   inventar otros niveles de precio ni cifras que no esten ahi. Si NO hay
+   datos de mercado, arranca el lede directo con el panorama de las
+   noticias, sin mencionar Fear & Greed ni precio de BTC.
 5. Escribi un "teaser" de 2-3 frases cortas tipo gancho (una por cada
    noticia mas fuerte del dia, sin el detalle completo - eso va en
    "items") y cerra siempre con la frase exacta "Vamos a empezar." como
@@ -1015,6 +1022,26 @@ def _format_tspl_market_context(market_data: Optional[dict]) -> str:
     if momento_dia:
         lines.append(f"Momento del dia a usar en la frase de apertura: {momento_dia}")
 
+    btc_dominance = market_data.get("btc_dominance")
+    if btc_dominance is not None:
+        lines.append(f"Dominancia BTC: {btc_dominance:.1f}%")
+
+    market_cap_change = market_data.get("market_cap_change_24h")
+    if market_cap_change is not None:
+        signo = "sube" if market_cap_change >= 0 else "baja"
+        lines.append(f"Market cap total 24h: {signo} {abs(market_cap_change):.2f}%")
+
+    altseason_value = market_data.get("altcoin_season_value")
+    if altseason_value is not None:
+        lines.append(f"Altcoin Season Index: {altseason_value}/100 ({market_data.get('altcoin_season_label') or 'N/A'})")
+
+    # Nota: los insights de CMC AI (/v5/cmc-ai/latest) NO se repiten acá —
+    # ya se suman como articulos crudos mas al pool que arma
+    # generate_and_cache_tspl_digest() (ver _cmc_ai_insights_to_articles
+    # en tspl_digest_scheduler.py), para que compitan por un lugar entre
+    # los 4-6 items igual que cualquier noticia de NewsData, en vez de
+    # aparecer duplicados acá y como item.
+
     return "\n".join(lines) if lines else sin_datos
 
 
@@ -1051,8 +1078,13 @@ def _extract_json_object(raw: str) -> Optional[dict]:
 
 
 def _format_tspl_articles_text(articles: list[dict]) -> str:
-    """Convierte la lista de articulos normalizados de NewsData.io en texto
-    plano para el prompt del digest."""
+    """Convierte la lista de articulos normalizados (NewsData.io, y desde
+    el plan CMC AI, tambien insights de /v5/cmc-ai/latest normalizados
+    por _cmc_ai_insights_to_articles en tspl_digest_scheduler.py) en
+    texto plano para el prompt del digest — mismo shape para ambas
+    fuentes (title, description, source_name), asi Groq los cura/traduce
+    en el mismo paso, sin distincion especial de codigo entre una fuente
+    y otra."""
     lines = []
     for i, art in enumerate(articles, start=1):
         title = art.get("title") or ""

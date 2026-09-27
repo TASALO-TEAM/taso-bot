@@ -43,24 +43,37 @@ def _momento_dia_cuba() -> str:
 
 
 async def _fetch_tspl_market_context() -> dict | None:
-    """Junta Fear & Greed + precio de BTC en paralelo para anclar la
-    apertura del "lede" a cifras reales en vez de dejar que Groq las
-    invente. Reusa el mismo cliente singleton que /p
-    (src.handlers.p.get_crypto_client) — no agrega ninguna llamada nueva
-    a ninguna API que el bot no use ya.
+    """Junta Fear & Greed + precio de BTC + dominancia/market cap +
+    altcoin season index + (si hay acceso) el feed editorial de CMC AI,
+    todo en paralelo, para anclar la apertura del "lede" y el "radar" a
+    cifras reales en vez de dejar que Groq las invente. Reusa el mismo
+    cliente singleton que /p (src.handlers.p.get_crypto_client) — no
+    agrega ninguna llamada nueva a ninguna API que el bot no use ya.
 
-    Si una de las dos consultas falla, se sigue con lo que si respondio
-    (el prompt sabe omitir lo que falte); si ambas fallan retorna None.
+    get_cmc_ai_market_feed() ya degrada a None en el plan Basic actual
+    (ver docs/plans/2026-09-27-cmc-ai-insights-grounding.md) — no rompe
+    nada si no hay acceso, el prompt simplemente omite esa sección.
+
+    Si alguna fuente falla, se sigue con las que sí respondieron (el
+    prompt sabe omitir lo que falte); si Fear&Greed y BTC fallan ambos
+    (las dos únicas que ya eran obligatorias antes de este cambio) se
+    retorna None, igual que antes.
     """
     client = get_crypto_client()
-    fng_result, btc_result = await asyncio.gather(
+    fng_result, btc_result, global_result, altseason_result, cmc_ai_result = await asyncio.gather(
         client.get_fear_greed(),
         client.get_crypto_data("BTC"),
+        client.get_global_metrics(),
+        client.get_altcoin_season_index(),
+        client.get_cmc_ai_market_feed(),
         return_exceptions=True,
     )
 
     fear_greed = None if isinstance(fng_result, Exception) else fng_result
     btc_data = None if isinstance(btc_result, Exception) else btc_result
+    global_metrics = None if isinstance(global_result, Exception) else global_result
+    altcoin_season = None if isinstance(altseason_result, Exception) else altseason_result
+    cmc_ai_feed = None if isinstance(cmc_ai_result, Exception) else cmc_ai_result
 
     if not fear_greed and not btc_data:
         logger.warning("⚠️ Digest /tspl: no se pudo obtener Fear & Greed ni precio BTC")
@@ -72,6 +85,11 @@ async def _fetch_tspl_market_context() -> dict | None:
         "btc_price": (btc_data or {}).get("price"),
         "btc_change_24h": (btc_data or {}).get("percent_change_24h"),
         "momento_dia": _momento_dia_cuba(),
+        "btc_dominance": (global_metrics or {}).get("btc_dominance"),
+        "market_cap_change_24h": (global_metrics or {}).get("market_cap_change_24h"),
+        "altcoin_season_value": (altcoin_season or {}).get("value"),
+        "altcoin_season_label": (altcoin_season or {}).get("label"),
+        "cmc_ai_market_feed": cmc_ai_feed,
     }
 
 
@@ -92,6 +110,38 @@ def _dedup_by_title(articles: list[dict]) -> list[dict]:
             seen.add(title)
             result.append(art)
     return result
+
+
+def _cmc_ai_insights_to_articles(cmc_ai_feed: dict | None) -> list[dict]:
+    """Normaliza los insights del feed de CMC AI (/v5/cmc-ai/latest) al
+    mismo shape que usan los articulos de NewsData.io (title,
+    description, source_name), para que Groq los cure/traduzca/redacte
+    en el mismo paso que el resto — sin tocar el prompt ni la logica de
+    seleccion, que ya sabe elegir lo relevante e ignorar lo generico
+    (paso 1 de TSPL_DIGEST_PROMPT) y traducir del ingles (paso 2).
+
+    Dormido mientras el plan de CMC siga en Basic (cmc_ai_feed es None y
+    esta funcion retorna []); ver
+    docs/plans/2026-09-27-cmc-ai-insights-grounding.md.
+    """
+    if not cmc_ai_feed:
+        return []
+
+    articles = []
+    for item in cmc_ai_feed.get("insights") or []:
+        answer = item.get("answer") or {}
+        tldr = (answer.get("tldr") or "").strip()
+        body = (answer.get("body") or "").strip()
+        titulo = (item.get("title") or tldr[:80] or "").strip()
+        descripcion = " ".join(p for p in (tldr, body) if p).strip()
+        if not titulo or not descripcion:
+            continue
+        articles.append({
+            "title": titulo,
+            "description": descripcion,
+            "source_name": "CoinMarketCap AI",
+        })
+    return articles
 
 
 async def generate_and_cache_tspl_digest() -> dict | None:
@@ -129,6 +179,18 @@ async def generate_and_cache_tspl_digest() -> dict | None:
         articles = _dedup_by_title(articles)
 
         market_data = await _fetch_tspl_market_context()
+
+        # Suma los insights de CMC AI (si hay acceso) al mismo pool de
+        # articulos crudos, para que Groq los cure/traduzca junto con los
+        # de NewsData en el mismo paso — no se pide una vez mas
+        # get_cmc_ai_market_feed(): ya viene incluido en market_data
+        # gracias a _fetch_tspl_market_context() de arriba. Dormido
+        # mientras el plan de CMC siga en Basic (market_data no trae la
+        # key, o cmc_ai_market_feed es None).
+        cmc_ai_articles = _cmc_ai_insights_to_articles((market_data or {}).get("cmc_ai_market_feed"))
+        if cmc_ai_articles:
+            logger.info("🤖 Digest /tspl: %d insights de CMC AI sumados al pool de articulos", len(cmc_ai_articles))
+            articles = _dedup_by_title(articles + cmc_ai_articles)
 
         digest = await get_groq_tspl_digest(articles, market_data)
         if digest is None:
