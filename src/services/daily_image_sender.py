@@ -17,6 +17,7 @@ from telegram.ext import Application
 from typing import Set
 
 from src.config import get_settings
+from src.formatters import build_toqueimg_caption
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -192,6 +193,18 @@ async def send_daily_images_job(application: Application):
     
     image_path = img_data["data"]["image_path"]
     logger.debug("📁 Image path: %s", image_path)
+
+    # Tasas del mismo snapshot que la imagen (ticket #5) — guardadas por
+    # taso-api junto con la descarga, no son tiempo real. Mismo builder
+    # que usa el comando manual /toqueimg para que ambos mensajes coincidan.
+    rates = (img_data["data"].get("extra_data") or {}).get("rates")
+    try:
+        captured_at = datetime.fromisoformat(
+            img_data["data"].get("captured_at", "").replace("Z", "+00:00")
+        )
+        captured_label = captured_at.astimezone(CUBA_TZ).strftime("%d/%m/%Y %H:%M")
+    except Exception:
+        captured_label = today_date.strftime("%d/%m/%Y")
     
     # 4. Send to matching users (with deduplication)
     sent_count = 0
@@ -212,13 +225,8 @@ async def send_daily_images_job(application: Application):
         send_start = time.time()
         
         try:
-            # Build caption with Cuba time
-            caption = (
-                "🇨🇺 *Tasa Diaria El Toque*\n"
-                f"📅 {today_date.strftime('%d/%m/%Y')} · {now_cuba.strftime('%H:%M')} (Cuba)\n\n"
-                "Esta es la tasa diaria de El Toque."
-            )
-            
+            caption = build_toqueimg_caption(captured_label, stale=False, rates=rates)
+
             # Send image using application.bot
             with open(image_path, "rb") as f:
                 if format_type == "photo":

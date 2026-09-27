@@ -1644,3 +1644,44 @@ def build_crypto_extended_block(enrichment: Dict[str, Any]) -> str:
         lines.append("Sin datos adicionales disponibles.")
 
     return "\n".join(lines)
+
+
+def build_toqueimg_caption(
+    captured_label: str,
+    stale: bool = False,
+    rates: Optional[Dict[str, Any]] = None,
+) -> str:
+    """Caption compartido para /toqueimg: comando manual y notificación
+    programada (ticket #5) usan exactamente este mismo builder, para que
+    el texto nunca se desalinee entre los dos caminos.
+
+    Args:
+        captured_label: fecha/hora ya formateada (hora Cuba) del momento
+            en que se capturó la imagen que acompaña este caption.
+        stale: si True, avisa que no se pudo refrescar y se muestra la
+            última imagen disponible (solo aplica al comando manual).
+        rates: dict con EUR/USD/MLC tomado de extra_data.rates del mismo
+            snapshot de la imagen (misma captura, mismo instante — nunca
+            tiempo real). Si viene vacío, el caption queda igual que antes.
+    """
+    caption = (
+        "🇨🇺 *Tasa Diaria El Toque*\n"
+        f"📅 {captured_label} (Cuba)\n\n"
+    )
+
+    if rates:
+        emoji_map = {"EUR": "💶", "USD": "💵", "MLC": "💳"}
+        rate_lines = []
+        for currency in ("EUR", "USD", "MLC"):
+            info = rates.get(currency)
+            rate = info.get("rate") if info else None
+            if not rate:
+                continue
+            rate_lines.append(f"{emoji_map[currency]} {currency}: {format_rate_value(rate)} CUP")
+        if rate_lines:
+            caption += "\n".join(rate_lines) + "\n\n"
+
+    if stale:
+        caption += "_⚠️ No se pudo actualizar ahora, mostrando última imagen disponible_\n"
+    caption += "_Fuente: iframe.cubanomic.com_"
+    return caption

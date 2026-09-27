@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 
 from src.config import get_settings
 from src.api_client import TasaloApiClient
+from src.formatters import build_toqueimg_caption
 
 settings = get_settings()
 API_URL = settings.tasalo_api_url
@@ -47,6 +48,11 @@ async def _fetch_toqueimg_data(api: TasaloApiClient, user_id: int) -> dict:
     image_path = image_data["image_path"]
     captured_at_str = image_data.get("captured_at", "")
 
+    # Tasas del mismo snapshot que la imagen (ticket #5) — NO es tiempo
+    # real: extra_data.rates se guarda en taso-api junto con la descarga
+    # de la imagen, mismo instante, mismo valor que lo dibujado en ella.
+    rates = (image_data.get("extra_data") or {}).get("rates")
+
     try:
         captured_dt = datetime.fromisoformat(captured_at_str.replace("Z", "+00:00"))
         captured_label = captured_dt.astimezone(CUBA_TZ).strftime("%d/%m/%Y %H:%M")
@@ -67,19 +73,8 @@ async def _fetch_toqueimg_data(api: TasaloApiClient, user_id: int) -> dict:
         "captured_label": captured_label,
         "stale": stale,
         "has_alert": has_alert,
+        "rates": rates,
     }
-
-
-def _build_toqueimg_caption(captured_label: str, stale: bool) -> str:
-    """Caption del mensaje. Si stale=True, avisa que puede no ser la más reciente."""
-    caption = (
-        "🇨🇺 *Tasa Diaria El Toque*\n"
-        f"📅 {captured_label} (Cuba)\n\n"
-    )
-    if stale:
-        caption += "_⚠️ No se pudo actualizar ahora, mostrando última imagen disponible_\n"
-    caption += "_Fuente: iframe.cubanomic.com_"
-    return caption
 
 
 async def toqueimg_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -121,7 +116,7 @@ async def toqueimg_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         keyboard = _build_toqueimg_keyboard(result["has_alert"])
-        caption = _build_toqueimg_caption(result["captured_label"], result["stale"])
+        caption = build_toqueimg_caption(result["captured_label"], result["stale"], result.get("rates"))
 
         with open(result["image_path"], "rb") as f:
             await loading_msg.edit_media(
@@ -213,7 +208,7 @@ async def toqueimg_refresh_callback(update: Update, context: ContextTypes.DEFAUL
             return
 
         keyboard = _build_toqueimg_keyboard(result["has_alert"])
-        caption = _build_toqueimg_caption(result["captured_label"], result["stale"])
+        caption = build_toqueimg_caption(result["captured_label"], result["stale"], result.get("rates"))
 
         with open(result["image_path"], "rb") as f:
             await query.edit_message_media(
