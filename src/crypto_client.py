@@ -16,6 +16,7 @@ from tradingview_ta import TA_Handler, Interval
 
 from src.config import get_settings
 from src.coingecko_client import CoinGeckoClient, CoinGeckoNetworkError
+from src.cache import cache
 
 logger = logging.getLogger(__name__)
 
@@ -641,6 +642,8 @@ class CryptoApiClient:
             altcoin_season, btc_technical,
         ) = (_safe(r) for r in results)
 
+        cmc_ai_market_feed = await self.get_cmc_ai_market_feed()
+
         return {
             "fear_greed": fear_greed,
             "global_metrics": global_metrics,
@@ -649,4 +652,154 @@ class CryptoApiClient:
             "news": news,
             "altcoin_season": altcoin_season,
             "btc_technical": btc_technical,
+            "cmc_ai_market_feed": cmc_ai_market_feed,
         }
+
+    # ── CMC AI Insights (/v5/cmc-ai) ──
+    # Familia de endpoints nueva de CMC que expone en JSON los mismos
+    # comentarios de IA de coinmarketcap.com, con fuentes adjuntas.
+    #
+    # ATENCION: Fase 1 de esta familia es Enterprise-only. Este proyecto
+    # está confirmado en plan Basic (ver el 403 documentado en
+    # get_market_news() arriba), así que estos tres métodos van a
+    # devolver None en producción hasta que eso cambie — degradan igual
+    # que get_market_news(), sin romper nada. Quedan listos para
+    # activarse solos apenas haya acceso real.
+    #
+    # NOTA SOBRE EL PARSEO: el shape exacto de la respuesta para
+    # coins/map y coins/latest NO se pudo verificar contra una llamada
+    # real (bloqueado por el 403 del plan Basic) — el parseo de abajo
+    # sigue lo que documenta el artículo de CMC ("data.coins" para el
+    # mapa, "data" indexado por símbolo para coins/latest, igual que
+    # quotes/latest) pero hay que confirmarlo contra una respuesta real
+    # la primera vez que haya acceso, antes de confiar en él a ciegas.
+    #
+    # Ver docs/plans/2026-09-27-cmc-ai-insights-grounding.md para el
+    # diseño completo.
+
+    _CMC_AI_MAP_CACHE_KEY = "cmc_ai_coverage_map"
+    _CMC_AI_MAP_TTL = 21600  # 6h — 1 crédito plano por consulta, sin importar cuántos símbolos se chequeen después
+    _CMC_AI_PRICE_TTL = 3600  # 1h — igual a la cadencia real de refresco de price_up/price_down en CMC
+    _CMC_AI_MARKET_FEED_CACHE_KEY = "cmc_ai_market_feed"
+    _CMC_AI_MARKET_FEED_TTL = 1800  # 30 min — igual a la cadencia real de refresco del feed de mercado
+
+    async def get_cmc_ai_coverage_map(self) -> Optional[Dict[str, Any]]:
+        """Mapa de cobertura de CMC AI (`/v5/cmc-ai/coins/map`).
+
+        Cuesta 1 crédito PLANO por llamada sin importar cuántas monedas
+        trae, así que se cachea agresivo (6h) y se usa como gate antes de
+        pedir `coins/latest` para un símbolo — evita gastar crédito en
+        símbolos sin cobertura o sin el question_key que se necesita.
+
+        Returns:
+            Dict indexado por símbolo (`{"BTC": {...}, ...}`) con
+            `available_question_keys`/`num_insights`/`last_generated_at`
+            por moneda, o None si la llamada falla o el plan no tiene
+            acceso (403 — ver nota de clase sobre Fase 1 Enterprise-only).
+        """
+        cached = cache.get(self._CMC_AI_MAP_CACHE_KEY, ttl=self._CMC_AI_MAP_TTL)
+        if cached is not None:
+            return cached
+
+        raw = await self._cmc_get("v5/cmc-ai/coins/map")
+        if raw is None:
+            return None
+
+        coins_list = raw if isinstance(raw, list) else (raw.get("coins") or [])
+
+        by_symbol: Dict[str, Any] = {}
+        for item in coins_list:
+            symbol = item.get("symbol")
+            if symbol:
+                by_symbol[symbol.upper()] = item
+
+        cache.set(self._CMC_AI_MAP_CACHE_KEY, by_symbol)
+        return by_symbol
+
+    async def get_cmc_ai_price_insight(self, symbol: str) -> Optional[Dict[str, Any]]:
+        """Insight de `price_up`/`price_down` para una moneda
+        (`/v5/cmc-ai/coins/latest`), usado como grounding del botón
+        "Panorama IA" de /p.
+
+        Chequea primero el mapa de cobertura cacheado — si el símbolo no
+        aparece ahí, o no tiene ninguno de los dos question_keys
+        generado ahora mismo, retorna None SIN gastar crédito en
+        `coins/latest` (son mutuamente excluyentes y solo existen cuando
+        hay un movimiento real que explicar — su ausencia es el caso
+        normal para buena parte del top 100 en un momento dado).
+
+        Args:
+            symbol: Símbolo de la moneda (ej: BTC)
+
+        Returns:
+            Dict con `title`, `answer` ({"tldr", "body"}) y `sources` del
+            insight de price_up o price_down (el que esté disponible), o
+            None si no hay cobertura, no hay contenido generado ahora
+            mismo, o el plan no tiene acceso (403).
+        """
+        symbol_upper = symbol.upper()
+
+        coverage_map = await self.get_cmc_ai_coverage_map()
+        if coverage_map is None:
+            return None
+
+        coin_coverage = coverage_map.get(symbol_upper)
+        if not coin_coverage:
+            return None
+
+        available_keys = set(coin_coverage.get("available_question_keys") or [])
+        if "price_up" not in available_keys and "price_down" not in available_keys:
+            return None
+
+        cache_key = f"cmc_ai_price:{symbol_upper}"
+        cached = cache.get(cache_key, ttl=self._CMC_AI_PRICE_TTL)
+        if cached is not None:
+            return cached
+
+        raw = await self._cmc_get("v5/cmc-ai/coins/latest", {"symbol": symbol_upper})
+        if raw is None:
+            return None
+
+        insights = raw.get(symbol_upper) if isinstance(raw, dict) else None
+        if insights is None:
+            return None
+
+        insight = next(
+            (i for i in insights if i.get("question_key") in ("price_up", "price_down")),
+            None,
+        )
+        if not insight:
+            return None
+
+        cache.set(cache_key, insight)
+        return insight
+
+    async def get_cmc_ai_market_feed(self) -> Optional[Dict[str, Any]]:
+        """Feed de mercado de CMC AI (`/v5/cmc-ai/latest`), usado como
+        grounding de /spl.
+
+        Cache propio de 30 min, independiente del cacheo de 15 min que
+        /spl ya hace sobre el cuerpo completo del spotlight (ver
+        src/handlers/spl.py) — así nunca se pide más seguido de lo que
+        CMC realmente regenera el contenido (pedirlo más seguido
+        devuelve lo mismo, según su documentación), sin importar cuántas
+        veces expire el caché externo de /spl mientras tanto.
+
+        Returns:
+            Dict con `insights` (fixed/trending questions + top news,
+            cada uno con `title`, `answer` y `sources`), o None si falla
+            o el plan no tiene acceso (403).
+        """
+        cached = cache.get(self._CMC_AI_MARKET_FEED_CACHE_KEY, ttl=self._CMC_AI_MARKET_FEED_TTL)
+        if cached is not None:
+            return cached
+
+        raw = await self._cmc_get("v5/cmc-ai/latest")
+        if raw is None:
+            return None
+
+        insights = raw if isinstance(raw, list) else (raw.get("insights") or [])
+        result = {"insights": insights}
+
+        cache.set(self._CMC_AI_MARKET_FEED_CACHE_KEY, result)
+        return result

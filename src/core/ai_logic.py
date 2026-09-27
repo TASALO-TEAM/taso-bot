@@ -490,6 +490,26 @@ def _format_price_spotlight_data(price_data: dict) -> str:
     if sentiment is not None:
         lines.append(f"Sentimiento positivo de la comunidad: {sentiment:.1f}%")
 
+    # Grounding opcional de CMC AI (price_up/price_down) — ver
+    # CryptoApiClient.get_cmc_ai_price_insight(). Dormido mientras el plan
+    # de CMC siga en Basic (devuelve None), no rompe nada si no está.
+    cmc_ai_insight = price_data.get("cmc_ai_insight")
+    if cmc_ai_insight:
+        answer = cmc_ai_insight.get("answer") or {}
+        tldr = (answer.get("tldr") or "").strip()
+        body = (answer.get("body") or "").strip()
+        if tldr or body:
+            lines.append("")
+            lines.append(
+                "Comentario de un analista de CoinMarketCap sobre por qué se "
+                "mueve el precio (en inglés — tradúcelo e intégralo en tu "
+                "propio análisis, no lo cites literal):"
+            )
+            if tldr:
+                lines.append(tldr)
+            if body:
+                lines.append(body)
+
     return "\n".join(lines)
 
 
@@ -611,6 +631,17 @@ async def get_groq_price_spotlight(price_data: dict) -> str:
 
         # Asegurar separación visual en párrafos (evita el "muro de texto")
         content = _normalize_spotlight_paragraphs(content)
+
+        # Atribución de fuente si el análisis se enriqueció con un insight
+        # de CMC AI (ver _format_price_spotlight_data) — el modelo no
+        # maneja esto, se agrega acá con el dato real.
+        cmc_ai_insight = price_data.get("cmc_ai_insight")
+        if cmc_ai_insight:
+            sources = cmc_ai_insight.get("sources") or []
+            source_url = (sources[0].get("url") if sources else None) or None
+            if source_url:
+                domain = source_url.split("//")[-1].split("/")[0]
+                content += f"\n\nFuente adicional: {domain}"
 
         # Disclaimer siempre añadido por el código (no por el modelo),
         # con su propio salto de línea y formato en cursiva para que se
@@ -778,6 +809,24 @@ def _format_market_snapshot_text(snapshot: dict) -> str:
             title = item.get("title")
             if title:
                 lines.append(f"  - {title}")
+
+    # Grounding opcional de CMC AI (/v5/cmc-ai/latest) — ver
+    # CryptoApiClient.get_cmc_ai_market_feed(). Dormido mientras el plan
+    # de CMC siga en Basic (devuelve None), no rompe nada si no está.
+    cmc_ai_feed = snapshot.get("cmc_ai_market_feed") or {}
+    cmc_ai_insights = cmc_ai_feed.get("insights") or []
+    if cmc_ai_insights:
+        lines.append(
+            "Comentario editorial de CoinMarketCap (en inglés — "
+            "tradúcelo e intégralo, no lo cites literal):"
+        )
+        for item in cmc_ai_insights[:5]:
+            answer = item.get("answer") or {}
+            tldr = (answer.get("tldr") or "").strip()
+            title = item.get("title")
+            if tldr:
+                prefix = f"{title}: " if title else ""
+                lines.append(f"  - {prefix}{tldr}")
 
     return "\n".join(lines)
 

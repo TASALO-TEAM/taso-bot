@@ -104,6 +104,17 @@ async def p_ai_panorama_callback(update: Update, context: ContextTypes.DEFAULT_T
         )
         return
 
+    # Grounding opcional con CMC AI (price_up/price_down) — dormido
+    # mientras el plan de CMC siga en Basic (devuelve None de inmediato
+    # sin latencia extra); ver docs/plans/2026-09-27-cmc-ai-insights-grounding.md.
+    try:
+        cmc_ai_insight = await client.get_cmc_ai_price_insight(symbol)
+    except Exception as e:
+        logger.debug("CMC AI insight no disponible para %s: %s", symbol, e)
+        cmc_ai_insight = None
+    if cmc_ai_insight:
+        datos["cmc_ai_insight"] = cmc_ai_insight
+
     try:
         spotlight = await get_groq_price_spotlight(datos)
     except Exception as e:
