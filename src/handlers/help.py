@@ -75,7 +75,7 @@ _Ejemplos: /ta btcusdt · /graf ethusdt_
 SUMMARY_ADMIN_EXTRA = """
 
 🔑 *Administración*
-/refresh /status /health /log /db /ads /ms — usa `/help admin`, `/help ads` o `/help ms` para el detalle.
+/refresh /status /health /log /db /ads /ms /msapp — usa `/help admin`, `/help ads`, `/help ms` o `/help msapp` para el detalle.
 /tkt list · /tkt active · /tkt show <id> — gestión de tickets, ver `/help admin`."""
 
 
@@ -271,6 +271,18 @@ Siempre muestra una vista previa con botones de confirmación antes de enviar na
 
 Pensado para avisos rápidos: un comando que cambió, un bug arreglado, mantenimiento, etc.""",
 
+    "msapp": """📱 */msapp — Publicar un mensaje en la app Android* (admin)
+
+Uso:
+`/msapp <texto>` — publica el mensaje en Notificaciones → Alertas de la app
+`/msapp list` — últimos mensajes publicados (con su #id)
+`/msapp del <id>` — elimina un mensaje de la app
+Reply a un mensaje de texto + `/msapp` — publica ese texto
+
+La *primera línea* es el título (lo que se ve contraído); el resto se ve al expandir. Usa el mismo formato que /ms: `*negrita*`, `_cursiva_`, [texto](url).
+
+Muestra una vista previa con botones de confirmación y no envía nada por Telegram (para eso está /ms). Los usuarios lo ven al abrir la app o en su próxima actualización en segundo plano (hasta ~30 min).""",
+
     "admin": """🔑 *Comandos de administración*
 
 `/refresh` — fuerza un refresh manual de las tasas
@@ -297,6 +309,7 @@ TOPIC_ALIASES: dict[str, str] = {
     "broadcast": "ms",
     "aviso": "ms",
     "notificar": "ms",
+    "mensajeapp": "msapp",
     "ticket": "tkt",
     "tickets": "admin",  # /help tickets -> detalle unificado de gestion en "admin"
     "soporte": "tkt",
@@ -330,7 +343,7 @@ TOPIC_ALIASES: dict[str, str] = {
     "p2p": "qp",
 }
 
-ADMIN_ONLY_TOPICS = {"ads", "admin", "ms"}
+ADMIN_ONLY_TOPICS = {"ads", "admin", "ms", "msapp"}
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

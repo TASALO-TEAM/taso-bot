@@ -19,7 +19,7 @@ from telegram import Update
 from telegram.ext import ContextTypes, CallbackQueryHandler
 from telegram.error import BadRequest
 
-from src.handlers import image_alerts, tasalo, start, toqueimg, p, ta, trading, y, alert as price_alert, spl, ms, tkt, admin, news, tspl, qp
+from src.handlers import image_alerts, tasalo, start, toqueimg, p, ta, trading, y, alert as price_alert, spl, ms, msapp, tkt, admin, news, tspl, qp
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +44,7 @@ ROUTE_MAP: dict[str, str] = {
     "news":     "_handle_news",
     "tspl":     "_handle_tspl",
     "ms":       "_handle_ms",
+    "msapp":    "_handle_msapp",
     "tkt":      "_handle_tkt",
     "status":   "_handle_status",
 }
@@ -410,6 +411,43 @@ async def _handle_qp(update: Update, context: ContextTypes.DEFAULT_TYPE, callbac
         duration_ms = (time.time() - handler_start) * 1000
         logger.error("❌ Error in _handle_qp for user %d callback '%s' (%.0fms): %s", user_id, callback_data, duration_ms, e, exc_info=True)
         raise
+
+
+# ── App Android (/msapp) callbacks ──
+
+async def _handle_msapp(update: Update, context: ContextTypes.DEFAULT_TYPE, callback_data: str) -> None:
+    """Handle msapp_confirm:<admin_id> / msapp_cancel:<admin_id> callbacks from /msapp.
+
+    The actual implementation lives in ``handlers/msapp.py``; same thin-wrapper
+    pattern as ``_handle_ms``. The namespace ``msapp`` is resolved from the first
+    segment, so it never collides with ``ms``.
+    """
+    handler_start = time.time()
+    query = update.callback_query
+    user_id = query.from_user.id
+
+    logger.info("📱 Handler _handle_msapp processing '%s' for user %d", callback_data, user_id)
+
+    try:
+        if callback_data.startswith("msapp_confirm:"):
+            await msapp.confirm_callback(update, context)
+        elif callback_data.startswith("msapp_cancel:"):
+            await msapp.cancel_callback(update, context)
+        else:
+            logger.warning("⚠️ _handle_msapp recibió callback_data desconocido: '%s'", callback_data)
+            return
+
+        duration_ms = (time.time() - handler_start) * 1000
+        logger.info(
+            "✅ _handle_msapp completed for user %d callback '%s' (%.0fms)",
+            user_id, callback_data, duration_ms,
+        )
+    except Exception as e:
+        duration_ms = (time.time() - handler_start) * 1000
+        logger.error(
+            "❌ Error in _handle_msapp for user %d callback '%s' (%.0fms): %s",
+            user_id, callback_data, duration_ms, e, exc_info=True,
+        )
 
 
 def get_callback_handler() -> CallbackQueryHandler:

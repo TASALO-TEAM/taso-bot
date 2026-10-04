@@ -920,6 +920,73 @@ class TasaloApiClient:
             logger.error("❌ Error en admin_list_user_ids: %s", e)
             return []
 
+    # ── Mensajes de la app Android (/msapp) ─────────────────────────────────────
+    # Ver docs/plans/2026-10-01-app-mensajes-notificaciones-y-blog.md.
+
+    async def admin_create_app_message(
+        self, title: str, body: str, format: str = "telegram", created_by: Optional[int] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Publica un mensaje en la sección Alertas de la app Android. Requiere admin_key.
+
+        Endpoint: POST /api/v1/app/messages. Usado por /msapp.
+
+        Returns:
+            Dict con la respuesta ({"ok": True, "data": {...}}) o None si falla.
+        """
+        if not self.admin_key:
+            logger.error("❌ admin_create_app_message requiere admin_key configurado")
+            return None
+        url = f"{self.api_url}/api/v1/app/messages"
+        payload: Dict[str, Any] = {"title": title, "body": body, "format": format}
+        if created_by is not None:
+            payload["created_by"] = created_by
+        try:
+            return await self._post_with_retry(url, headers=self._admin_headers, json=payload)
+        except httpx.HTTPStatusError as e:
+            logger.error("❌ HTTP %d en admin_create_app_message", e.response.status_code)
+            return None
+        except Exception as e:
+            logger.error("❌ Error en admin_create_app_message: %s", e)
+            return None
+
+    async def admin_list_app_messages(self, limit: int = 10) -> list:
+        """Lista los últimos mensajes de la app (activos o no). Requiere admin_key.
+
+        Endpoint: GET /api/v1/app/messages/all. Usado por /msapp list.
+        """
+        if not self.admin_key:
+            logger.error("❌ admin_list_app_messages requiere admin_key configurado")
+            return []
+        url = f"{self.api_url}/api/v1/app/messages/all"
+        try:
+            data = await self._get_with_retry(url, headers=self._admin_headers, params={"limit": limit})
+            if data and data.get("ok"):
+                return data.get("data", [])
+            return []
+        except Exception as e:
+            logger.error("❌ Error en admin_list_app_messages: %s", e)
+            return []
+
+    async def admin_delete_app_message(self, message_id: int) -> bool:
+        """Elimina un mensaje de la app definitivamente. Requiere admin_key. Usado por /msapp del."""
+        if not self.admin_key:
+            logger.error("❌ admin_delete_app_message requiere admin_key configurado")
+            return False
+        url = f"{self.api_url}/api/v1/app/messages/{message_id}"
+        try:
+            client = self._get_client()
+            resp = await client.delete(url, headers=self._admin_headers)
+            resp.raise_for_status()
+            return bool(resp.json().get("ok"))
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 404:
+                return False
+            logger.error("❌ HTTP %d en admin_delete_app_message id=%d", e.response.status_code, message_id)
+            return False
+        except Exception as e:
+            logger.error("❌ Error en admin_delete_app_message id=%d: %s", message_id, e)
+            return False
+
     async def lookup_user_id_by_username(self, username: str) -> Optional[int]:
         """Busca el user_id de un usuario registrado a partir de su username.
 

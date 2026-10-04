@@ -67,6 +67,7 @@ from src.handlers.news import news_command
 from src.handlers.tspl import tspl_command, handle_tspl_hour_input
 from src.handlers.ads import ads_command
 from src.handlers.ms import ms_command
+from src.handlers.msapp import msapp_command
 from src.handlers.tkt import tkt_command, handle_tkt_message
 from src.handlers.help import help_command
 from src.services.daily_image_sender import start_daily_dispatcher, stop_daily_dispatcher
@@ -245,6 +246,7 @@ def create_application() -> Application:
         ("tspl", tspl_command),
         ("ads", ads_command),
         ("ms", ms_command),
+        ("msapp", msapp_command),
         ("tkt", tkt_command),
     ]
     
