@@ -120,7 +120,7 @@ Uso: `/fuel`
 
 Precio del combustible en el mercado informal, tomado del mismo feed de El Toque.
 
-_Se actualiza junto con el resto de las tasas, cada 5 minutos aprox._""",
+_Se actualiza junto con el resto de las tasas, cada 15 minutos aprox._""",
 
     "qp": """💱 */qp — Tasas P2P de QvaPay*
 

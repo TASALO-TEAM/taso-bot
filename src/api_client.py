@@ -1262,7 +1262,7 @@ class TasaloApiClient:
             return None
 
     async def admin_db_prune_rates(self) -> Optional[Dict[str, Any]]:
-        """Dispara on-demand la poda de tasas históricas (>1 año). Requiere admin_key."""
+        """Dispara on-demand la poda de tasas históricas (>6 meses). Requiere admin_key."""
         if not self.admin_key:
             logger.error("❌ admin_db_prune_rates requiere admin_key configurado")
             return None

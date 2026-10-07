@@ -4,7 +4,7 @@ Uso:
     /db                 Resumen: backups existentes
     /db backup          Crea un backup manual y lo envía como documento
     /db list             Lista los backups existentes
-    /db prune-rates      Poda on-demand de tasas históricas (>1 año)
+    /db prune-rates      Poda on-demand de tasas históricas (>6 meses)
 
 Restore NO existe como subcomando aquí — es la única operación
 deliberadamente excluida de Telegram, por seguridad. Vive solo en la CLI
@@ -194,6 +194,6 @@ async def _handle_prune_rates(update: Update, api_client: TasaloApiClient):
         "🧹 *Poda completada*\n\n"
         f"*rate_snapshots* borrados: {result.get('rate_snapshots_deleted', 0)}\n"
         f"*history_snapshots* borrados: {result.get('history_snapshots_deleted', 0)}\n"
-        f"Retención: > {result.get('days', 365)} días",
+        f"Retención: > {result.get('days', 180)} días",
         parse_mode="Markdown",
     )
