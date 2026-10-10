@@ -22,6 +22,8 @@ from src.formatters import build_toqueimg_caption
 logger = logging.getLogger(__name__)
 settings = get_settings()
 API_URL = settings.tasalo_api_url
+# taso-api puede exigir X-API-Key en /images/alerts* (REQUIRE_KEY_USER_ENDPOINTS)
+API_HEADERS = {"X-API-Key": settings.tasalo_admin_key} if settings.tasalo_admin_key else {}
 
 # Cuba timezone - handles both UTC-4 (summer) and UTC-5 (standard)
 CUBA_TZ = ZoneInfo("America/Havana")
@@ -91,6 +93,7 @@ async def send_daily_images_job(application: Application):
         async with httpx.AsyncClient() as client:
             response = await client.get(
                 f"{API_URL}/api/v1/images/alerts?enabled=true",
+                headers=API_HEADERS,
                 timeout=10.0
             )
             data = response.json()
@@ -110,7 +113,7 @@ async def send_daily_images_job(application: Application):
     # 2. Filter alerts matching current Cuba time (within 5-minute window)
     matching_alerts = []
     for alert in alerts:
-        alert_time = alert.get("alert_time", "07:15")
+        alert_time = alert.get("alert_time", "07:30")
         try:
             alert_hour, alert_min = map(int, alert_time.split(":"))
             # Compare using Cuba time

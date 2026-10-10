@@ -13,6 +13,8 @@ from src.config import get_settings
 
 settings = get_settings()
 API_URL = settings.tasalo_api_url
+# taso-api puede exigir X-API-Key en /images/alerts* (REQUIRE_KEY_USER_ENDPOINTS)
+API_HEADERS = {"X-API-Key": settings.tasalo_admin_key} if settings.tasalo_admin_key else {}
 
 
 async def _safe_edit_message(query, text, reply_markup=None, parse_mode="Markdown"):
@@ -62,6 +64,7 @@ async def alert_enable_default_callback(update: Update, context: ContextTypes.DE
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 f"{API_URL}/api/v1/images/alerts",
+                headers=API_HEADERS,
                 json={
                     "user_id": user_id,
                     "alert_time": "07:30",
@@ -191,6 +194,7 @@ async def handle_time_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 f"{API_URL}/api/v1/images/alerts",
+                headers=API_HEADERS,
                 json={
                     "user_id": user_id,
                     "alert_time": time_str,
@@ -251,6 +255,7 @@ async def alert_disable_callback(update: Update, context: ContextTypes.DEFAULT_T
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 f"{API_URL}/api/v1/images/alerts/{user_id}/disable",
+                headers=API_HEADERS,
                 timeout=5.0
             )
             data = response.json()
@@ -394,6 +399,7 @@ async def alert_format_callback(update: Update, context: ContextTypes.DEFAULT_TY
         async with httpx.AsyncClient() as client:
             response = await client.get(
                 f"{API_URL}/api/v1/images/alerts/{user_id}",
+                headers=API_HEADERS,
                 timeout=5.0
             )
             alert_data = response.json()
@@ -402,7 +408,7 @@ async def alert_format_callback(update: Update, context: ContextTypes.DEFAULT_TY
         logger.info("📡 Alert format-save GET API completed for user %d (%.0fms)",
                      user_id, api_get_duration_ms)
 
-        current_time = alert_data.get("data", {}).get("alert_time", "07:15")
+        current_time = alert_data.get("data", {}).get("alert_time", "07:30")
         logger.info("📡 Alert format-save current_time='%s' for user %d", current_time, user_id)
 
         # Update alert
@@ -410,6 +416,7 @@ async def alert_format_callback(update: Update, context: ContextTypes.DEFAULT_TY
         async with httpx.AsyncClient() as client:
             await client.post(
                 f"{API_URL}/api/v1/images/alerts",
+                headers=API_HEADERS,
                 json={
                     "user_id": user_id,
                     "alert_time": current_time,
@@ -463,6 +470,7 @@ async def alert_status_callback(update: Update, context: ContextTypes.DEFAULT_TY
         async with httpx.AsyncClient() as client:
             response = await client.get(
                 f"{API_URL}/api/v1/images/alerts/{user_id}",
+                headers=API_HEADERS,
                 timeout=5.0
             )
             alert_data = response.json()
