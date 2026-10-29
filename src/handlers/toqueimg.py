@@ -95,7 +95,7 @@ async def toqueimg_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         loading_msg = await update.message.reply_text("📸 Cargando imagen...")
 
     try:
-        api = TasaloApiClient(api_url=API_URL, timeout=30)
+        api = TasaloApiClient(api_url=API_URL, timeout=30, admin_key=settings.tasalo_admin_key)
         result = await _fetch_toqueimg_data(api, user_id)
 
         if not result["ok"]:
@@ -196,7 +196,7 @@ async def toqueimg_refresh_callback(update: Update, context: ContextTypes.DEFAUL
     await query.answer("🔄 Actualizando...")
 
     try:
-        api = TasaloApiClient(api_url=API_URL, timeout=30)
+        api = TasaloApiClient(api_url=API_URL, timeout=30, admin_key=settings.tasalo_admin_key)
         result = await _fetch_toqueimg_data(api, user_id)
 
         if not result["ok"]:
