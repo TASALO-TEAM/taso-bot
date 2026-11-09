@@ -58,7 +58,7 @@ async def test_refresh_command_admin_success():
     mock_api_client.admin_refresh = AsyncMock(return_value={
         "ok": True,
         "data": {
-            "sources": ["eltoque", "cadeca", "bcc"],
+            "sources": ["eltoque", "bcc"],
             "timestamp": "2026-03-22T14:30:00Z"
         }
     })

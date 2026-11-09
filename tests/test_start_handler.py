@@ -19,7 +19,7 @@ class TestBuildStartKeyboard:
         keyboard = build_start_keyboard()
 
         assert isinstance(keyboard, InlineKeyboardMarkup)
-        # 3 filas: Tasalo/Toque, BCC/CADECA, Web App
+        # 3 filas: Tasalo/Toque, BCC, Web App
         assert len(keyboard.inline_keyboard) >= 2  # Al menos 2 filas de botones de fuentes
 
         # Primera fila: Tasalo, Toque
@@ -29,12 +29,10 @@ class TestBuildStartKeyboard:
         assert keyboard.inline_keyboard[0][1].text == "📈 Toque"
         assert keyboard.inline_keyboard[0][1].callback_data == "start_toque"
 
-        # Segunda fila: BCC, CADECA
-        assert len(keyboard.inline_keyboard[1]) == 2
+        # Segunda fila: BCC
+        assert len(keyboard.inline_keyboard[1]) == 1
         assert keyboard.inline_keyboard[1][0].text == "🏛 BCC"
         assert keyboard.inline_keyboard[1][0].callback_data == "start_bcc"
-        assert keyboard.inline_keyboard[1][1].text == "🏢 CADECA"
-        assert keyboard.inline_keyboard[1][1].callback_data == "start_cadeca"
 
 
 class TestStartCommand:
@@ -232,47 +230,6 @@ class TestStartButtonCallback:
 
         text = message.reply_text.call_args[1]["text"]
         assert "🏛 *OFFICIAL RATE (BCC)*" in text
-
-    @pytest.mark.asyncio
-    async def test_start_cadeca_button(self):
-        """Test botón CADECA."""
-        user = User(id=123, first_name="Test", is_bot=False)
-        message = MagicMock(spec=Message)
-        message.reply_text = AsyncMock()
-
-        callback_query = MagicMock(spec=CallbackQuery)
-        callback_query.from_user = user
-        callback_query.message = message
-        callback_query.data = "start_cadeca"
-        callback_query.answer = AsyncMock()
-
-        update = MagicMock(spec=Update)
-        update.callback_query = callback_query
-
-        api_client_mock = AsyncMock(
-            get_latest=AsyncMock(return_value={
-                "ok": True,
-                "data": {
-                    "cadeca": {
-                        "USD": {"buy": 120.0, "sell": 125.0},
-                        "EUR": {"buy": 130.0, "sell": 136.0},
-                    },
-                },
-                "updated_at": "2026-03-23T20:32:44Z"
-            })
-        )
-        context = MagicMock()
-        context.bot_data = {"api_client": api_client_mock}
-
-        await start_button_callback(update, context)
-
-        callback_query.answer.assert_called_once()
-
-        text = message.reply_text.call_args[1]["text"]
-        assert "🏢 *CADECA (Exchange Houses)*" in text
-        assert "_Currency_" in text
-        assert "_Buy_" in text
-        assert "_Sell_" in text
 
     @pytest.mark.asyncio
     async def test_start_button_api_error(self):

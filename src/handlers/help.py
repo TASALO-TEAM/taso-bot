@@ -39,7 +39,6 @@ Bienvenido 👋 Estos son los principales comandos del bot.
 /tasalo — Todas las tasas
 /toque — Tasas de El Toque
 /bcc — Tasas del BCC
-/cadeca — Tasas de CADECA
 /fuel — Combustible
 /qp — Tasas P2P de QvaPay
 /toqueimg — Imagen diaria de El Toque
@@ -85,7 +84,7 @@ HELP_TOPICS: dict[str, str] = {
 
 Uso: `/tasalo`
 
-Muestra en un solo mensaje las tasas de El Toque, BCC y CADECA juntas, para comparar de un vistazo.
+Muestra en un solo mensaje las tasas de El Toque y BCC juntas, para comparar de un vistazo.
 
 Botones:
 🔄 Actualizar · 🗺 Provincias · 📈 Históricos""",
@@ -103,14 +102,6 @@ Botón: 🔄 Actualizar""",
 Uso: `/bcc`
 
 Tasa oficial de cambio publicada por el BCC (USD, EUR).
-
-Botón: 🔄 Actualizar""",
-
-    "cadeca": """🏢 */cadeca — Tasas de CADECA*
-
-Uso: `/cadeca`
-
-Tasas oficiales de compra y venta de CADECA (USD, EUR).
 
 Botón: 🔄 Actualizar""",
 
@@ -241,7 +232,7 @@ _Los administradores pueden agregar, editar o eliminar frases con subcomandos ad
 
 Uso: `/start`
 
-Muestra el mensaje de bienvenida con botones de acceso directo a Tasalo, Toque, BCC, CADECA, precio cripto y alertas.""",
+Muestra el mensaje de bienvenida con botones de acceso directo a Tasalo, Toque, BCC, precio cripto y alertas.""",
 
     "tkt": """🎫 */tkt — Contactar a los administradores*
 

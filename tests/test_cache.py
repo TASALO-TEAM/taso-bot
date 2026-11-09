@@ -71,7 +71,7 @@ class TestSimpleCache:
         """Should handle multiple independent keys."""
         cache = SimpleCache()
         cache.set("rates", {"USD": 515.0})
-        cache.set("sources", ["eltoque", "cadeca"])
+        cache.set("sources", ["eltoque", "bcc"])
 
         assert cache.get("rates")["USD"] == 515.0
         assert len(cache.get("sources")) == 2

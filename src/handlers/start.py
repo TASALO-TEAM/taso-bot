@@ -13,7 +13,6 @@ from telegram.ext import ContextTypes, CommandHandler, CallbackQueryHandler
 from src.formatters import (
     build_eltoque_only_message,
     build_bcc_only_message,
-    build_cadeca_only_message,
     build_toque_new_message,
 )
 from src.api_client import TasaloApiClient
@@ -29,7 +28,7 @@ def build_start_keyboard() -> InlineKeyboardMarkup:
 
     Distribución:
         [📊 Tasalo ] [📈 Toque  ]
-        [🏛 BCC    ] [🏢 CADECA ]
+        [🏛 BCC    ]
         [💰 Precio Cripto /p]
         [📊 Análisis Técnico /ta]
         [🔔 Alertas de Precio /alert]
@@ -53,7 +52,6 @@ def build_start_keyboard() -> InlineKeyboardMarkup:
         ],
         [
             InlineKeyboardButton("🏛 BCC", callback_data="start_bcc"),
-            InlineKeyboardButton("🏢 CADECA", callback_data="start_cadeca"),
         ],
         [
             InlineKeyboardButton(
@@ -105,7 +103,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         welcome_text = (
             f"👋 ¡Hola {user.mention_html()}!\n\n"
             f"Soy TASALO, un bot para consultar las tasas de cambio de Cuba.\n"
-            f"Puedes consultar tanto el mercado informal de ElToque como el mercado Oficial BCC y CADECA.\n\n"
+            f"Puedes consultar tanto el mercado informal de ElToque como el mercado Oficial BCC.\n\n"
             f"Presiona el botón del tipo de tasas que desees consultar:"
         )
 
@@ -148,7 +146,6 @@ async def start_button_callback(update: Update, context: ContextTypes.DEFAULT_TY
     - start_tasalo: Muestra tasas combinadas (todas las fuentes)
     - start_toque: Muestra solo ElToque (nuevo formato)
     - start_bcc: Muestra solo BCC
-    - start_cadeca: Muestra solo CADECA
 
     Args:
         update: Update de Telegram con el callback query
@@ -273,7 +270,6 @@ async def start_button_callback(update: Update, context: ContextTypes.DEFAULT_TY
             "tasalo": lambda data: _build_tasalo_start_message(data, api_data),
             "toque": build_toque_new_message,
             "bcc": build_bcc_only_message,
-            "cadeca": build_cadeca_only_message,
         }
 
         build_func = build_funcs.get(command)

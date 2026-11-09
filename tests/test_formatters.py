@@ -9,13 +9,11 @@ from src.formatters import (
     parse_iso_datetime,
     parse_iso_datetime_extended,
     build_eltoque_block,
-    build_cadeca_block,
     build_bcc_block,
     build_footer,
     build_full_message,
     build_eltoque_only_message,
     build_bcc_only_message,
-    build_cadeca_only_message,
     build_toque_new_message,
     INDICATOR_UP,
     INDICATOR_DOWN,
@@ -209,48 +207,6 @@ class TestBuildEltoqueBlock:
         # No indicator when change is None
 
 
-class TestBuildCadecaBlock:
-    """Tests para build_cadeca_block."""
-
-    def test_complete_cadeca_data(self):
-        """Datos completos de CADECA."""
-        data = {
-            "cadeca": {
-                "USD": {"buy": 120.0, "sell": 125.0, "change": "up"},
-                "EUR": {"buy": 130.0, "sell": 136.0, "change": "neutral"},
-            }
-        }
-
-        result = build_cadeca_block(data)
-
-        assert "🏢 *CADECA (Exchange Houses)*" in result
-        assert "↳ _Airports, Ports & Hotels_" in result
-        assert SEPARATOR_THICK in result
-        assert "_Currency_" in result
-        assert "_Buy_" in result
-        assert "_Sell_" in result
-        assert "*USD*" in result
-        assert "120.00" in result
-        assert "125.00" in result
-        assert INDICATOR_UP in result
-
-    def test_empty_cadeca_data(self):
-        """Datos vacíos de CADECA."""
-        data = {"cadeca": {}}
-
-        result = build_cadeca_block(data)
-
-        assert "⚠️ Not available" in result
-
-    def test_missing_cadeca_data(self):
-        """Campo cadeca faltante."""
-        data = {}
-
-        result = build_cadeca_block(data)
-
-        assert "⚠️ Not available" in result
-
-
 class TestBuildBccBlock:
     """Tests para build_bcc_block."""
 
@@ -304,7 +260,6 @@ class TestBuildFooter:
         data = {
             "updated_at": "2026-03-22T14:30:00Z",
             "eltoque": {"USD": {"rate": 365.0}},
-            "cadeca": {"USD": {"buy": 120.0, "sell": 125.0}},
             "bcc": {"USD": 24.0},
         }
 
@@ -314,7 +269,6 @@ class TestBuildFooter:
         assert "📆 2026-03-22 14:30" in result
         assert "Fuentes de consulta:" in result
         assert "elToque.com" in result
-        assert "www.cadeca.cu" in result
         assert "www.bc.gob.cu" in result
 
     def test_footer_without_sources(self):
@@ -328,7 +282,6 @@ class TestBuildFooter:
         assert "📆" in result
         # Debe mostrar todas las fuentes como fallback
         assert "elToque.com" in result
-        assert "www.cadeca.cu" in result
         assert "www.bc.gob.cu" in result
 
     def test_footer_invalid_datetime(self):
@@ -353,9 +306,6 @@ class TestBuildFullMessage:
             "eltoque": {
                 "USD": {"rate": 365.0, "change": "up", "prev_rate": 360.0},
             },
-            "cadeca": {
-                "USD": {"buy": 120.0, "sell": 125.0},
-            },
             "bcc": {
                 "USD": 24.0,
             },
@@ -366,7 +316,6 @@ class TestBuildFullMessage:
 
         # Verificar que contiene todos los bloques
         assert "📊 *MERCADO INFORMAL (El Toque)*" in result
-        assert "🏢 *CADECA (Exchange Houses)*" in result
         assert "🏛 *OFFICIAL RATE (BCC)*" in result
         assert "📆 2026-03-22 14:30" in result
 
@@ -386,7 +335,6 @@ class TestBuildFullMessage:
         result = build_full_message(data)
 
         assert "📊 *MERCADO INFORMAL (El Toque)*" in result
-        assert "🏢 *CADECA" not in result
         assert "🏛 *OFFICIAL RATE" not in result
         assert "📆" in result
 
@@ -501,9 +449,9 @@ class TestBuildHistoryMessage:
             {"sell_rate": 365.0, "fetched_at": "2026-03-22T14:30:00Z"},
         ]
 
-        result = build_history_message("USD", "cadeca", history_data)
+        result = build_history_message("USD", "bcc", history_data)
 
-        assert "CADECA" in result or "cadeca" in result
+        assert "BCC" in result.upper()
 
 
 # =============================================================================
@@ -627,62 +575,6 @@ class TestBuildBccOnlyMessage:
 
         result = build_bcc_only_message(data)
 
-        assert INDICATOR_UP in result  # 🔺 para USD
-        assert INDICATOR_DOWN in result  # 🔻 para EUR
-
-
-class TestBuildCadecaOnlyMessage:
-    """Tests para build_cadeca_only_message."""
-
-    def test_complete_data(self):
-        """Datos completos de CADECA."""
-        data = {
-            "cadeca": {
-                "USD": {"buy": 120.0, "sell": 125.0, "change": "up"},
-                "EUR": {"buy": 130.0, "sell": 136.0, "change": "neutral"},
-            },
-            "updated_at": "2026-03-22T14:30:00Z",
-        }
-
-        result = build_cadeca_only_message(data)
-
-        assert "🏢 *CADECA (Exchange Houses)*" in result
-        assert "↳ _Airports, Ports & Hotels_" in result
-        assert "_Currency_" in result
-        assert "_Buy_" in result
-        assert "_Sell_" in result
-        assert "🔗 www.cadeca.cu" in result
-        # Verificar nuevo separador legacy
-        assert SEPARATOR_THICK in result
-
-    def test_empty_data(self):
-        """Datos vacíos."""
-        data = {
-            "cadeca": {},
-            "updated_at": "2026-03-22T14:30:00Z",
-        }
-
-        result = build_cadeca_only_message(data)
-
-        assert "⚠️ Not available" in result
-        assert "🔗 www.cadeca.cu" in result
-
-    def test_with_buy_sell_columns(self):
-        """Verificar formato de columnas Buy/Sell."""
-        data = {
-            "cadeca": {
-                "USD": {"buy": 120.0, "sell": 125.0, "change": "up"},
-                "EUR": {"buy": 130.0, "sell": 136.0, "change": "down", "prev_rate": 138.0},
-            },
-            "updated_at": "2026-03-22T14:30:00Z",
-        }
-
-        result = build_cadeca_only_message(data)
-
-        assert "120.00" in result  # Buy USD
-        assert "125.00" in result  # Sell USD
-        assert "130.00" in result  # Buy EUR
-        assert "136.00" in result  # Sell EUR
         assert INDICATOR_UP in result  # 🔺 para USD
         assert INDICATOR_DOWN in result  # 🔻 para EUR
 
