@@ -221,7 +221,6 @@ async def test_back_callback_returns_to_main():
                 "ok": True,
                 "data": {
                     "eltoque": {"USD": {"rate": 365.0, "change": "up"}},
-                    "cadeca": {"USD": {"buy": 120.0, "sell": 125.0}},
                     "bcc": {"USD": 24.0}
                 },
                 "updated_at": "2026-03-22T14:30:00Z"
@@ -267,7 +266,6 @@ async def test_provincias_callback_shows_national_rate():
                 "ok": True,
                 "data": {
                     "eltoque": {"USD": {"rate": 365.0, "change": "up"}},
-                    "cadeca": {"USD": {"buy": 120.0, "sell": 125.0}},
                     "bcc": {"USD": 24.0}
                 },
                 "updated_at": "2026-03-22T14:30:00Z"

@@ -23,7 +23,6 @@ async def test_get_latest_success():
         "ok": True,
         "data": {
             "eltoque": {"USD": {"rate": 365.0, "change": "up"}},
-            "cadeca": {"USD": {"buy": 120.0, "sell": 125.0}},
             "bcc": {"USD": 24.0}
         },
         "updated_at": "2026-03-22T14:30:00Z"
@@ -183,21 +182,6 @@ async def test_get_eltoque_success():
 
         assert result is not None
         assert result["ok"] is True
-
-
-@pytest.mark.asyncio
-async def test_get_cadeca_success():
-    """get_cadeca devuelve tasas de CADECA."""
-    from src.api_client import TasaloApiClient
-
-    mock_data = {"ok": True, "data": {"cadeca": {"USD": {"buy": 120.0, "sell": 125.0}}}}
-
-    client = TasaloApiClient(api_url="http://test:8000")
-
-    with patch.object(client, '_get_with_retry', return_value=mock_data):
-        result = await client.get_cadeca()
-
-        assert result is not None
 
 
 @pytest.mark.asyncio

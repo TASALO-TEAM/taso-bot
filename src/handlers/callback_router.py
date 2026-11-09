@@ -31,7 +31,6 @@ ROUTE_MAP: dict[str, str] = {
     "tasalo":   "_handle_tasalo",
     "toque":    "_handle_tasalo",
     "bcc":      "_handle_tasalo",
-    "cadeca":   "_handle_tasalo",
     "toqueimg": "_handle_toqueimg",
     "alert":    "_handle_alert",
     "p":        "_handle_p",
@@ -148,7 +147,7 @@ async def _handle_start(update: Update, context: ContextTypes.DEFAULT_TYPE, call
 # ── Tasalo/source callbacks ──
 
 async def _handle_tasalo(update: Update, context: ContextTypes.DEFAULT_TYPE, callback_data: str) -> None:
-    """Handle tasalo_*, toque_*, bcc_*, cadeca_* callbacks."""
+    """Handle tasalo_*, toque_*, bcc_* callbacks."""
     handler_start = time.time()
     query = update.callback_query
     user_id = query.from_user.id

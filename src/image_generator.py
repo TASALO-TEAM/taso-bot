@@ -6,7 +6,7 @@ de cambio, usando diseño minimalista y limpio sobre plantilla personalizada.
 Diseño v3:
 - Contenido simplificado: solo moneda + precio + indicador
 - Espaciado aumentado: 60px padding, 40px gap, 56px row height
-- Encabezados claros: "Tasa El Toque", "Tasa BCC", "Tasa CADECA"
+- Encabezados claros: "Tasa El Toque", "Tasa BCC"
 - Footer minimalista: solo "@tasalobot"
 - Color de texto: #EDFFF1 (blanco-azulado)
 - Sin emojis - solo texto limpio
@@ -66,7 +66,7 @@ COLOR_DOWN = "#4ECDC4"  # Turquesa (bajada)
 COLOR_NEUTRAL = "#6C7A89"  # Gris azulado (neutral)
 
 # Layout de columnas (horizontal)
-COLUMN_WIDTH_HORIZONTAL = (IMG_WIDTH_HORIZONTAL - (PADDING * 2) - (COLUMN_GAP * 2)) // 3
+COLUMN_WIDTH_HORIZONTAL = (IMG_WIDTH_HORIZONTAL - (PADDING * 2) - COLUMN_GAP) // 2
 
 COLUMN_POSITIONS = {
     "eltoque": {
@@ -76,10 +76,6 @@ COLUMN_POSITIONS = {
     "bcc": {
         "start": PADDING + COLUMN_WIDTH_HORIZONTAL + COLUMN_GAP,
         "end": PADDING + (COLUMN_WIDTH_HORIZONTAL * 2) + COLUMN_GAP,
-    },
-    "cadeca": {
-        "start": PADDING + (COLUMN_WIDTH_HORIZONTAL * 2) + (COLUMN_GAP * 2),
-        "end": IMG_WIDTH_HORIZONTAL - PADDING,
     },
 }
 
@@ -104,7 +100,6 @@ ROW_HEIGHT = 56  # Aumentado de 48px → 56px
 SOURCE_TITLES = {
     "eltoque": "Tasa El Toque",
     "bcc": "Tasa BCC",
-    "cadeca": "Tasa CADECA",
 }
 
 
@@ -499,149 +494,6 @@ def draw_currency_column(
     return y
 
 
-def draw_cadeca_column(
-    draw: ImageDraw.ImageDraw,
-    data: Dict[str, Any],
-    x_start: int,
-    x_end: int,
-    y_start: int,
-    fonts: Fonts,
-) -> int:
-    """Dibujar columna de CADECA con tasas (buy/sell).
-
-    Layout mejorado con 3 columnas bien espaciadas:
-        Tasa CADECA · 26/03/2026 · Cuba
-        ——————————————————————————————
-        Moneda        Compra       Venta
-        ——————————————————————————————
-        EUR          544.49       566.71
-        USD          470.40       489.60
-        ...
-    """
-    y = y_start
-
-    # Línea separadora después del título
-    draw.line((x_start, y, x_end, y), fill=COLOR_ACCENT, width=2)
-    y += 15
-
-    # Headers de columnas - mejor espaciados
-    # Columna 1: Moneda (izquierda) - 30% del ancho
-    # Columna 2: Compra (centro) - 35% del ancho
-    # Columna 3: Venta (derecha) - 35% del ancho
-    total_width = x_end - x_start
-    col1_width = int(total_width * 0.30)  # Moneda
-    col2_width = int(total_width * 0.35)  # Compra
-    col3_width = int(total_width * 0.35)  # Venta
-
-    # Posiciones X para cada columna (usando layout proporcional 30/35/35%)
-    # Header "Moneda" más hacia adentro, datos alineados
-    moneda_x = x_start + 60  # Header Moneda
-    compra_x = x_start + col1_width + (col2_width // 2)
-    venta_x = x_start + col1_width + col2_width + (col3_width // 2)
-
-    # Datos de moneda alineados (más hacia adentro)
-    data_moneda_x = x_start + 50
-
-    # Dibujar headers - anchor="mm" para centrar verticalmente
-    draw.text(
-        (moneda_x, y),
-        "Moneda",
-        fill=COLOR_TEXT_SECONDARY,
-        font=fonts.column_header,
-        anchor="mm",
-    )
-    draw.text(
-        (compra_x, y),
-        "Compra",
-        fill=COLOR_TEXT_SECONDARY,
-        font=fonts.column_header,
-        anchor="mm",
-    )
-    draw.text(
-        (venta_x, y),
-        "Venta",
-        fill=COLOR_TEXT_SECONDARY,
-        font=fonts.column_header,
-        anchor="mm",
-    )
-    y += int(IMG_HEIGHT_VERTICAL * FONT_SCALE["column_header"]) + 10
-
-    # Línea separadora después de headers
-    draw.line((x_start, y, x_end, y), fill=COLOR_ACCENT, width=1)
-    y += 15
-
-    # Ordenar monedas por prioridad
-    priority = ["EUR", "USD", "MLC", "CAD", "MXN", "GBP", "CHF", "RUB", "AUD", "JPY"]
-    sorted_currencies = sorted(
-        data.keys() if isinstance(data, dict) else [],
-        key=lambda x: priority.index(x.upper()) if x.upper() in priority else 99,
-    )
-
-    # Dibujar filas (máximo 8 para CADECA)
-    for currency in sorted_currencies[:8]:
-        if not isinstance(data, dict):
-            break
-
-        currency_info = data.get(currency, {})
-
-        if isinstance(currency_info, dict):
-            buy = currency_info.get("buy")
-            sell = currency_info.get("sell")
-        else:
-            buy = None
-            sell = None
-
-        # Dibujar moneda (izquierda) - alineado con header
-        draw.text(
-            (data_moneda_x, y),
-            currency.upper(),
-            fill=COLOR_TEXT_PRIMARY,
-            font=fonts.currency,
-        )
-
-        # Dibujar compra (centro) - anchor="mm" para centrar y alinear con header
-        if buy is not None:
-            buy_str = format_rate_value(buy)
-            draw.text(
-                (compra_x, y),
-                buy_str,
-                fill=COLOR_TEXT_PRIMARY,
-                anchor="mm",
-                font=fonts.rate_value,
-            )
-        else:
-            draw.text(
-                (compra_x, y),
-                "---",
-                fill=COLOR_TEXT_SECONDARY,
-                anchor="mm",
-                font=fonts.rate_value,
-            )
-
-        # Dibujar venta (derecha) - anchor="mm" para centrar y alinear con header
-        if sell is not None:
-            sell_str = format_rate_value(sell)
-            draw.text(
-                (venta_x, y),
-                sell_str,
-                fill=COLOR_TEXT_PRIMARY,
-                anchor="mm",
-                font=fonts.rate_value,
-            )
-        else:
-            draw.text(
-                (venta_x, y),
-                "---",
-                fill=COLOR_TEXT_SECONDARY,
-                anchor="mm",
-                font=fonts.rate_value,
-            )
-
-        y += ROW_HEIGHT
-
-    return y
-
-
 def draw_single_source_card(
     draw: ImageDraw.ImageDraw,
     data: Dict[str, Any],
@@ -691,10 +543,6 @@ def draw_single_source_card(
         draw_currency_column(
             draw, data.get("bcc", {}), "bcc", inner_x_start, inner_x_end, inner_y, fonts
         )
-    elif source == "cadeca":
-        draw_cadeca_column(
-            draw, data.get("cadeca", {}), inner_x_start, inner_x_end, inner_y, fonts
-        )
 
 
 def draw_footer(draw: ImageDraw.ImageDraw, W: int, H: int, fonts: Fonts) -> None:
@@ -715,12 +563,12 @@ def draw_footer(draw: ImageDraw.ImageDraw, W: int, H: int, fonts: Fonts) -> None
 
 
 async def generate_tasalo_image(data: Dict[str, Any]) -> Optional[io.BytesIO]:
-    """Generar imagen horizontal con tabla triple (ElToque | BCC | CADECA).
+    """Generar imagen horizontal con tabla doble (ElToque | BCC).
 
     Usa la plantilla img.jpg si está disponible, sino usa fondo gradiente.
     """
     gen_start = time.time()
-    logger.info("🖼️ Generating TASALO image (triple column)")
+    logger.info("🖼️ Generating TASALO image (two columns)")
 
     try:
         # 1. Cargar plantilla o crear fallback
@@ -764,10 +612,9 @@ async def generate_tasalo_image(data: Dict[str, Any]) -> Optional[io.BytesIO]:
         # 5. Extraer datos por fuente
         eltoque_data = data.get("eltoque", {})
         bcc_data = data.get("bcc", {})
-        cadeca_data = data.get("cadeca", {})
         logger.debug(
-            "📊 Data extracted: ElToque=%d currencies, BCC=%d, CADECA=%d",
-            len(eltoque_data), len(bcc_data), len(cadeca_data)
+            "📊 Data extracted: ElToque=%d currencies, BCC=%d",
+            len(eltoque_data), len(bcc_data)
         )
 
         # 6. Dibujar columnas
@@ -792,16 +639,8 @@ async def generate_tasalo_image(data: Dict[str, Any]) -> Optional[io.BytesIO]:
             fonts,
         )
 
-        draw_cadeca_column(
-            draw,
-            cadeca_data,
-            COLUMN_POSITIONS["cadeca"]["start"],
-            COLUMN_POSITIONS["cadeca"]["end"],
-            y_content,
-            fonts,
-        )
         col_duration_ms = (time.time() - col_start) * 1000
-        logger.debug("✅ All 3 columns drawn (%.0fms)", col_duration_ms)
+        logger.debug("✅ Both columns drawn (%.0fms)", col_duration_ms)
 
         # 7. Dibujar footer
         footer_start = time.time()
@@ -920,14 +759,14 @@ async def generate_image(
 
     Args:
         data: Datos de la API (campo 'data' del response)
-        image_type: Tipo de imagen ("tasalo", "eltoque", "bcc", "cadeca")
+        image_type: Tipo de imagen ("tasalo", "eltoque", "bcc")
 
     Returns:
         BytesIO con PNG optimizado, o None si hay error
     """
     if image_type == "tasalo":
         return await generate_tasalo_image(data)
-    elif image_type in ("eltoque", "bcc", "cadeca"):
+    elif image_type in ("eltoque", "bcc"):
         return await generate_single_source_image(data, image_type)
     else:
         logger.error(f"❌ Tipo de imagen desconocido: {image_type}")
@@ -974,10 +813,6 @@ if __name__ == "__main__":
             "USD": {"rate": 478.00, "change": None, "prev_rate": 478.00},
             "CAD": {"rate": 348.17, "change": "down", "prev_rate": 352.00},
         },
-        "cadeca": {
-            "EUR": {"buy": 531.94, "sell": 584.30},
-            "USD": {"buy": 461.27, "sell": 506.68},
-        },
         "updated_at": datetime.now().isoformat(),
     }
 
@@ -985,8 +820,8 @@ if __name__ == "__main__":
 
     print("🎨 Generando imágenes de prueba...")
 
-    # Probar imagen triple TASALO
-    print("\n📊 Generando imagen TASALO (tabla triple)...")
+    # Probar imagen doble TASALO
+    print("\n📊 Generando imagen TASALO (tabla doble)...")
     img_tasalo = generate_image_sync(test_data, image_type="tasalo")
     if img_tasalo:
         with open("test_tasalo.png", "wb") as f:
@@ -1015,17 +850,7 @@ if __name__ == "__main__":
     else:
         print("❌ Error generando test_bcc.png")
 
-    # Probar imagen individual CADECA
-    print("\n🏢 Generando imagen CADECA...")
-    img_cadeca = generate_image_sync(test_data, image_type="cadeca")
-    if img_cadeca:
-        with open("test_cadeca.png", "wb") as f:
-            f.write(img_cadeca.read())
-        print("✅ test_cadeca.png generada")
-    else:
-        print("❌ Error generando test_cadeca.png")
-
     print("\n🎨 Pruebas completadas")
     print(
-        "📁 Archivos generados: test_tasalo.png, test_eltoque.png, test_bcc.png, test_cadeca.png"
+        "📁 Archivos generados: test_tasalo.png, test_eltoque.png, test_bcc.png"
     )

@@ -24,7 +24,6 @@ from src.handlers.tasalo import (
     tasalo_command,
     toque_command,
     bcc_command,
-    cadeca_command,
     fuel_command,
 )
 from src.handlers.start import (
@@ -232,7 +231,6 @@ def create_application() -> Application:
         ("db", db_command),
         ("toque", toque_command),
         ("bcc", bcc_command),
-        ("cadeca", cadeca_command),
         ("fuel", fuel_command),
         ("qp", qp_command),
         ("toqueimg", toqueimg_command),

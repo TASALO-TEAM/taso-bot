@@ -39,7 +39,6 @@ class TestDatetimeEntityDisabled:
                 "USD": {"rate": 515.0, "change": "up", "prev_rate": 510.0},
                 "EUR": {"rate": 580.0, "change": "down", "prev_rate": 585.0},
             },
-            "cadeca": {},
             "bcc": {},
             "updated_at": "2026-04-10T12:00:00Z",
         }
@@ -57,7 +56,6 @@ class TestDatetimeEntityDisabled:
         """Disabled path should delegate to build_full_message."""
         sample_data = {
             "eltoque": {"USD": {"rate": 515.0}},
-            "cadeca": {},
             "bcc": {},
             "updated_at": "2026-04-10T12:00:00Z",
         }
@@ -74,7 +72,6 @@ class TestDatetimeEntityDisabled:
         """Fallback should handle empty eltoque data gracefully."""
         sample_data = {
             "eltoque": {},
-            "cadeca": {},
             "bcc": {},
             "updated_at": "2026-04-10T12:00:00Z",
         }

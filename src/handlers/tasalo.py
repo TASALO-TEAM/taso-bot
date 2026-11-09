@@ -23,7 +23,6 @@ from src.formatters import (
     HAS_DATETIME_ENTITY,
     build_eltoque_only_message,
     build_bcc_only_message,
-    build_cadeca_only_message,
     build_fuel_only_message,
     build_toque_new_message,
 )
@@ -147,7 +146,7 @@ async def tasalo_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler para el comando /tasalo.
 
     Comando principal que muestra las tasas de cambio actuales de todas
-    las fuentes (ElToque, CADECA, BCC) con texto formateado y botones.
+    las fuentes (ElToque, BCC) con texto formateado y botones.
 
     Flujo:
         1. Envía mensaje "⏳ Consultando tasas..."
@@ -508,7 +507,7 @@ async def history_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # =============================================================================
-# COMANDOS INDIVIDUALES POR FUENTE: /toque, /bcc, /cadeca
+# COMANDOS INDIVIDUALES POR FUENTE: /toque, /bcc
 # =============================================================================
 
 
@@ -539,7 +538,7 @@ async def _handle_source_command(
     Args:
         update: Update de Telegram con el mensaje del usuario
         context: Contexto del bot con api_client en bot_data
-        source: Identificador de la fuente ("toque", "bcc", "cadeca")
+        source: Identificador de la fuente ("toque", "bcc")
         build_message_func: Función formatter específica para la fuente
     """
     user_id = update.effective_user.id if update.effective_user else 0
@@ -657,11 +656,6 @@ async def bcc_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     await _handle_source_command(update, context, "bcc", build_bcc_only_message)
 
 
-async def cadeca_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Comando /cadeca — Muestra solo tasas de CADECA."""
-    await _handle_source_command(update, context, "cadeca", build_cadeca_only_message)
-
-
 async def fuel_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Comando /fuel — Precios de combustible del mercado informal (ElToque)."""
     user_id = update.effective_user.id if update.effective_user else 0
@@ -775,7 +769,6 @@ async def source_refresh_callback(
         build_funcs = {
             "toque": build_toque_new_message,
             "bcc": build_bcc_only_message,
-            "cadeca": build_cadeca_only_message,
             "fuel": build_fuel_only_message,
         }
         build_func = build_funcs.get(source)

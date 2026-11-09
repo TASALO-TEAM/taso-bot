@@ -51,10 +51,6 @@ def sample_api_data():
             "USD": {"rate": 478.00, "change": None, "prev_rate": 478.00},
             "CAD": {"rate": 348.17, "change": "down", "prev_rate": 352.00},
         },
-        "cadeca": {
-            "EUR": {"buy": 531.94, "sell": 584.30},
-            "USD": {"buy": 461.27, "sell": 506.68},
-        },
         "updated_at": datetime.now().isoformat(),
     }
 
@@ -79,18 +75,6 @@ def sample_bcc_data():
         "bcc": {
             "EUR": {"rate": 551.23, "change": "up", "prev_rate": 548.00},
             "USD": {"rate": 478.00, "change": None, "prev_rate": 478.00},
-        },
-        "updated_at": datetime.now().isoformat(),
-    }
-
-
-@pytest.fixture
-def sample_cadeca_data():
-    """Datos de prueba solo para CADECA."""
-    return {
-        "cadeca": {
-            "EUR": {"buy": 531.94, "sell": 584.30},
-            "USD": {"buy": 461.27, "sell": 506.68},
         },
         "updated_at": datetime.now().isoformat(),
     }
@@ -173,7 +157,7 @@ class TestImageGeneration:
 
     @pytest.mark.asyncio
     async def test_generate_tasalo_image(self, sample_api_data):
-        """Generar imagen TASALO con tabla triple."""
+        """Generar imagen TASALO con tabla doble."""
         result = await generate_tasalo_image(sample_api_data)
         
         assert result is not None
@@ -219,19 +203,6 @@ class TestImageGeneration:
         assert img.size == (IMG_WIDTH_VERTICAL, IMG_HEIGHT_VERTICAL)
 
     @pytest.mark.asyncio
-    async def test_generate_single_source_image_cadeca(self, sample_cadeca_data):
-        """Generar imagen individual de CADECA."""
-        result = await generate_single_source_image(sample_cadeca_data, "cadeca")
-
-        assert result is not None
-        assert isinstance(result, BytesIO)
-
-        result.seek(0)
-        from PIL import Image
-        img = Image.open(result)
-        assert img.size == (IMG_WIDTH_VERTICAL, IMG_HEIGHT_VERTICAL)
-
-    @pytest.mark.asyncio
     async def test_generate_image_with_type_parameter(self, sample_api_data):
         """Generar imagen usando parámetro image_type."""
         # Probar tipo "tasalo"
@@ -246,9 +217,6 @@ class TestImageGeneration:
         result_bcc = await generate_image(sample_api_data, image_type="bcc")
         assert result_bcc is not None
         
-        # Probar tipo "cadeca"
-        result_cadeca = await generate_image(sample_api_data, image_type="cadeca")
-        assert result_cadeca is not None
 
     @pytest.mark.asyncio
     async def test_generate_image_invalid_type(self, sample_api_data):
@@ -262,7 +230,6 @@ class TestImageGeneration:
         empty_data = {
             "eltoque": {},
             "bcc": {},
-            "cadeca": {},
             "updated_at": datetime.now().isoformat(),
         }
         
@@ -367,7 +334,7 @@ class TestErrorHandling:
         """Datos con claves faltantes no deberían crashear."""
         incomplete_data = {
             "eltoque": {"USD": {"rate": 515.00}},
-            # Faltan "bcc" y "cadeca"
+            # Falta "bcc"
             "updated_at": datetime.now().isoformat(),
         }
         
@@ -451,10 +418,6 @@ if __name__ == "__main__":
             "USD": {"rate": 478.00, "change": None, "prev_rate": 478.00},
             "CAD": {"rate": 348.17, "change": "down", "prev_rate": 352.00},
         },
-        "cadeca": {
-            "EUR": {"buy": 531.94, "sell": 584.30},
-            "USD": {"buy": 461.27, "sell": 506.68},
-        },
         "updated_at": datetime.now().isoformat(),
     }
     
@@ -490,15 +453,5 @@ if __name__ == "__main__":
     else:
         print("❌ Error generando test_bcc.png")
     
-    # Test 4: Imagen CADECA
-    print("\n🏢 Generando imagen CADECA...")
-    img_cadeca = generate_image_sync(test_data, image_type="cadeca")
-    if img_cadeca:
-        with open("test_cadeca.png", "wb") as f:
-            f.write(img_cadeca.read())
-        print("✅ test_cadeca.png generada")
-    else:
-        print("❌ Error generando test_cadeca.png")
-    
     print("\n✅ Tests manuales completados")
-    print("📁 Archivos: test_tasalo.png, test_eltoque.png, test_bcc.png, test_cadeca.png")
+    print("📁 Archivos: test_tasalo.png, test_eltoque.png, test_bcc.png")

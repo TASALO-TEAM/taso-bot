@@ -42,7 +42,6 @@ INDICATOR_NEUTRAL = ""  # Sin cambio (legacy no usa indicador para neutral)
 # Fuentes
 SOURCES_LABELS = {
     "eltoque": "elToque.com",
-    "cadeca": "cadeca.cu",
     "bcc": "bc.gob.cu",
     "binance": "binance.com",
 }
@@ -222,95 +221,6 @@ def build_eltoque_block(data: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def build_cadeca_block(data: Dict[str, Any]) -> str:
-    """Construye el bloque de CADECA estilo legacy.
-
-    Formato legacy:
-        🏢 *CADECA (Exchange Houses)*
-        ↳ _Airports, Ports & Hotels_
-        —————————————————
-        _Currency_     _Buy_      _Sell_
-         *USD*          461.27       506.68
-         *EUR*          531.94       584.30
-
-    Args:
-        data: Dict con datos de la API (campo 'data.cadeca')
-
-    Returns:
-        String formateado con el bloque completo
-    """
-    lines = []
-
-    # Header
-    lines.append("🏢 *CADECA (Exchange Houses)*")
-    lines.append("↳ _Airports, Ports & Hotels_")
-    lines.append(SEPARATOR_THICK)
-
-    cadeca_data = data.get("cadeca", {})
-
-    # Debug logging
-    logger.info(f"🔍 CADECA data received: {cadeca_data}")
-
-    if not cadeca_data:
-        logger.warning("⚠️ CADECA data empty or missing")
-        lines.append("⚠️ Not available")
-        lines.append("")
-        return "\n".join(lines)
-
-    logger.debug("📊 CADECA data: %d currencies", len(cadeca_data))
-
-    # Header de columnas
-    lines.append("_Currency_     _Buy_      _Sell_")
-
-    # Ordenar monedas: legacy order - EUR, USD, MLC, CAD, MXN, GBP, CHF, RUB, AUD, JPY
-    priority = ["EUR", "USD", "MLC", "CAD", "MXN", "GBP", "CHF", "RUB", "AUD", "JPY"]
-    sorted_currencies = sorted(
-        cadeca_data.keys(),
-        key=lambda x: (priority.index(x.upper()) if x.upper() in priority else 99, x),
-    )
-
-    for currency in sorted_currencies:
-        currency_info = cadeca_data[currency]
-
-        if isinstance(currency_info, dict):
-            buy = currency_info.get("buy")
-            sell = currency_info.get("sell")
-            change = currency_info.get("change")
-            prev_rate = currency_info.get("prev_rate")
-        else:
-            buy = None
-            sell = None
-            change = None
-            prev_rate = None
-
-        # Formatear compra y venta - mostrar --- solo si es None (no si es 0)
-        if buy is not None:
-            buy_str = f"{buy:6.2f}"
-        else:
-            buy_str = "  ---"
-
-        if sell is not None:
-            sell_str = f"{sell:6.2f}"
-        else:
-            sell_str = "  ---"
-
-        # Indicador solo si hay cambio significativo
-        indicator = ""
-        if change == "up":
-            indicator = " " + INDICATOR_UP
-            logger.debug("📈 %s CADECA indicator: %s", currency, INDICATOR_UP)
-        elif change == "down":
-            indicator = " " + INDICATOR_DOWN
-            logger.debug("📉 %s CADECA indicator: %s", currency, INDICATOR_DOWN)
-
-        # Formato legacy: columna alineada
-        line = f" *{currency}*          {buy_str}       {sell_str}{indicator}"
-        lines.append(line)
-
-    lines.append("")  # Linea vacia al final
-    return "\n".join(lines)
-
-
 def build_bcc_block(data: Dict[str, Any]) -> str:
     """Construye el bloque del Banco Central (BCC) estilo legacy.
 
@@ -485,7 +395,6 @@ def build_footer(data: Dict[str, Any]) -> str:
         📆 2026-03-23 09:00
         Fuentes de consulta:
         🔗 elToque.com
-        🔗 www.cadeca.cu
         🔗 www.bc.gob.cu
 
     Args:
@@ -511,8 +420,6 @@ def build_footer(data: Dict[str, Any]) -> str:
     sources = []
     if data.get("eltoque"):
         sources.append("🔗 elToque.com")
-    if data.get("cadeca"):
-        sources.append("🔗 www.cadeca.cu")
     if data.get("bcc"):
         sources.append("🔗 www.bc.gob.cu")
 
@@ -521,7 +428,6 @@ def build_footer(data: Dict[str, Any]) -> str:
     else:
         # Fallback: mostrar todas las fuentes posibles
         lines.append("🔗 elToque.com")
-        lines.append("🔗 www.cadeca.cu")
         lines.append("🔗 www.bc.gob.cu")
 
     return "\n".join(lines)
@@ -530,7 +436,7 @@ def build_footer(data: Dict[str, Any]) -> str:
 def build_full_message(data: Dict[str, Any]) -> str:
     """Construye el mensaje completo con todos los bloques estilo legacy.
 
-    Combina los bloques de ElToque, CADECA, BCC y el footer en un solo mensaje.
+    Combina los bloques de ElToque, BCC y el footer en un solo mensaje.
 
     Args:
         data: Dict con datos de la API (estructura completa del response)
@@ -547,16 +453,6 @@ def build_full_message(data: Dict[str, Any]) -> str:
 
     # Separador ••• entre bloques
     blocks.append(SEPARATOR_THIN)
-
-    # Bloque CADECA (si hay datos)
-    cadeca_data = data.get("cadeca", {})
-    if cadeca_data:
-        logger.debug("📊 CADECA block included: %d currencies", len(cadeca_data))
-        cadeca_block = build_cadeca_block(data)
-        blocks.append(cadeca_block)
-        blocks.append(SEPARATOR_THIN)
-    else:
-        logger.debug("📊 CADECA block skipped: no data")
 
     # Bloque BCC (si hay datos)
     bcc_data = data.get("bcc", {})
@@ -663,12 +559,6 @@ def build_full_message_with_datetime(
     blocks.append("\n".join(eltoque_lines))
     blocks.append(SEPARATOR_THIN)
 
-    # ── CADECA block ──
-    cadeca_data = data.get("cadeca", {})
-    if cadeca_data:
-        blocks.append(build_cadeca_block(data))
-        blocks.append(SEPARATOR_THIN)
-
     # ── BCC block ──
     bcc_data = data.get("bcc", {})
     if bcc_data:
@@ -680,14 +570,12 @@ def build_full_message_with_datetime(
     sources = []
     if data.get("eltoque"):
         sources.append("🔗 elToque.com")
-    if data.get("cadeca"):
-        sources.append("🔗 www.cadeca.cu")
     if data.get("bcc"):
         sources.append("🔗 www.bc.gob.cu")
     if sources:
         footer_lines.extend(sources)
     else:
-        footer_lines.extend(["🔗 elToque.com", "🔗 www.cadeca.cu", "🔗 www.bc.gob.cu"])
+        footer_lines.extend(["🔗 elToque.com", "🔗 www.bc.gob.cu"])
     blocks.append("\n".join(footer_lines))
 
     full_text = "\n".join(blocks)
@@ -723,7 +611,7 @@ def build_history_message(
 
     Args:
         currency: Código de moneda (USD, EUR, etc.)
-        source: Fuente (eltoque, cadeca, bcc, binance)
+        source: Fuente (eltoque, bcc, binance)
         history_data: Lista de dicts con sell_rate y fetched_at
 
     Returns:
@@ -910,73 +798,6 @@ def build_bcc_only_message(api_data: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def build_cadeca_only_message(api_data: Dict[str, Any]) -> str:
-    """Construye mensaje con solo CADECA para comando /cadeca."""
-    lines = []
-
-    lines.append("🏢 *CADECA (Exchange Houses)*")
-    lines.append("↳ _Airports, Ports & Hotels_")
-    lines.append(SEPARATOR_THICK)
-
-    cadeca_data = api_data.get("cadeca", {})
-
-    if not cadeca_data:
-        logger.warning("⚠️ CADECA data empty for /cadeca command")
-        lines.append("⚠️ Not available")
-    else:
-        logger.debug("📊 /cadeca CADECA data: %d currencies", len(cadeca_data))
-        lines.append("_Currency_     _Buy_      _Sell_")
-
-        priority = ["EUR", "USD", "MLC", "CAD", "MXN", "GBP", "CHF", "RUB", "AUD", "JPY"]
-        sorted_currencies = sorted(
-            cadeca_data.keys(),
-            key=lambda x: (priority.index(x.upper()) if x.upper() in priority else 99, x),
-        )
-
-        for currency in sorted_currencies:
-            currency_info = cadeca_data[currency]
-            if isinstance(currency_info, dict):
-                buy = currency_info.get("buy")
-                sell = currency_info.get("sell")
-                change = currency_info.get("change")
-            else:
-                buy = None
-                sell = None
-                change = None
-
-            # Formatear compra y venta - mostrar --- solo si es None (no si es 0)
-            if buy is not None:
-                buy_str = f"{buy:6.2f}"
-            else:
-                buy_str = "  ---"
-
-            if sell is not None:
-                sell_str = f"{sell:6.2f}"
-            else:
-                sell_str = "  ---"
-
-            indicator = ""
-            if change == "up":
-                indicator = " " + INDICATOR_UP
-            elif change == "down":
-                indicator = " " + INDICATOR_DOWN
-
-            line = f" *{currency}*          {buy_str}       {sell_str}{indicator}"
-            lines.append(line)
-
-    lines.append("")
-    lines.append(SEPARATOR_THICK)
-
-    # Footer
-    updated_at = api_data.get("updated_at")
-    if updated_at:
-        date_str = parse_iso_datetime(updated_at)
-        lines.append(f"📆 {date_str}")
-    lines.append("🔗 www.cadeca.cu")
-
-    return "\n".join(lines)
-
-
 def build_fuel_only_message(api_data: Dict[str, Any]) -> str:
     """Construye mensaje con precios de combustible para comando /fuel."""
     lines = []
@@ -1092,7 +913,7 @@ def build_qvapay_message(rates: Dict[str, Optional[float]]) -> str:
             mostrarse como "$0.00" — una moneda sin datos no aporta nada
             al usuario y "$0.00" se lee como una tasa real (confuso).
 
-    Formato (estilo legacy, igual que /bcc, /cadeca, /toque):
+    Formato (estilo legacy, igual que /bcc, /toque):
         💱 *QVAPAY P2P — Promedio x USD*
         ————————————————————
         💰 *CUP:*   $977.73

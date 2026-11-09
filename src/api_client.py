@@ -177,25 +177,6 @@ class TasaloApiClient:
             logger.error("❌ Error obteniendo ElToque (%.0fms): %s", duration_ms, e)
             return None
 
-    async def get_cadeca(self) -> Optional[Dict[str, Any]]:
-        """Obtener solo tasas de CADECA."""
-        url = f"{self.api_url}/api/v1/tasas/cadeca"
-        start_time = time.time()
-
-        try:
-            data = await self._get_with_retry(url)
-            duration_ms = (time.time() - start_time) * 1000
-            
-            if data and data.get('ok'):
-                logger.info("✅ Tasas CADECA obtenidas (%.0fms)", duration_ms)
-                return data
-            return None
-
-        except Exception as e:
-            duration_ms = (time.time() - start_time) * 1000
-            logger.error("❌ Error obteniendo CADECA (%.0fms): %s", duration_ms, e)
-            return None
-
     async def get_fuel(self) -> Optional[Dict[str, Any]]:
         """Obtener precios de combustible del mercado informal."""
         url = f"{self.api_url}/api/v1/tasas/fuel"

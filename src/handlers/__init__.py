@@ -9,7 +9,6 @@ from src.handlers.tasalo import (
     history_callback,
     toque_command,
     bcc_command,
-    cadeca_command,
     fuel_command,
     source_refresh_callback,
 )
@@ -49,7 +48,6 @@ __all__ = [
     "history_callback",
     "toque_command",
     "bcc_command",
-    "cadeca_command",
     "fuel_command",
     "source_refresh_callback",
     "refresh_command",
