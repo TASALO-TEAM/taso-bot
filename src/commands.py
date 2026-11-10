@@ -9,6 +9,7 @@ Los comandos admin salen en el menú solo para los ids de ADMIN_CHAT_IDS.
 Los alias se registran como handler pero no aparecen en el menú.
 """
 
+import importlib
 import logging
 from dataclasses import dataclass
 from typing import Callable
@@ -30,15 +31,28 @@ from src.handlers.p import p_command
 from src.handlers.qp import qp_command
 from src.handlers.spl import spl_command
 from src.handlers.start import start_command
-from src.handlers.ta import ta_command
 from src.handlers.tasalo import bcc_command, fuel_command, tasalo_command, toque_command
 from src.handlers.tkt import tkt_command
 from src.handlers.toqueimg import toqueimg_command
-from src.handlers.trading import graf_command, mk_command
 from src.handlers.tspl import tspl_command
 from src.handlers.y import y_command
 
 logger = logging.getLogger(__name__)
+
+
+def _lazy(modulo: str, nombre: str) -> Callable:
+    """Handler que importa `modulo` en la primera llamada.
+
+    ta/trading cargan pandas + numba + matplotlib (~140 MB de RSS): solo se
+    pagan cuando alguien usa el comando.
+    shortcut: el primer import bloquea el loop 1-3 s, una vez por proceso.
+    """
+
+    async def handler(update, context):
+        return await getattr(importlib.import_module(modulo), nombre)(update, context)
+
+    handler.__name__ = nombre
+    return handler
 
 
 @dataclass(frozen=True)
@@ -62,9 +76,9 @@ COMANDOS: tuple[Cmd, ...] = (
     Cmd("toqueimg", toqueimg_command, "Imagen diaria de El Toque"),
     Cmd("y", y_command, "Estado del año"),
     Cmd("p", p_command, "Precio de criptomonedas"),
-    Cmd("ta", ta_command, "Análisis técnico"),
-    Cmd("graf", graf_command, "Gráfico con indicadores"),
-    Cmd("mk", mk_command, "Resumen del mercado"),
+    Cmd("ta", _lazy("src.handlers.ta", "ta_command"), "Análisis técnico"),
+    Cmd("graf", _lazy("src.handlers.trading", "graf_command"), "Gráfico con indicadores"),
+    Cmd("mk", _lazy("src.handlers.trading", "mk_command"), "Resumen del mercado"),
     Cmd("alert", alert_command, "Alertas de precio"),
     Cmd("spl", spl_command, "Spotlight del mercado"),
     Cmd("tspl", tspl_command, "TASALO Spotlight completo"),
