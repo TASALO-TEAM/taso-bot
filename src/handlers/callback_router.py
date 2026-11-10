@@ -19,7 +19,7 @@ from telegram import Update
 from telegram.ext import ContextTypes, CallbackQueryHandler
 from telegram.error import BadRequest
 
-from src.handlers import image_alerts, tasalo, start, toqueimg, p, ta, trading, y, alert as price_alert, spl, ms, msapp, tkt, admin, news, tspl, qp
+from src.handlers import image_alerts, tasalo, start, toqueimg, p, y, alert as price_alert, spl, ms, msapp, tkt, admin, news, tspl, qp
 
 logger = logging.getLogger(__name__)
 
@@ -316,10 +316,13 @@ async def _handle_ta(update: Update, context: ContextTypes.DEFAULT_TYPE, callbac
     logger.info("🔍 Handler _handle_ta processing '%s' for user %d", callback_data, user_id)
     try:
         if callback_data.startswith("ta_switch|"):
+            from src.handlers import ta
             await ta.ta_switch_callback(update, context)
         elif callback_data.startswith("ta_quick|"):
+            from src.handlers import trading
             await trading.ta_quick_callback(update, context)
         elif callback_data.startswith("ai_analyze|"):
+            from src.handlers import ta
             await ta.ai_analysis_callback(update, context)
         elif callback_data.startswith("ai_panorama|"):
             await p.p_ai_panorama_callback(update, context)
@@ -345,8 +348,10 @@ async def _handle_graf(update: Update, context: ContextTypes.DEFAULT_TYPE, callb
     logger.info("📈 Handler _handle_graf processing '%s' for user %d", callback_data, user_id)
     try:
         if callback_data.startswith("graf_tf|"):
+            from src.handlers import trading
             await trading.graf_timeframe_callback(update, context)
         elif callback_data.startswith("graf_from_ta|"):
+            from src.handlers import ta
             await ta.graf_from_ta_callback(update, context)
         elif callback_data.startswith("graf_from_btc|"):
             await query.answer("⚠️ Funcionalidad no disponible", show_alert=True)
