@@ -21,6 +21,7 @@ from telegram.ext import ContextTypes
 from src.api_client import TasaloApiClient
 from src.build_info import BOT_BUILD_INFO, BOT_VERSION, format_uptime
 from src.cache import cache
+from src.config import settings
 from src.formatters import SEPARATOR_THICK, parse_iso_datetime
 from src.utils.permissions import is_admin as _is_admin
 
@@ -707,3 +708,44 @@ async def status_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             )
         except Exception:
             pass
+
+
+async def health_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handler para el comando /health.
+
+    Verifica que el bot puede conectarse al backend.
+    Solo para administradores.
+    """
+    user_id = update.effective_user.id
+    logger.info("🔍 /health command invoked by user %s", user_id)
+
+    # Verificar si es admin
+    if not _is_admin(user_id):
+        logger.warning("⚠️ /health denied for non-admin user %s", user_id)
+        await update.message.reply_text("🔑 Este comando es solo para administradores.")
+        return
+
+    start_time = time.time()
+    await update.message.reply_text("⏳ Verificando conexión con el backend...")
+
+    data = await context.bot_data["api_client"].get_latest()
+    duration_ms = (time.time() - start_time) * 1000
+
+    if data:
+        logger.info("✅ /health: Backend OK (%.0fms)", duration_ms)
+        await update.message.reply_text(
+            f"✅ *Backend Conectado*\n\n"
+            f"*URL:* `{settings.tasalo_api_url}`\n"
+            f"*Updated:* `{data.get('updated_at', 'N/A')}`\n"
+            f"*Response time:* `{duration_ms:.0f}ms`",
+            parse_mode="Markdown",
+        )
+    else:
+        logger.error("❌ /health: Backend connection failed (%.0fms)", duration_ms)
+        await update.message.reply_text(
+            "❌ *Error de Conexión*\n\n"
+            f"*URL:* `{settings.tasalo_api_url}`\n"
+            f"*Response time:* `{duration_ms:.0f}ms`\n"
+            "El backend no responde.",
+            parse_mode="Markdown",
+        )

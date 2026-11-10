@@ -20,55 +20,11 @@ from src.config import settings
 from src.build_info import BOT_VERSION
 from src.api_client import TasaloApiClient
 from src.bot_profile import ensure_bot_profile_photo, create_template_with_profile
-from src.handlers.tasalo import (
-    tasalo_command,
-    toque_command,
-    bcc_command,
-    fuel_command,
-)
-from src.handlers.start import (
-    start_command,
-)
-from src.handlers.admin import (
-    refresh_command,
-    status_command,
-)
-from src.handlers.logs import (
-    log_command,
-)
-from src.handlers.db import (
-    db_command,
-)
-from src.handlers.toqueimg import (
-    toqueimg_command,
-)
-from src.handlers.image_alerts import (
-    handle_time_input,
-)
-from src.handlers.p import (
-    p_command,
-)
-from src.handlers.ta import (
-    ta_command,
-)
-from src.handlers.trading import (
-    graf_command,
-    mk_command,
-)
-from src.handlers.y import (
-    y_command,
-    handle_year_hour_input,
-)
-from src.handlers.alert import alert_command
-from src.handlers.spl import spl_command
-from src.handlers.qp import qp_command
-from src.handlers.news import news_command
-from src.handlers.tspl import tspl_command, handle_tspl_hour_input
-from src.handlers.ads import ads_command
-from src.handlers.ms import ms_command
-from src.handlers.msapp import msapp_command
-from src.handlers.tkt import tkt_command, handle_tkt_message
-from src.handlers.help import help_command
+from src.commands import publish_menu, register_commands
+from src.handlers.image_alerts import handle_time_input
+from src.handlers.y import handle_year_hour_input
+from src.handlers.tspl import handle_tspl_hour_input
+from src.handlers.tkt import handle_tkt_message
 from src.services.daily_image_sender import start_daily_dispatcher, stop_daily_dispatcher
 from src.services.year_alert_scheduler import start_year_scheduler, stop_year_scheduler
 from src.services.price_alert_checker import start_price_alert_checker, stop_price_alert_checker
@@ -168,47 +124,6 @@ api_client = TasaloApiClient(
 )
 
 
-async def health_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handler para el comando /health.
-
-    Verifica que el bot puede conectarse al backend.
-    Solo para administradores.
-    """
-    user_id = update.effective_user.id
-    logger.info("🔍 /health command invoked by user %s", user_id)
-
-    # Verificar si es admin
-    if user_id not in settings.get_admin_chat_ids_list():
-        logger.warning("⚠️ /health denied for non-admin user %s", user_id)
-        await update.message.reply_text("🔑 Este comando es solo para administradores.")
-        return
-
-    start_time = time.time()
-    await update.message.reply_text("⏳ Verificando conexión con el backend...")
-
-    data = await api_client.get_latest()
-    duration_ms = (time.time() - start_time) * 1000
-
-    if data:
-        logger.info("✅ /health: Backend OK (%.0fms)", duration_ms)
-        await update.message.reply_text(
-            f"✅ *Backend Conectado*\n\n"
-            f"*URL:* `{settings.tasalo_api_url}`\n"
-            f"*Updated:* `{data.get('updated_at', 'N/A')}`\n"
-            f"*Response time:* `{duration_ms:.0f}ms`",
-            parse_mode="Markdown",
-        )
-    else:
-        logger.error("❌ /health: Backend connection failed (%.0fms)", duration_ms)
-        await update.message.reply_text(
-            "❌ *Error de Conexión*\n\n"
-            f"*URL:* `{settings.tasalo_api_url}`\n"
-            f"*Response time:* `{duration_ms:.0f}ms`\n"
-            "El backend no responde.",
-            parse_mode="Markdown",
-        )
-
-
 def create_application() -> Application:
     """Crear y configurar la aplicación de python-telegram-bot."""
     logger.info("🔧 Creating bot application instance...")
@@ -217,42 +132,9 @@ def create_application() -> Application:
     application = Application.builder().token(settings.telegram_bot_token).build()
     logger.debug("✅ Application instance created")
 
-    # Registrar handlers
-    command_handlers = [
-        ("start", start_command),
-        ("help", help_command),
-        ("ayuda", help_command),
-        ("y", y_command),
-        ("tasalo", tasalo_command),
-        ("health", health_check),
-        ("refresh", refresh_command),
-        ("status", status_command),
-        ("log", log_command),
-        ("db", db_command),
-        ("toque", toque_command),
-        ("bcc", bcc_command),
-        ("fuel", fuel_command),
-        ("qp", qp_command),
-        ("toqueimg", toqueimg_command),
-        ("p", p_command),
-        ("ta", ta_command),
-        ("graf", graf_command),
-        ("mk", mk_command),
-        ("alert", alert_command),
-        ("spl", spl_command),
-        ("news", news_command),
-        ("tspl", tspl_command),
-        ("ads", ads_command),
-        ("ms", ms_command),
-        ("msapp", msapp_command),
-        ("tkt", tkt_command),
-    ]
-    
-    for cmd_name, handler in command_handlers:
-        application.add_handler(CommandHandler(cmd_name, handler))
-        logger.debug("  📌 CommandHandler registered: /%s", cmd_name)
-    
-    logger.info("✅ %d command handlers registered", len(command_handlers))
+    # Registrar comandos desde el registro unico (src/commands.py)
+    total = register_commands(application)
+    logger.info("✅ %d command handlers registered", total)
 
     # Registrar callback handler para botones del /start
     from src.handlers.callback_router import get_callback_handler
@@ -304,7 +186,7 @@ def create_application() -> Application:
     application.bot_data["api_client"] = api_client
     logger.debug("✅ API client stored in bot_data")
 
-    logger.info("✅ All handlers registered: start, tasalo, health, refresh, status, callback_router (1 handler)")
+    logger.info("✅ All handlers registered")
 
     return application
 
@@ -313,6 +195,9 @@ async def post_init(application: Application):
     """Callback después de inicializar el bot."""
     logger.info("🤖 Bot initialized. Verifying connection to taso-api...")
     init_start = time.time()
+
+    # Menú "/" de Telegram (un fallo no tumba el arranque)
+    await publish_menu(application)
 
     # Aviso de arranque al grupo de soporte (mismo patrón que taso-gcg)
     if settings.log_chat_id:
