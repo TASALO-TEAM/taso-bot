@@ -126,12 +126,6 @@ class Settings(BaseSettings):
         examples=["pub_1234567890abcdef1234567890abcdef"]
     )
 
-    # Image Generation
-    template_path: str = Field(
-        default="data/template.png",
-        description="Ruta a la plantilla de imagen para las tasas",
-    )
-
     # Sistema de anuncios (/ads)
     ads_enabled: bool = Field(
         default=True,
@@ -211,13 +205,6 @@ class Settings(BaseSettings):
             return []
         return [k.strip() for k in self.groq_api_key.split(",") if k.strip()]
 
-    @property
-    def template_full_path(self) -> str:
-        """Retorna la ruta absoluta a la plantilla de imagen."""
-        import os
-        # Obtener el directorio raíz del proyecto (padre de src/)
-        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        return os.path.join(base_dir, self.template_path)
 
 
 # Instancia global para usar en toda la aplicación

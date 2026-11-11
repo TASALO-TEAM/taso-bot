@@ -21,7 +21,6 @@ from src.formatters import (
     SEPARATOR_THICK,
     parse_iso_datetime,
     HAS_DATETIME_ENTITY,
-    build_eltoque_only_message,
     build_bcc_only_message,
     build_fuel_only_message,
     build_toque_new_message,

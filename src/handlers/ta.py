@@ -13,12 +13,10 @@ from io import BytesIO
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from telegram.constants import ParseMode
-from tradingview_ta import TA_Handler, Interval, Exchange
+from tradingview_ta import TA_Handler, Interval
 
 from src.core.ai_logic import get_groq_crypto_analysis
-from src.core.config import ADMIN_CHAT_IDS
-from src.utils.file_manager import add_log_line
-from src.utils.subscription_manager import check_feature_access, registrar_uso_comando
+from src.utils.subscription_manager import registrar_uso_comando
 from src.services.ads_manager import get_ad_block, safe_append
 from src.handlers.alert import cache_alert_levels
 # I18n removed – using Spanish strings directly

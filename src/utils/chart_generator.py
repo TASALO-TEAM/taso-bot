@@ -9,7 +9,6 @@ import matplotlib
 matplotlib.use('Agg')  # Backend sin pantalla para servidores
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
-from matplotlib.patches import FancyBboxPatch
 from matplotlib.gridspec import GridSpec
 from datetime import datetime
 
