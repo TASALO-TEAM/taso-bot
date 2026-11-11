@@ -17,8 +17,7 @@ import os
 import time
 import logging
 import traceback
-from pathlib import Path
-from typing import Optional, Union, Dict, Any
+from typing import Optional, Dict, Any
 from logging.handlers import RotatingFileHandler
 
 

@@ -12,11 +12,9 @@ from io import BytesIO
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from telegram.constants import ParseMode
-from tradingview_ta import TA_Handler, Interval, Exchange
+from tradingview_ta import TA_Handler, Interval
 from datetime import timedelta, datetime
 
-from src.utils.file_manager import add_log_line
-from src.utils.subscription_manager import check_feature_access, registrar_uso_comando
 from src.services.ads_manager import get_ad_block, safe_append
 from src.utils.chart_generator import generate_ohlcv_chart
 from src.core.btc_advanced_analysis import BTCAdvancedAnalyzer

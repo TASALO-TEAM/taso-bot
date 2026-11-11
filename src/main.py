@@ -19,7 +19,6 @@ from telegram.ext import (
 from src.config import settings
 from src.build_info import BOT_VERSION
 from src.api_client import TasaloApiClient
-from src.bot_profile import ensure_bot_profile_photo, create_template_with_profile
 from src.commands import publish_menu, register_commands
 from src.handlers.image_alerts import handle_time_input
 from src.handlers.y import handle_year_hour_input
@@ -259,42 +258,6 @@ async def post_init(application: Application):
         logger.info("✅ /tspl subscription dispatcher started (runs at :00 UTC every hour)")
     except Exception as e:
         logger.error("❌ Failed to start /tspl subscription dispatcher: %s", e, exc_info=True)
-
-    # Obtener y cachear foto de perfil del bot
-    try:
-        logger.info("📸 Fetching bot profile photo...")
-        profile_path = await ensure_bot_profile_photo(application.bot, cache_dir="data")
-
-        if profile_path:
-            logger.info("✅ Bot profile photo cached: %s", profile_path)
-            
-            # Crear plantilla con marca de agua
-            template_base = settings.template_full_path
-            template_with_watermark = os.path.join("data", "template_watermark.png")
-
-            # Crear directorio data si no existe
-            os.makedirs("data", exist_ok=True)
-
-            if os.path.exists(template_base):
-                watermark_start = time.time()
-                create_template_with_profile(
-                    template_base,
-                    profile_path,
-                    template_with_watermark,
-                    position="center",
-                    size=(250, 250),
-                    opacity=0.12,
-                )
-                watermark_duration_ms = (time.time() - watermark_start) * 1000
-                logger.info(
-                    "✅ Watermark template created: %s (%.0fms)",
-                    template_with_watermark,
-                    watermark_duration_ms
-                )
-            else:
-                logger.warning("⚠️ Template base not found: %s", template_base)
-    except Exception as e:
-        logger.error("⚠️ Error obteniendo foto de perfil: %s", e, exc_info=True)
 
     init_duration_ms = (time.time() - init_start) * 1000
     logger.info("✅ Bot post-init completed in %.0fms", init_duration_ms)

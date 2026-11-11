@@ -12,7 +12,7 @@ from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
-from telegram import InputMediaPhoto, InputMediaDocument
+from telegram import InputMediaPhoto
 from telegram.ext import Application
 from typing import Set
 
@@ -137,7 +137,7 @@ async def send_daily_images_job(application: Application):
     
     # 3. Obtener última imagen capturada por el scheduler de taso-api
     # (no capturamos aquí — la captura diaria ocurre en taso-api vía cron
-    # fijo a las 7:05 hora de Cuba, timezone "America/Havana" — ver
+    # fijo a las 8:30 hora de Cuba, timezone "America/Havana" — ver
     # init_image_capture_scheduler() en taso-api/src/services/scheduler.py.
     # Independiente de si algún usuario usó /toqueimg ese día.)
     logger.info("📸 Obteniendo última imagen capturada...")
@@ -172,7 +172,6 @@ async def send_daily_images_job(application: Application):
         # Verificar que la imagen es de hoy (hora Cuba)
         captured_at_str = img_data["data"].get("captured_at", "")
         try:
-            from datetime import timezone as tz_mod
             captured_at = datetime.fromisoformat(captured_at_str.replace("Z", "+00:00"))
             captured_cuba = captured_at.astimezone(CUBA_TZ)
             image_date = captured_cuba.date()

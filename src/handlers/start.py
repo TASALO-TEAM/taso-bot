@@ -11,7 +11,6 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppI
 from telegram.ext import ContextTypes, CommandHandler, CallbackQueryHandler
 
 from src.formatters import (
-    build_eltoque_only_message,
     build_bcc_only_message,
     build_toque_new_message,
 )
