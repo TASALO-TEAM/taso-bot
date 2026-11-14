@@ -29,7 +29,7 @@ API_HEADERS = {"X-API-Key": settings.tasalo_admin_key} if settings.tasalo_admin_
 CUBA_TZ = ZoneInfo("America/Havana")
 
 # Time constants (in Cuba time)
-IMAGE_CAPTURE_TIME = "07:30"  # Capture image at 7:30 AM Cuba (after source updates at 7:00)
+IMAGE_CAPTURE_TIME = "08:30"  # Debe coincidir con el cron de taso-api (scheduler.py: 8:30 America/Havana)
 MIN_SEND_TIME = "07:30"       # Earliest time to send images (7:30 AM Cuba)
 
 # Global scheduler instance
@@ -121,7 +121,10 @@ async def send_daily_images_job(application: Application):
             current_min = now_cuba.minute
             
             # Allow 5-minute window
-            time_diff = abs((current_hour * 60 + current_min) - (alert_hour * 60 + alert_min))
+            # La imagen del dia no existe hasta que taso-api la captura: un aviso
+            # programado antes se envia justo despues de la captura, nunca con la de ayer.
+            effective_minutes = max(alert_hour * 60 + alert_min, capture_minutes + 1)
+            time_diff = abs((current_hour * 60 + current_min) - effective_minutes)
             if time_diff <= 5:  # Within 5 minutes
                 matching_alerts.append(alert)
         except (ValueError, AttributeError) as e:
@@ -142,6 +145,7 @@ async def send_daily_images_job(application: Application):
     # Independiente de si algún usuario usó /toqueimg ese día.)
     logger.info("📸 Obteniendo última imagen capturada...")
     img_data = None
+    image_date = None
 
     for attempt in range(3):
         logger.info("🔍 Solicitando imagen a taso-api (intento %d/3)", attempt + 1)
@@ -193,6 +197,15 @@ async def send_daily_images_job(application: Application):
         logger.error("❌ No se pudo obtener imagen tras 3 intentos, abortando job")
         return
     
+    if image_date != today_date:
+        # Antes se enviaba igual la imagen de ayer como si fuera la de hoy.
+        logger.error(
+            "Sin imagen de hoy tras 3 intentos (la mas reciente es de %s); "
+            "no se envia nada, se reintenta en el proximo ciclo",
+            image_date,
+        )
+        return
+
     image_path = img_data["data"]["image_path"]
     logger.debug("📁 Image path: %s", image_path)
 
