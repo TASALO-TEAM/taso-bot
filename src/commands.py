@@ -31,7 +31,7 @@ from src.handlers.p import p_command
 from src.handlers.qp import qp_command
 from src.handlers.spl import spl_command
 from src.handlers.start import start_command
-from src.handlers.tasalo import bcc_command, fuel_command, tasalo_command, toque_command
+from src.handlers.tasalo import bcc_command, tasalo_command, toque_command
 from src.handlers.tkt import tkt_command
 from src.handlers.toqueimg import toqueimg_command
 from src.handlers.tspl import tspl_command
@@ -71,7 +71,6 @@ COMANDOS: tuple[Cmd, ...] = (
     Cmd("tasalo", tasalo_command, "Todas las tasas de cambio"),
     Cmd("toque", toque_command, "Tasas de El Toque"),
     Cmd("bcc", bcc_command, "Tasas del Banco Central de Cuba"),
-    Cmd("fuel", fuel_command, "Precio del combustible"),
     Cmd("qp", qp_command, "Tasas P2P de QvaPay"),
     Cmd("toqueimg", toqueimg_command, "Imagen diaria de El Toque"),
     Cmd("y", y_command, "Estado del año"),

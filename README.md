@@ -12,7 +12,6 @@ Bot de Telegram para consultar tasas de cambio de Cuba, precios y análisis crip
 ### 💱 Tasas de cambio
 - ✅ `/tasalo` — El Toque y BCC juntas, con botones de actualizar/provincias/históricos
 - ✅ `/toque`, `/bcc` — tasas individuales con flecha de tendencia
-- ✅ `/fuel` — precio del combustible en el mercado informal
 - ✅ `/toqueimg` — imagen diaria de El Toque, con alertas configurables (hora personalizada, foto/documento)
 
 ### 🪙 Cripto y trading
@@ -134,7 +133,6 @@ python src/main.py
 | `/tasalo` | Todas las tasas juntas (El Toque, BCC) | Todos los usuarios |
 | `/toque` | Tasa de El Toque | Todos los usuarios |
 | `/bcc` | Tasa oficial del Banco Central de Cuba | Todos los usuarios |
-| `/fuel` | Precio del combustible | Todos los usuarios |
 | `/toqueimg` | Imagen diaria de El Toque, con alertas configurables | Todos los usuarios |
 
 **Criptomonedas y trading**
@@ -283,7 +281,7 @@ taso-bot/
     └── handlers/
         ├── start.py        # /start
         ├── help.py         # /help, /ayuda
-        ├── tasalo.py       # /tasalo, /toque, /bcc, /fuel + callbacks
+        ├── tasalo.py       # /tasalo, /toque, /bcc + callbacks
         ├── toqueimg.py      # /toqueimg + alertas de imagen diaria
         ├── admin.py         # /refresh, /status
         ├── logs.py          # /log
