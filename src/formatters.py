@@ -293,15 +293,6 @@ def build_bcc_block(data: Dict[str, Any]) -> str:
         line = f" *{currency}:*   {rate_str}   *CUP*{indicator}{change_str}"
         lines.append(line)
 
-    # Otras monedas no estandar (si existen)
-    for currency, currency_info in bcc_data.items():
-        if currency not in priority:
-            if isinstance(currency_info, dict):
-                rate = currency_info.get("rate", 0)
-            else:
-                rate = currency_info
-            rate_str = format_rate_value(rate)
-            lines.append(f" *{currency}:*   {rate_str}  *CUP*")
 
     lines.append("")  # Línea vacía al final
     return "\n".join(lines)
