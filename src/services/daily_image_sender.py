@@ -18,6 +18,7 @@ from typing import Set
 
 from src.config import get_settings
 from src.formatters import build_toqueimg_caption
+from src.utils.telegram_errors import chat_inaccesible
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -276,8 +277,13 @@ async def send_daily_images_job(application: Application):
             logger.error("❌ Timeout sending image to user %d (10s limit)", user_id)
             fail_count += 1
             continue
-        except Exception:
-            logger.error("❌ Telegram send failed for user %d (alert_id=%s)", user_id, alert_id, exc_info=True)
+        except Exception as e:
+            if chat_inaccesible(e):
+                # Chat borrado o bot bloqueado: no es un bug ni se arregla reintentando hoy.
+                logger.warning("⚠️ Imagen omitida: chat %d inaccesible (%s)", user_id, e)
+                _sent_today.add(sent_key)
+            else:
+                logger.error("❌ Telegram send failed for user %d (alert_id=%s)", user_id, alert_id, exc_info=True)
             fail_count += 1
             continue
         

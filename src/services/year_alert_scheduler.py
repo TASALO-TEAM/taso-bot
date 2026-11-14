@@ -12,6 +12,7 @@ from apscheduler.triggers.cron import CronTrigger
 
 from src.config import get_settings
 from src.api_client import TasaloApiClient
+from src.utils.telegram_errors import chat_inaccesible
 
 logger = logging.getLogger(__name__)
 
@@ -103,7 +104,10 @@ def create_year_scheduler(application) -> AsyncIOScheduler:
                     await app_ref.bot.send_message(chat_id=uid, text=msg, parse_mode="Markdown")
                     logger.info("📨 Year alert sent to user %s", uid)
                 except Exception as e:
-                    logger.error("❌ Failed to send year alert to %s: %s", uid, e)
+                    if chat_inaccesible(e):
+                        logger.warning("⚠️ Aviso anual omitido: chat %s inaccesible (%s)", uid, e)
+                    else:
+                        logger.error("❌ Failed to send year alert to %s: %s", uid, e)
 
         except Exception:
             logger.exception("❌ Year alert job failed")
