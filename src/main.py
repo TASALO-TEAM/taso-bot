@@ -8,6 +8,7 @@ import os
 import time
 from typing import Any
 from telegram import Update
+from telegram.error import NetworkError
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -66,6 +67,13 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
     # Extraer información del error
     error = context.error
     error_type = type(error).__name__
+
+    # Fallos transitorios de red con Telegram (ReadError, Bad Gateway,
+    # TimedOut): PTB ya reintenta el polling solo. Una linea WARNING basta;
+    # la traza y el aviso al grupo de soporte eran ruido (H-013).
+    if isinstance(error, NetworkError):
+        logger.warning("Telegram red: %s: %s", error_type, error)
+        return
 
     # Extraer contexto de usuario si está disponible
     user_id = None
