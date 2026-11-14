@@ -18,7 +18,7 @@ from typing import Set
 
 from src.config import get_settings
 from src.formatters import build_toqueimg_caption
-from src.utils.telegram_errors import chat_inaccesible
+from src.utils.telegram_errors import chat_inaccesible, chat_no_existe
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -282,6 +282,8 @@ async def send_daily_images_job(application: Application):
                 # Chat borrado o bot bloqueado: no es un bug ni se arregla reintentando hoy.
                 logger.warning("⚠️ Imagen omitida: chat %d inaccesible (%s)", user_id, e)
                 _sent_today.add(sent_key)
+                if chat_no_existe(e):
+                    await _desactivar_alerta(user_id)
             else:
                 logger.error("❌ Telegram send failed for user %d (alert_id=%s)", user_id, alert_id, exc_info=True)
             fail_count += 1
@@ -300,6 +302,20 @@ async def send_daily_images_job(application: Application):
         "✅ Daily image dispatch completed: %d sent, %d failed (%.0fms total)",
         sent_count, fail_count, total_duration_ms
     )
+
+
+async def _desactivar_alerta(user_id: int) -> None:
+    """Desactiva la alerta de un chat que ya no existe (reversible: el usuario puede reactivarla)."""
+    try:
+        async with httpx.AsyncClient() as client:
+            await client.post(
+                f"{API_URL}/api/v1/images/alerts/{user_id}/disable",
+                headers=API_HEADERS,
+                timeout=5.0,
+            )
+        logger.warning("🔕 Alerta de imagen desactivada: el chat %d no existe", user_id)
+    except Exception as e:
+        logger.warning("⚠️ No se pudo desactivar la alerta de imagen de %d: %s", user_id, e)
 
 
 def start_daily_dispatcher(application: Application) -> None:

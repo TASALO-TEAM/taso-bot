@@ -12,7 +12,7 @@ from apscheduler.triggers.cron import CronTrigger
 
 from src.config import get_settings
 from src.api_client import TasaloApiClient
-from src.utils.telegram_errors import chat_inaccesible
+from src.utils.telegram_errors import chat_inaccesible, chat_no_existe
 
 logger = logging.getLogger(__name__)
 
@@ -106,6 +106,9 @@ def create_year_scheduler(application) -> AsyncIOScheduler:
                 except Exception as e:
                     if chat_inaccesible(e):
                         logger.warning("⚠️ Aviso anual omitido: chat %s inaccesible (%s)", uid, e)
+                        if chat_no_existe(e):
+                            await api_client.admin_delete_year_subscription(uid)
+                            logger.warning("🔕 Suscripción anual eliminada: el chat %s no existe", uid)
                     else:
                         logger.error("❌ Failed to send year alert to %s: %s", uid, e)
 
