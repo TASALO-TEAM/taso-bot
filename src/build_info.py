@@ -1,4 +1,4 @@
-"""Info de build/versión del bot taso-bot: commit, fecha, hora de arranque.
+﻿"""Info de build/versión del bot taso-bot: commit, fecha, hora de arranque.
 
 Usado por /status (panel ejecutivo, botón "📝 Cambios recientes") y por el
 log de arranque en main.py. Se calcula una sola vez al importar el módulo
@@ -14,7 +14,7 @@ import time
 
 logger = logging.getLogger(__name__)
 
-BOT_VERSION = "0.18.5.0"
+BOT_VERSION = "0.18.6.0"
 
 # Timestamp de arranque del proceso — usado para calcular uptime en /status.
 BOT_START_TIME = time.time()

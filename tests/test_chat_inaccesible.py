@@ -96,3 +96,83 @@ async def test_aviso_anual_con_error_real_sigue_siendo_error(monkeypatch, caplog
     with caplog.at_level(logging.WARNING):
         await job()
     assert [r for r in caplog.records if r.levelno >= logging.ERROR]
+
+
+# --- Desactivacion de suscripciones de chats que no existen (solo "Chat not found") ---
+
+def _con_post(monkeypatch, ok=True):
+    """Envuelve el cliente httpx falso de _preparar para registrar los POST a /disable."""
+    from tests.test_daily_image_sender import _Resp
+    base = img_mod.httpx.AsyncClient
+    llamadas = []
+
+    class _Conn(base):
+        async def post(self, url, **kw):
+            llamadas.append(url)
+            return _Resp({"ok": ok})
+
+    monkeypatch.setattr(img_mod.httpx, "AsyncClient", _Conn)
+    return llamadas
+
+
+@pytest.mark.asyncio
+async def test_imagen_chat_not_found_desactiva_la_alerta(monkeypatch, tmp_path):
+    app = _preparar(monkeypatch, tmp_path, 8, 30, "08:30", HOY_15Z)
+    llamadas = _con_post(monkeypatch)
+    app.bot.send_photo.side_effect = BadRequest("Chat not found")
+    await img_mod.send_daily_images_job(app)
+    assert len(llamadas) == 1 and llamadas[0].endswith("/images/alerts/111/disable")
+
+
+@pytest.mark.asyncio
+async def test_imagen_forbidden_no_desactiva_la_alerta(monkeypatch, tmp_path):
+    app = _preparar(monkeypatch, tmp_path, 8, 30, "08:30", HOY_15Z)
+    llamadas = _con_post(monkeypatch)
+    app.bot.send_photo.side_effect = Forbidden("Forbidden: bot was blocked by the user")
+    await img_mod.send_daily_images_job(app)
+    assert llamadas == []
+
+
+@pytest.mark.asyncio
+async def test_imagen_si_falla_el_disable_no_rompe_el_job(monkeypatch, tmp_path):
+    app = _preparar(monkeypatch, tmp_path, 8, 30, "08:30", HOY_15Z)
+    from tests.test_daily_image_sender import _Resp
+    base = img_mod.httpx.AsyncClient
+
+    class _Roto(base):
+        async def post(self, url, **kw):
+            raise RuntimeError("api caida")
+
+    monkeypatch.setattr(img_mod.httpx, "AsyncClient", _Roto)
+    app.bot.send_photo.side_effect = BadRequest("Chat not found")
+    await img_mod.send_daily_images_job(app)  # no debe lanzar
+    assert len(img_mod._sent_today) == 1
+
+
+def _preparar_anual_con_borrado(monkeypatch, send):
+    borrados = []
+    job = _preparar_anual(monkeypatch, send)
+    api = year_mod.TasaloApiClient
+
+    class _Api2(api):
+        async def admin_delete_year_subscription(self, user_id):
+            borrados.append(user_id)
+            return {"ok": True}
+
+    monkeypatch.setattr(year_mod, "TasaloApiClient", _Api2)
+    return job, borrados
+
+
+@pytest.mark.asyncio
+async def test_aviso_anual_chat_not_found_borra_la_suscripcion(monkeypatch):
+    job, borrados = _preparar_anual_con_borrado(monkeypatch, AsyncMock(side_effect=BadRequest("Chat not found")))
+    await job()
+    assert borrados == [111]
+
+
+@pytest.mark.asyncio
+async def test_aviso_anual_forbidden_no_borra_la_suscripcion(monkeypatch):
+    job, borrados = _preparar_anual_con_borrado(
+        monkeypatch, AsyncMock(side_effect=Forbidden("Forbidden: bot was blocked by the user")))
+    await job()
+    assert borrados == []
