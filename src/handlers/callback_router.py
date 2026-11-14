@@ -31,6 +31,7 @@ ROUTE_MAP: dict[str, str] = {
     "tasalo":   "_handle_tasalo",
     "toque":    "_handle_tasalo",
     "bcc":      "_handle_tasalo",
+    "fuel":     "_handle_tasalo",
     "toqueimg": "_handle_toqueimg",
     "alert":    "_handle_alert",
     "p":        "_handle_p",
