@@ -29,8 +29,12 @@ API_HEADERS = {"X-API-Key": settings.tasalo_admin_key} if settings.tasalo_admin_
 CUBA_TZ = ZoneInfo("America/Havana")
 
 # Time constants (in Cuba time)
-IMAGE_CAPTURE_TIME = "08:30"  # Debe coincidir con el cron de taso-api (scheduler.py: 8:30 America/Havana)
+IMAGE_CAPTURE_TIME = "08:15"  # Debe coincidir con el cron de taso-api (scheduler.py: 8:15 America/Havana)
 MIN_SEND_TIME = "07:30"       # Earliest time to send images (7:30 AM Cuba)
+# taso-api reintenta la captura cada 5 min hasta ~35 min despues de la hora fija si
+# El Toque aun no publico la imagen nueva; los avisos que dependen de la captura
+# siguen siendo validos ese mismo margen (+5 min de holgura).
+CAPTURE_GRACE_MIN = 40
 
 # Global scheduler instance
 scheduler = AsyncIOScheduler()
@@ -123,9 +127,15 @@ async def send_daily_images_job(application: Application):
             # Allow 5-minute window
             # La imagen del dia no existe hasta que taso-api la captura: un aviso
             # programado antes se envia justo despues de la captura, nunca con la de ayer.
-            effective_minutes = max(alert_hour * 60 + alert_min, capture_minutes + 1)
-            time_diff = abs((current_hour * 60 + current_min) - effective_minutes)
-            if time_diff <= 5:  # Within 5 minutes
+            alert_minutes = alert_hour * 60 + alert_min
+            effective_minutes = max(alert_minutes, capture_minutes + 1)
+            now_minutes = current_hour * 60 + current_min
+            time_diff = abs(now_minutes - effective_minutes)
+            # Un aviso cuya hora es anterior a la captura depende de ella: si la imagen
+            # de hoy llega tarde (taso-api reintenta), aun se envia dentro del margen.
+            depende_de_captura = alert_minutes <= capture_minutes + 1
+            tarde_pero_valido = depende_de_captura and 0 < now_minutes - effective_minutes <= CAPTURE_GRACE_MIN
+            if time_diff <= 5 or tarde_pero_valido:
                 matching_alerts.append(alert)
         except (ValueError, AttributeError) as e:
             logger.warning("⚠️ Invalid alert_time format: %s (alert: %s)", alert_time, alert.get("id"))
@@ -140,7 +150,7 @@ async def send_daily_images_job(application: Application):
     
     # 3. Obtener última imagen capturada por el scheduler de taso-api
     # (no capturamos aquí — la captura diaria ocurre en taso-api vía cron
-    # fijo a las 8:30 hora de Cuba, timezone "America/Havana" — ver
+    # fijo a las 8:15 hora de Cuba, timezone "America/Havana" — ver
     # init_image_capture_scheduler() en taso-api/src/services/scheduler.py.
     # Independiente de si algún usuario usó /toqueimg ese día.)
     logger.info("📸 Obteniendo última imagen capturada...")
