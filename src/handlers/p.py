@@ -1,7 +1,7 @@
 # src/handlers/p.py
 """Handler para comando /p — consulta de precios de criptomonedas.
 
-Implementa la funcionalidad de BBAlert /p en taso-bot:
+Funcionalidad:
 - Consulta CoinMarketCap (primario) o CryptoCompare/CoinGecko (fallback)
 - Muestra precio, high/low 24h, cambios %, precio en ETH/BTC y, si hay
   datos de CoinGecko, el bloque extendido (ATH/ATL, supply, categoría)

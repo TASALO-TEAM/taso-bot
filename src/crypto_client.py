@@ -2,7 +2,7 @@
 """Cliente asíncrono para obtener datos de criptomonedas desde CoinMarketCap
 con fallback a CryptoCompare.
 
-Implementa la misma lógica de BBAlert /p: consulta CMC con múltiples símbolos
+Para /p: consulta CMC con múltiples símbolos
 (moneda + ETH + BTC) y obtiene high/low desde Binance con fallback a CC.
 """
 

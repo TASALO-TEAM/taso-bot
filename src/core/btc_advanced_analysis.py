@@ -1,5 +1,5 @@
 # src/core/btc_advanced_analysis.py
-# Copia literal de BBAlert — motor de análisis técnico profesional
+# Motor de análisis técnico profesional
 
 import numpy as np
 import pandas as pd
