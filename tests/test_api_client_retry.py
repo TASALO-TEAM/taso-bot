@@ -122,21 +122,51 @@ async def test_get_with_retry_succeeds_on_second_attempt():
 
 
 @pytest.mark.asyncio
-async def test_post_with_retry_retries_on_timeout():
-    """_post_with_retry should retry 3 times on TimeoutException."""
+@pytest.mark.parametrize(
+    "exc",
+    [httpx.ConnectError("refused"), httpx.ConnectTimeout("connect timeout")],
+)
+async def test_post_with_retry_retries_when_request_never_left(exc):
+    """POST se reintenta 3 veces solo si la peticion nunca salio (conexion)."""
     from src.api_client import TasaloApiClient
 
     client = TasaloApiClient(api_url="http://test:8000", timeout=10)
 
     mock_http_client = AsyncMock()
     mock_http_client.is_closed = False
-    mock_http_client.post.side_effect = httpx.TimeoutException("Timeout")
+    mock_http_client.post.side_effect = exc
     client._client = mock_http_client
 
-    with pytest.raises(httpx.TimeoutException):
+    with pytest.raises(type(exc)):
         await client._post_with_retry("http://test:8000/api/v1/admin/refresh")
 
     assert mock_http_client.post.call_count == 3
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "exc",
+    [
+        httpx.ReadTimeout("read timeout"),
+        httpx.WriteTimeout("write timeout"),
+        httpx.TimeoutException("timeout"),
+    ],
+)
+async def test_post_with_retry_does_not_retry_when_server_may_have_processed(exc):
+    """H-035: un timeout tras enviar el POST no se reintenta (evita duplicados)."""
+    from src.api_client import TasaloApiClient
+
+    client = TasaloApiClient(api_url="http://test:8000", timeout=10)
+
+    mock_http_client = AsyncMock()
+    mock_http_client.is_closed = False
+    mock_http_client.post.side_effect = exc
+    client._client = mock_http_client
+
+    with pytest.raises(type(exc)):
+        await client._post_with_retry("http://test:8000/api/v1/tickets")
+
+    assert mock_http_client.post.call_count == 1
 
 
 @pytest.mark.asyncio
