@@ -55,29 +55,26 @@ def _clear_cache():
 
 def test_build_qvapay_message_incluye_todas_las_monedas():
     mensaje = build_qvapay_message(RATES_COMPLETAS)
-    assert "Tasa de cambio promedio P2P QvaPay.com x USD:" in mensaje
-    assert "💰 CUP: $977.73" in mensaje
-    assert "💵 MLC: $1.43" in mensaje
-    assert "💶 TROPIPAY: $0.91" in mensaje
-    assert "📱 ETECSA: $405.19" in mensaje
-    assert "🏦 ZELLE: $1.01" in mensaje
-    assert "💷 CLASICA: $1.05" in mensaje
-    assert "💸 BOLSATM: $965.03" in mensaje
-    assert "🏦 BANDECPREPAGO: $1.10" in mensaje
-    assert "Última actualización:" in mensaje
+    assert "QVAPAY P2P" in mensaje
+    assert "Promedio x USD" in mensaje
+    for label, valor in RATES_COMPLETAS.items():
+        if valor is not None:
+            assert f"*{label}:*   ${valor:,.2f}" in mensaje
+    assert "qvapay.com" in mensaje
 
 
-def test_build_qvapay_message_moneda_sin_datos_muestra_cero():
-    """None (sin operaciones recientes / fallo puntual) se muestra como $0.00."""
+def test_build_qvapay_message_omite_moneda_sin_datos():
+    """None (sin operaciones recientes / fallo puntual) se omite, no se muestra como $0.00."""
     mensaje = build_qvapay_message(RATES_COMPLETAS)
-    assert "🏦 SBERBANK: $0.00" in mensaje
+    assert "SBERBANK" not in mensaje
+    assert "$0.00" not in mensaje
 
 
 def test_build_qvapay_message_orden_sigue_qvapay_coins():
     mensaje = build_qvapay_message(RATES_COMPLETAS)
-    posiciones = [mensaje.index(f"{label}:") for label in QVAPAY_COINS]
+    labels = [l for l in QVAPAY_COINS if RATES_COMPLETAS.get(l) is not None]
+    posiciones = [mensaje.index(f"*{label}:*") for label in labels]
     assert posiciones == sorted(posiciones)
-
 
 # ── QvaPayClient ──
 
@@ -163,7 +160,7 @@ async def test_qp_command_envia_mensaje_con_teclado():
 
     update.message.reply_text.assert_called_once()
     mensaje = update.message.reply_text.call_args[0][0]
-    assert "QvaPay.com" in mensaje
+    assert "qvapay.com" in mensaje
     keyboard = update.message.reply_text.call_args.kwargs["reply_markup"]
     assert keyboard.inline_keyboard[0][0].callback_data == "qp_refresh"
 

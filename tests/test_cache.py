@@ -93,4 +93,5 @@ class TestSimpleCache:
         from src.cache import cache
 
         assert isinstance(cache, SimpleCache)
-        assert cache.size() == 0  # Fresh instance
+        from src.cache import cache as otra
+        assert cache is otra  # instancia unica (no asumir vacia: otros tests la usan)

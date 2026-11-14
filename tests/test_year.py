@@ -163,7 +163,7 @@ async def test_y_command_add_mode_success():
         "context": {"current": 132, "limit": 365, "year": 2026, "is_extra": False},
         "quote_id": 132,
     }
-    with patch("src.handlers.y._year_api") as mock_api:
+    with patch("src.handlers.y._year_api") as mock_api, patch("src.handlers.y.is_admin", return_value=True):
         mock_api.get_year_state = _amock(None)
         mock_api.get_year_subscription = _amock(None)
         mock_api.add_year_quote = _amock(mock_add_result)
@@ -195,7 +195,7 @@ async def test_y_command_add_mode_extra_year():
         "context": {"current": 3, "limit": 365, "year": 2026, "is_extra": True},
         "quote_id": 368,
     }
-    with patch("src.handlers.y._year_api") as mock_api:
+    with patch("src.handlers.y._year_api") as mock_api, patch("src.handlers.y.is_admin", return_value=True):
         mock_api.get_year_state = _amock(None)
         mock_api.get_year_subscription = _amock(None)
         mock_api.add_year_quote = _amock(mock_add_result)
@@ -217,7 +217,7 @@ async def test_y_command_add_mode_extra_year():
 @pytest.mark.asyncio
 async def test_y_command_add_duplicate():
     """y_command con /y add detecta frase duplicada."""
-    with patch("src.handlers.y._year_api") as mock_api:
+    with patch("src.handlers.y._year_api") as mock_api, patch("src.handlers.y.is_admin", return_value=True):
         mock_api.get_year_state = _amock(None)
         mock_api.get_year_subscription = _amock(None)
         mock_api.add_year_quote = _amock({
@@ -234,6 +234,23 @@ async def test_y_command_add_duplicate():
         # Last call is the duplicate error
         last = update.message.reply_text.call_args[0][0]
         assert "ya existe" in last
+
+
+@pytest.mark.asyncio
+async def test_y_command_add_requires_admin():
+    """/y add es solo para administradores: un usuario normal no llega a la API."""
+    with patch("src.handlers.y._year_api") as mock_api, patch("src.handlers.y.is_admin", return_value=False):
+        mock_api.get_year_state = _amock(None)
+        mock_api.get_year_subscription = _amock(None)
+        mock_api.add_year_quote = _amock(None)
+
+        update = _make_update("/y add frase de prueba")
+        ctx = MagicMock(spec=ContextTypes)
+        ctx.args = ["add", "frase", "de", "prueba"]
+        await y_command(update, ctx)
+
+        mock_api.add_year_quote.assert_not_called()
+        assert "administradores" in update.message.reply_text.call_args[0][0]
 
 
 @pytest.mark.asyncio
@@ -258,7 +275,7 @@ async def test_y_command_add_too_short():
 async def test_year_sub_callback_set_hour():
     """year_sub_callback activa suscripción al hacer clic en hora."""
     with patch("src.handlers.y._year_api") as mock_api:
-        mock_api.admin_set_year_subscription = _amock({"ok": True, "user_id": 12345, "hour": 6})
+        mock_api.set_year_subscription = _amock({"ok": True, "user_id": 12345, "hour": 6})
         mock_api.get_year_subscription = _amock({"ok": True, "id": 1, "user_id": 12345, "hour": 6})
 
         update = _make_callback_update("year_sub_6")
@@ -267,14 +284,14 @@ async def test_year_sub_callback_set_hour():
         ctx.bot.send_message = AsyncMock()
         await year_sub_callback(update, ctx)
 
-        mock_api.admin_set_year_subscription.assert_called_once_with(12345, 6)
+        mock_api.set_year_subscription.assert_called_once_with(12345, 6)
 
 
 @pytest.mark.asyncio
 async def test_year_sub_callback_off():
     """year_sub_callback desactiva suscripción al clicar off."""
     with patch("src.handlers.y._year_api") as mock_api:
-        mock_api.admin_delete_year_subscription = _amock({"ok": True})
+        mock_api.delete_year_subscription = _amock({"ok": True})
         mock_api.get_year_subscription = _amock(None)
 
         update = _make_callback_update("year_sub_off")
@@ -283,7 +300,7 @@ async def test_year_sub_callback_off():
         ctx.bot.send_message = AsyncMock()
         await year_sub_callback(update, ctx)
 
-        mock_api.admin_delete_year_subscription.assert_called_once_with(12345)
+        mock_api.delete_year_subscription.assert_called_once_with(12345)
 
 
 @pytest.mark.asyncio
@@ -294,7 +311,7 @@ async def test_year_sub_callback_api_failure():
     (not two).  The single call carries the error visual notification.
     """
     with patch("src.handlers.y._year_api") as mock_api:
-        mock_api.admin_set_year_subscription = _amock(None)
+        mock_api.set_year_subscription = _amock(None)
 
         update = _make_callback_update("year_sub_9")
         ctx = MagicMock(spec=ContextTypes)
