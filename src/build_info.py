@@ -1,4 +1,4 @@
-﻿"""Info de build/versión del bot taso-bot: commit, fecha, hora de arranque.
+"""Info de build/versión del bot taso-bot: commit, fecha, hora de arranque.
 
 Usado por /status (panel ejecutivo, botón "📝 Cambios recientes") y por el
 log de arranque en main.py. Se calcula una sola vez al importar el módulo
