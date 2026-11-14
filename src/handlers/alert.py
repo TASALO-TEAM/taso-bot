@@ -17,12 +17,14 @@ Callbacks inline (prefijo "alert_"):
 """
 
 import logging
+import math
 import secrets
 import time
 from datetime import datetime, timezone
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from telegram.constants import ParseMode
+from telegram.helpers import escape_markdown
 
 from src.stats_tracker import track_command_usage
 from src.handlers.p import get_crypto_client
@@ -152,13 +154,14 @@ async def alert_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         return
 
     coin = context.args[0].upper()
+    coin_md = escape_markdown(coin, version=1)  # texto del usuario: escapar antes de Markdown
     try:
         price = float(context.args[1].replace(",", ""))
-        if price <= 0:
+        if not math.isfinite(price) or price <= 0:
             raise ValueError
     except ValueError:
         await update.message.reply_text(
-            f"⚠️ Precio inválido: `{context.args[1]}`\nDebe ser un número mayor a 0.",
+            "⚠️ Precio inválido.\nDebe ser un número mayor a 0.",
             parse_mode=ParseMode.MARKDOWN,
         )
         return
@@ -178,7 +181,7 @@ async def alert_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
     if current_price is None:
         await update.message.reply_text(
-            f"❌ No se pudo obtener el precio actual de *{coin}*.\n"
+            f"❌ No se pudo obtener el precio actual de *{coin_md}*.\n"
             f"Verifica que el símbolo sea correcto e inténtalo de nuevo.",
             parse_mode=ParseMode.MARKDOWN,
         )
