@@ -37,7 +37,7 @@ class TestToqueimgButtonStyles:
 
         # First button should be "🔔 Activar alerta" with success style
         enable_btn = keyboard[0][0]
-        assert enable_btn.text == "🔔 Activar alerta (7:15 AM)"
+        assert enable_btn.text == "🔔 Activar alerta (7:30 AM)"
         assert enable_btn.style == "success"
 
     def test_refresh_button_has_primary_style(self):
@@ -66,17 +66,22 @@ class TestStartButtonStyles:
         assert tasalo_btn.text == "📊 Tasalo"
         assert tasalo_btn.style == "primary"
 
-    def test_toqueimg_button_has_primary_style(self):
-        """ToqueImg button should have 'primary' style (blue)."""
+    def test_toqueimg_button_not_in_start_keyboard(self):
+        """ToqueImg fue retirado del /start (funcion en mantenimiento)."""
         from src.handlers.start import build_start_keyboard
 
         keyboard = build_start_keyboard()
+        callbacks = [b.callback_data or '' for row in keyboard.inline_keyboard for b in row]
+        assert not any('toqueimg' in c for c in callbacks)
 
-        # ToqueImg button is at keyboard.inline_keyboard[2][0]
-        toqueimg_btn = keyboard.inline_keyboard[2][0]
-        assert toqueimg_btn.text == "📸 ToqueImg"
-        assert toqueimg_btn.style == "primary"
+    def test_p_button_has_primary_style(self):
+        """Precio Cripto /p es la feature destacada (azul)."""
+        from src.handlers.start import build_start_keyboard
 
+        keyboard = build_start_keyboard()
+        p_btn = keyboard.inline_keyboard[2][0]
+        assert p_btn.callback_data == "start_p_help"
+        assert p_btn.style == "primary"
 
 class TestTasaloButtonStyles:
     """Test button styles in tasalo keyboard."""
