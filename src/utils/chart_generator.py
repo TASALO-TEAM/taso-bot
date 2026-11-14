@@ -1,6 +1,5 @@
 # src/utils/chart_generator.py
-# Copia literal de BBAlert - generador de gráficos TradingView-style
-# No modificaciones necesarias para integración en taso-bot
+# Generador de gráficos estilo TradingView
 
 import io
 import pandas as pd
@@ -350,7 +349,7 @@ def generate_ohlcv_chart(
         )
 
         # ── 12. WATERMARK ─────────────────────────────────────
-        fig.text(0.03, 0.015, 'BitBreadAlert',
+        fig.text(0.03, 0.015, 'TASALO Bot',
                  color='#4A90D9', fontsize=9, fontweight='bold',
                  ha='left', va='bottom', alpha=0.55,
                  bbox=dict(boxstyle='round,pad=0.3',

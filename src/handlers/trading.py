@@ -1,6 +1,5 @@
 # src/handlers/trading.py
 # Handler para comandos /graf, /p, /mk y callbacks relacionados
-# Adaptado de BBAlert con integración en taso-bot
 
 import asyncio
 import requests

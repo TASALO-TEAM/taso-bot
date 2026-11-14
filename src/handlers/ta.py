@@ -1,5 +1,5 @@
 # src/handlers/ta.py
-# Handler para comando /ta — copia literal de BBAlert mejorada
+# Handler para comando /ta
 # Provee análisis técnico profesional con indicadores y mensajes en español.
 
 import asyncio
@@ -16,7 +16,6 @@ from telegram.constants import ParseMode
 from tradingview_ta import TA_Handler, Interval
 
 from src.core.ai_logic import get_groq_crypto_analysis
-from src.utils.subscription_manager import registrar_uso_comando
 from src.services.ads_manager import get_ad_block, safe_append
 from src.handlers.alert import cache_alert_levels
 # I18n removed – using Spanish strings directly
@@ -123,14 +122,10 @@ def get_tradingview_analysis_enhanced(symbol_pair, interval_str):
     }
 
 async def ta_command(update: Update, context: ContextTypes.DEFAULT_TYPE, override_source=None, override_args=None, skip_binance_check=False, force_new_message=False):
-    user_id = update.effective_user.id
     is_callback = (update.callback_query is not None) and not force_new_message
     message = update.effective_message
     if force_new_message and update.callback_query:
         message = update.callback_query.message
-
-    if not is_callback:
-        registrar_uso_comando(user_id, 'ta')
 
     if override_args:
         symbol_base, pair, timeframe = override_args
