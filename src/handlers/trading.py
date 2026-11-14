@@ -11,6 +11,7 @@ from io import BytesIO
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from telegram.constants import ParseMode
+from telegram.helpers import escape_markdown
 from tradingview_ta import TA_Handler, Interval
 from datetime import timedelta, datetime
 
@@ -231,10 +232,11 @@ async def _do_graf(
 ):
     user_id = update.effective_user.id
     symbol = f"{base}{quote}"
+    symbol_md = escape_markdown(symbol, version=1)  # texto del usuario: escapar antes de Markdown
     msg_wait = None
     if not is_callback:
         msg_wait = await update.message.reply_text(
-            f"📊 _Generando gráfico de *{symbol}* ({timeframe})..._",
+            f"📊 _Generando gráfico de *{symbol_md}* ({timeframe})..._",
             parse_mode=ParseMode.MARKDOWN
         )
     loop = asyncio.get_running_loop()
@@ -247,7 +249,7 @@ async def _do_graf(
 
     if df is None or df.empty:
         err_msg = (
-            f"❌ No se encontraron datos para *{symbol}*\n"
+            f"❌ No se encontraron datos para *{symbol_md}*\n"
             f"No está disponible en Binance, KuCoin ni Bybit.\n\n"
             f"Verifica que el par sea correcto (ej: `SOLUSDT`, `ETHBTC`)."
         )

@@ -15,6 +15,7 @@ import time
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from telegram.constants import ParseMode
+from telegram.helpers import escape_markdown
 
 from src.crypto_client import CryptoApiClient
 from src.formatters import build_crypto_message, SEPARATOR_THICK
@@ -219,6 +220,7 @@ async def p_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     symbol = context.args[0].upper()
+    symbol_md = escape_markdown(symbol, version=1)  # texto del usuario: escapar antes de Markdown
     logger.debug("User %d: Querying /p for symbol '%s'", user_id, symbol)
 
     # 2. Mostrar "escribiendo..." si es mensaje nuevo (no callback refresh)
@@ -239,7 +241,7 @@ async def p_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     if not datos:
         logger.warning("⚠️ No data returned for %s (%.0fms)", symbol, fetch_duration_ms)
-        error_msg = f"⚠️ Error obteniendo datos para *{symbol}*. Las APIs pueden estar temporalmente inaccesibles. Intenta de nuevo en un momento."
+        error_msg = f"⚠️ Error obteniendo datos para *{symbol_md}*. Las APIs pueden estar temporalmente inaccesibles. Intenta de nuevo en un momento."
         if update.callback_query:
             await update.callback_query.edit_message_text(
                 error_msg, parse_mode=ParseMode.MARKDOWN
@@ -257,7 +259,7 @@ async def p_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if datos.get("not_found"):
         logger.info("❌ Símbolo %s no existe en ninguna API (%.0fms)", symbol, fetch_duration_ms)
         not_found_msg = (
-            f"❌ *{symbol}* no se encontró en ninguna fuente de datos.\n\n"
+            f"❌ *{symbol_md}* no se encontró en ninguna fuente de datos.\n\n"
             f"Verifica que el símbolo sea correcto o prueba con otro.\n"
             f"_Ejemplo: `/p BTC`, `/p ETH`, `/p SOL`_"
         )
@@ -284,7 +286,7 @@ async def p_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         mensaje = build_crypto_message(datos)
     except Exception as e:
         logger.error("❌ Error formatting crypto message for %s: %s", symbol, e, exc_info=True)
-        error_msg = f"😕 Error formateando datos para *{symbol}*."
+        error_msg = f"😕 Error formateando datos para *{symbol_md}*."
         if update.callback_query:
             await update.callback_query.edit_message_text(error_msg, parse_mode=ParseMode.MARKDOWN)
         else:

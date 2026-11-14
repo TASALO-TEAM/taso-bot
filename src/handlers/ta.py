@@ -13,6 +13,7 @@ from io import BytesIO
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from telegram.constants import ParseMode
+from telegram.helpers import escape_markdown
 from tradingview_ta import TA_Handler, Interval
 
 from src.core.ai_logic import get_groq_crypto_analysis
@@ -165,7 +166,7 @@ async def ta_command(update: Update, context: ContextTypes.DEFAULT_TYPE, overrid
     else:
         if not is_callback:
             msg_wait = await message.reply_text(
-                f"⏳ _Analizando {full_symbol} ({timeframe})..._",
+                f"⏳ _Analizando {escape_markdown(f'{full_symbol} ({timeframe})', version=1)}..._",
                 parse_mode=ParseMode.MARKDOWN
             )
 
@@ -251,7 +252,7 @@ async def ta_command(update: Update, context: ContextTypes.DEFAULT_TYPE, overrid
                 val = final_data.get(k, 0) or 0
                 final_data[f'{k}_list'] = [val, 0, 0]
         else:
-            err_txt = f"❌ No se encontraron datos para {full_symbol} ni en Binance ni en TV."
+            err_txt = f"❌ No se encontraron datos para {escape_markdown(full_symbol, version=1)} ni en Binance ni en TV."
             if is_callback:
                 await update.callback_query.answer("❌ Datos no encontrados", show_alert=True)
             else:
