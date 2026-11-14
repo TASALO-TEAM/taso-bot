@@ -107,7 +107,9 @@ class TasaloApiClient:
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=2, max=8),
-        retry=retry_if_exception_type((httpx.TimeoutException, httpx.ConnectError)),
+        # POST no es idempotente: solo se reintenta si la peticion nunca salio
+        # (ConnectError/ConnectTimeout/PoolTimeout). Un ReadTimeout puede haber sido procesado.
+        retry=retry_if_exception_type((httpx.ConnectTimeout, httpx.ConnectError, httpx.PoolTimeout)),
         before_sleep=before_sleep_log(logger, logging.WARNING),
         reraise=True,
     )
