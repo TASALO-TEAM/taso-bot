@@ -100,3 +100,26 @@ async def test_aviso_posterior_a_la_captura_sigue_a_su_hora_y_no_se_duplica(monk
     await mod.send_daily_images_job(app)
     await mod.send_daily_images_job(app)
     app.bot.send_photo.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_captura_tardia_aun_envia_el_aviso_de_las_730_dentro_del_margen(monkeypatch, tmp_path):
+    # taso-api reintenta hasta ~8:50 si El Toque tarda; a las 8:45 la imagen ya es de hoy.
+    app = _preparar(monkeypatch, tmp_path, 8, 45, "07:30", HOY_15Z)
+    await mod.send_daily_images_job(app)
+    app.bot.send_photo.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_aviso_de_las_730_no_sale_pasado_el_margen_de_la_captura(monkeypatch, tmp_path):
+    app = _preparar(monkeypatch, tmp_path, 9, 0, "07:30", HOY_15Z)
+    await mod.send_daily_images_job(app)
+    app.bot.send_photo.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_aviso_a_hora_fija_posterior_no_se_envia_tarde(monkeypatch, tmp_path):
+    # El margen extra es solo para avisos que dependen de la captura, no para los de 9:00.
+    app = _preparar(monkeypatch, tmp_path, 9, 30, "09:00", HOY_15Z)
+    await mod.send_daily_images_job(app)
+    app.bot.send_photo.assert_not_called()
