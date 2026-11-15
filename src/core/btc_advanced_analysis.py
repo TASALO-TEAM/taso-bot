@@ -3,7 +3,7 @@
 
 import numpy as np
 import pandas as pd
-import pandas_ta as ta
+from src.core import indicators as ind
 from typing import Dict, Tuple, List
 
 class BTCAdvancedAnalyzer:
@@ -25,52 +25,22 @@ class BTCAdvancedAnalyzer:
     def calculate_indicators(self):
         """Calcula indicadores y RENOMBRA las columnas para evitar errores de clave."""
 
+        df = self.df
+        h, l, c = df['high'], df['low'], df['close']
+
         for length in [9, 20, 50, 200]:
-            ema = ta.ema(self.df['close'], length=length)
-            if ema is not None:
-                self.df[f'EMA_{length}'] = ema
-            else:
-                self.df[f'EMA_{length}'] = self.df['close']
+            ema = ind.ema(c, length)
+            df[f'EMA_{length}'] = ema if ema.notna().any() else c
 
-        self.df['RSI'] = ta.rsi(self.df['close'], length=14)
+        df['RSI'] = ind.rsi(c, 14)
+        df['STOCH_K'], df['STOCH_D'] = ind.stoch(h, l, c, k=14, d=3, smooth_k=3)
+        df['CCI'] = ind.cci(h, l, c, 20)
+        df['AO'] = ind.ao(h, l)
+        df['ADX'] = ind.adx(h, l, c, 14)
+        df['MACD_LINE'], df['MACD_HIST'], df['MACD_SIGNAL'] = ind.macd(c, 12, 26, 9)
+        df['ATR'] = ind.atr(h, l, c, 14)
 
-        stoch = ta.stoch(self.df['high'], self.df['low'], self.df['close'], k=14, d=3, smooth_k=3)
-        if stoch is not None:
-            self.df['STOCH_K'] = stoch.iloc[:, 0]
-            self.df['STOCH_D'] = stoch.iloc[:, 1]
-        else:
-            self.df['STOCH_K'] = 50
-            self.df['STOCH_D'] = 50
-
-        cci = ta.cci(self.df['high'], self.df['low'], self.df['close'], length=20)
-        self.df['CCI'] = cci if cci is not None else 0
-
-        ao = ta.ao(self.df['high'], self.df['low'])
-        self.df['AO'] = ao if ao is not None else 0
-
-        adx_df = ta.adx(self.df['high'], self.df['low'], self.df['close'], length=14)
-        if adx_df is not None:
-            self.df['ADX'] = adx_df.iloc[:, 0]
-        else:
-            self.df['ADX'] = 0
-
-        macd = ta.macd(self.df['close'], fast=12, slow=26, signal=9)
-        if macd is not None:
-            self.df['MACD_LINE'] = macd.iloc[:, 0]
-            self.df['MACD_HIST'] = macd.iloc[:, 1]
-            self.df['MACD_SIGNAL'] = macd.iloc[:, 2]
-        else:
-            self.df['MACD_HIST'] = 0
-
-        self.df['ATR'] = ta.atr(self.df['high'], self.df['low'], self.df['close'], length=14)
-
-        self.df.fillna(0, inplace=True)
-
-        ichimoku = ta.ichimoku(self.df['high'], self.df['low'], self.df['close'])[0]
-        if ichimoku is not None:
-            self.df['KIJUN_SEN'] = ichimoku.iloc[:, 1]
-        else:
-            self.df['KIJUN_SEN'] = self.df['close']
+        df.fillna(0, inplace=True)
 
     def get_current_values(self):
         """Devuelve la última fila como diccionario asegurando tipos nativos (no numpy)."""

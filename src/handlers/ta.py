@@ -8,7 +8,6 @@ import requests
 import json
 import pytz
 import pandas as pd
-import pandas_ta as ta
 from io import BytesIO
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
@@ -21,6 +20,7 @@ from src.services.ads_manager import get_ad_block, safe_append
 from src.handlers.alert import cache_alert_levels
 # I18n removed – using Spanish strings directly
 from src.core.btc_advanced_analysis import BTCAdvancedAnalyzer
+from src.core import indicators as ind
 
 logger = logging.getLogger(__name__)
 
@@ -63,12 +63,13 @@ def calculate_table_indicators(df):
         except (KeyError, TypeError):
             df[name] = 0.0
 
-    safe_ind('RSI', df.ta.rsi(length=14))
-    safe_ind('MFI', df.ta.mfi(length=14))
-    safe_ind('CCI', df.ta.cci(length=20))
-    safe_ind('ADX', df.ta.adx(length=14)['ADX_14'])
-    safe_ind('WILLR', df.ta.willr(length=14))
-    safe_ind('OBV', df.ta.obv())
+    h, l, c, v = df['high'], df['low'], df['close'], df['volume']
+    safe_ind('RSI', ind.rsi(c, 14))
+    safe_ind('MFI', ind.mfi(h, l, c, v, 14))
+    safe_ind('CCI', ind.cci(h, l, c, 20))
+    safe_ind('ADX', ind.adx(h, l, c, 14))
+    safe_ind('WILLR', ind.willr(h, l, c, 14))
+    safe_ind('OBV', ind.obv(c, v))
 
     return df.iloc[-3:]
 

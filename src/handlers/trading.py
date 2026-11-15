@@ -6,7 +6,6 @@ import requests
 import json
 import pytz
 import pandas as pd
-import pandas_ta as ta
 from io import BytesIO
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
