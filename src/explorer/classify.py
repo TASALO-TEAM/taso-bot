@@ -154,6 +154,9 @@ def _hive_name(n: str) -> bool:
     return 3 <= len(n) <= 16 and all(len(p) >= 3 and _HIVE_SEG.match(p) for p in n.split("."))
 
 
+es_nombre_hive = _hive_name
+
+
 def _limpiar(texto: str) -> str | None:
     if not isinstance(texto, str):
         return None
