@@ -53,6 +53,7 @@ _Ejemplos: /p btc · /p eth · /p hive · /news btc_
 /ta <par> — Análisis técnico
 /graf <par> — Gráfico con indicadores
 /mk — Resumen del mercado
+/mapa — Mapa de calor cripto o forex
 _Ejemplos: /ta btcusdt · /graf ethusdt_
 
 🔔 *Alertas*
@@ -162,6 +163,17 @@ Uso: `/mk`
 Vista rápida del mercado cripto: variación de las principales monedas y tendencia general.
 
 _Para un panorama más completo con narrativa de IA, usá `/spl`._""",
+
+    "mapa": """🗺 */mapa — Mapa de calor del mercado*
+
+Uso: `/mapa` · `/mapa cripto 7d` · `/mapa forex`
+
+Imagen con el tamaño de cada cripto por capitalización y el color por variación (24h o 7 días), o las divisas principales contra USD. Incluye un resumen breve calculado con los mismos datos.
+
+Botones:
+🪙 Cripto 24h · 🪙 Cripto 7d · 💱 Forex · 🔄 Actualizar
+
+_El resultado es el mismo para todos y se guarda unos minutos en caché._""",
 
     "spl": """🌍 */spl — Spotlight del mercado*
 
