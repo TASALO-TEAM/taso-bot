@@ -80,3 +80,20 @@ def test_el_color_de_la_celda_se_pinta_en_su_zona():
     datos = render_mapa([Celda("UNO", 1.0, 5.0)], **_args())
     img = Image.open(io.BytesIO(datos)).convert("RGB")
     assert img.getpixel((6, render.CABECERA + 6)) == color_variacion(5.0, 5.0)
+
+
+def test_fuente_del_mapa_dibuja_acentos():
+    """La fuente por defecto de Pillow no trae ñ/ó/í y las pinta como recuadro."""
+    from src.heatmap import render
+
+    fuente = render._fuente(15)
+    sin_glifo = fuente.getmask("\uffff").getbbox()
+    for c in "ñóíáé":
+        assert fuente.getmask(c).getbbox() != sin_glifo, c
+
+
+def test_colores_vivos_saturados_en_el_tope_y_visibles_con_poca_variacion():
+    assert color_variacion(5.0, 5.0)[1] >= 190  # verde pleno
+    assert color_variacion(-5.0, 5.0)[0] >= 230  # rojo pleno
+    r, g, b = color_variacion(1.0, 5.0)  # +1 % ya se distingue del neutro
+    assert g - r >= 55

@@ -4,6 +4,7 @@ import io
 from dataclasses import dataclass
 from functools import lru_cache
 from math import isfinite
+from pathlib import Path
 from typing import Optional
 
 from PIL import Image, ImageDraw, ImageFont
@@ -17,13 +18,14 @@ PIE = 28
 GAP = 1  # separacion entre celdas (px)
 
 COLOR_FONDO = (18, 20, 26)
-COLOR_NEUTRO = (68, 71, 78)
+COLOR_NEUTRO = (66, 70, 82)
 COLOR_SIN_DATO = (90, 90, 90)
-COLOR_VERDE = (22, 163, 74)
-COLOR_ROJO = (220, 38, 38)
+COLOR_VERDE = (22, 200, 90)
+COLOR_ROJO = (240, 50, 55)
 COLOR_TEXTO = (240, 242, 245)
 COLOR_TENUE = (150, 156, 168)
 MARCA = "TASALO Bot"
+FUENTE_MARCA = Path(__file__).resolve().parents[2] / "fonts" / "SpaceGrotesk-Regular.ttf"
 
 
 @dataclass(frozen=True)
@@ -37,7 +39,7 @@ def color_variacion(variacion, tope):
     """Color de la celda: gris neutro en 0, verde/rojo creciente hasta `tope`."""
     if variacion is None or not isfinite(variacion):
         return COLOR_SIN_DATO
-    t = min(abs(variacion) / tope, 1.0)
+    t = min(abs(variacion) / tope, 1.0) ** 0.65  # curva: las variaciones pequeñas ya se ven
     destino = COLOR_VERDE if variacion > 0 else COLOR_ROJO
     return tuple(round(n + (d - n) * t) for n, d in zip(COLOR_NEUTRO, destino))
 
@@ -50,7 +52,11 @@ def etiqueta_variacion(variacion):
 
 @lru_cache(maxsize=32)
 def _fuente(tam):
-    return ImageFont.load_default(size=tam)
+    # La embebida de Pillow no trae ñ/ó/í (las pinta como recuadro): se usa la de marca.
+    try:
+        return ImageFont.truetype(str(FUENTE_MARCA), tam)
+    except OSError:
+        return ImageFont.load_default(size=tam)
 
 
 def _texto_celda(draw, rect, celda):
@@ -101,11 +107,11 @@ def render_mapa(celdas, titulo, subtitulo, fuente, generado, tope):
         _texto_celda(draw, (caja[0], caja[1], caja[2] - caja[0], caja[3] - caja[1]), celda)
 
     draw.text((16, 10), titulo, font=_fuente(26), fill=COLOR_TEXTO)
-    draw.text((16, 40), subtitulo, font=_fuente(15), fill=COLOR_TENUE)
+    draw.text((16, 40), subtitulo, font=_fuente(17), fill=COLOR_TENUE)
     pie_y = ALTO - PIE // 2
-    draw.text((16, pie_y), fuente, font=_fuente(13), fill=COLOR_TENUE, anchor="lm")
-    draw.text((ANCHO / 2, pie_y), MARCA, font=_fuente(13), fill=COLOR_TENUE, anchor="mm")
-    draw.text((ANCHO - 16, pie_y), generado, font=_fuente(13), fill=COLOR_TENUE, anchor="rm")
+    draw.text((16, pie_y), fuente, font=_fuente(15), fill=COLOR_TENUE, anchor="lm")
+    draw.text((ANCHO / 2, pie_y), MARCA, font=_fuente(15), fill=COLOR_TENUE, anchor="mm")
+    draw.text((ANCHO - 16, pie_y), generado, font=_fuente(15), fill=COLOR_TENUE, anchor="rm")
 
     buf = io.BytesIO()
     img.save(buf, format="PNG", optimize=True)

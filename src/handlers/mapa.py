@@ -7,11 +7,13 @@ cuando F5 defina su contrato (F3-T4).
 """
 
 import asyncio
+import html
 import logging
-from datetime import datetime
+from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto, Update
+from telegram.constants import ParseMode
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 
@@ -25,6 +27,10 @@ logger = logging.getLogger(__name__)
 CUBA = ZoneInfo("America/Havana")
 VISTAS = {"cripto_24h": ("cripto", "24h"), "cripto_7d": ("cripto", "7d"), "forex": ("forex", None)}
 MESES = ("ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic")
+PRINCIPALES = ("BTC", "ETH", "BNB", "XRP", "SOL")
+# |variacion ponderada| minima para abrir el caption con el titular "ULTIMA HORA"
+UMBRAL_ULTIMA_HORA = {"24h": 5.0, "7d": 10.0}
+PERIODO = {"24h": "las últimas 24 horas", "7d": "los últimos 7 días"}
 MSG_ERROR = "⚠️ No pude obtener datos de mercado ahora mismo. Intenta de nuevo en unos minutos."
 MSG_USO = "Uso: /mapa [cripto|forex] [24h|7d]\nEjemplos: /mapa, /mapa cripto 7d, /mapa forex"
 
@@ -57,44 +63,98 @@ def _vista_desde_args(args):
 
 
 def armar_teclado(vista) -> InlineKeyboardMarkup:
+    activa = _clave(vista)
+
+    def boton(clave, icono, texto):
+        marca = "✅" if clave == activa else icono
+        return InlineKeyboardButton(f"{marca} {texto}", callback_data=f"mapa_{clave}")
+
     return InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("₿ Cripto 24 h", callback_data="mapa_cripto_24h"),
-            InlineKeyboardButton("₿ Cripto 7 d", callback_data="mapa_cripto_7d"),
-            InlineKeyboardButton("💱 Forex", callback_data="mapa_forex"),
-        ],
-        [InlineKeyboardButton("🔄 Actualizar", callback_data=f"mapa_{_clave(vista)}")],
+        [boton("cripto_24h", "₿", "24 h"), boton("cripto_7d", "₿", "7 d"), boton("forex", "💱", "Forex")],
+        [InlineKeyboardButton("🔄 Actualizar", callback_data=f"mapa_{activa}")],
     ])
 
 
-def _lista(celdas, n=3):
-    return ", ".join(f"{c.simbolo} {c.variacion:+.2f}%" for c in celdas[:n]) or "—"
+def _bloque(titulo, emoji, celdas, n=3):
+    """Seccion del caption: titulo en negrita y una linea por moneda (vacia si no hay celdas)."""
+    if not celdas:
+        return []
+    return ["", f"{emoji} <b>{titulo}</b>"] + [
+        f"• {html.escape(c.simbolo)} {c.variacion:+.2f}%" for c in celdas[:n]
+    ]
+
+
+def _monto(v: float) -> str:
+    """Monto en USD con escala del espanol (mil millones = 1e9, billon = 1e12)."""
+    v = abs(v)
+    if v >= 1e12:
+        return f"${v / 1e12:,.1f} billones"
+    if v >= 1e9:
+        return f"${v / 1e9:,.1f} mil millones"
+    return f"${v / 1e6:,.1f} millones"
+
+
+def _delta_capital(celdas) -> float:
+    """Cambio estimado del capital (USD): cap actual - cap previa, con previa = cap / (1 + var)."""
+    return sum(c.peso - c.peso / (1 + c.variacion / 100) for c in celdas if c.variacion > -100)
+
+
+def _principales(celdas):
+    por = {c.simbolo: c for c in celdas}
+    lineas = []
+    for s in PRINCIPALES:
+        c = por.get(s)
+        if c is None:
+            continue
+        v = round(c.variacion, 2)
+        txt = "sin cambios" if v == 0 else f"{'subió' if v > 0 else 'cayó'} {abs(v):.2f}%"
+        lineas.append(f"• ${html.escape(s)} {txt}")
+    return ["", "📌 <b>Principales</b>"] + lineas if lineas else []
+
+
+def _fecha_larga(iso: str) -> str:
+    try:
+        d = date.fromisoformat(iso)
+    except (TypeError, ValueError):
+        return str(iso)
+    return f"{d.day} {MESES[d.month - 1]} {d.year}"
 
 
 def armar_caption(vista, snap, ahora) -> str:
+    """Caption en HTML (parse_mode=HTML): los simbolos vienen de un proveedor, se escapan."""
     con = [c for c in snap.celdas if c.variacion is not None]
     suben = sorted((c for c in con if c.variacion > 0), key=lambda c: -c.variacion)
     bajan = sorted((c for c in con if c.variacion < 0), key=lambda c: c.variacion)
     lineas = []
     if snap.obsoleto_min is not None:
-        lineas.append(f"⚠️ Datos de hace {snap.obsoleto_min} min (no se pudo actualizar).")
+        lineas += [f"⚠️ <i>Datos de hace {snap.obsoleto_min} min (no se pudo actualizar).</i>", ""]
     if vista[0] == "cripto":
         total = sum(c.peso for c in con)
         pond = sum(c.peso * c.variacion for c in con) / total if total else 0.0
-        lineas += [
-            f"🗺 Mapa de calor cripto · {vista[1].replace('h', ' h').replace('d', ' d')}",
-            f"Mercado (ponderado por capitalización): {pond:+.2f}% · {len(suben)} suben / {len(bajan)} bajan",
-            f"Mayores subas: {_lista(suben)}",
-            f"Mayores bajas: {_lista(bajan)}",
-        ]
+        ventana = vista[1].replace("h", " h").replace("d", " d")
+        delta = _delta_capital(con)
+        lineas.append(f"🗺 <b>Mapa de calor cripto · {ventana}</b>")
+        anomalo = any(c.variacion <= -100 for c in con)  # el delta no es calculable: sin titular
+        titular = abs(pond) >= UMBRAL_ULTIMA_HORA[vista[1]] and not anomalo
+        if titular:
+            verbo = "añadidos al" if delta >= 0 else "borrados del"
+            lineas.append(
+                f"🚨 <b>ÚLTIMA HORA</b>: {_monto(delta)} {verbo} capital del top 100 "
+                f"en {PERIODO[vista[1]]}."
+            )
+        lineas.append(f"Mercado <b>{pond:+.2f}%</b> · {len(suben)} suben · {len(bajan)} bajan")
+        if not titular:  # con titular el monto ya esta arriba
+            lineas.append(f"Capital del top 100: <b>{'+' if delta >= 0 else '-'}{_monto(delta)}</b>")
+        lineas.append("<i>Ponderado por capitalización</i>")
+        lineas += _principales(con)
+        lineas += _bloque("Mayores subas", "🟢", suben) + _bloque("Mayores bajas", "🔴", bajan)
     else:
-        nota = "" if snap.fecha_dato == ahora.date().isoformat() else " (último día hábil publicado)"
+        nota = "" if snap.fecha_dato == ahora.date().isoformat() else " <i>(último día hábil publicado)</i>"
         lineas += [
-            "🗺 Mapa de calor forex · monedas frente al USD",
-            f"Referencia BCE del {snap.fecha_dato}{nota}",
-            f"Más fuertes: {_lista(suben)}",
-            f"Más débiles: {_lista(bajan)}",
+            "🗺 <b>Mapa de calor forex</b> · monedas frente al USD",
+            f"Referencia BCE del {_fecha_larga(snap.fecha_dato)}{nota}",
         ]
+        lineas += _bloque("Más fuertes", "🟢", suben) + _bloque("Más débiles", "🔴", bajan)
     return "\n".join(lineas)
 
 
@@ -102,9 +162,9 @@ def _textos_imagen(vista, ahora):
     gen = f"{ahora.day} {MESES[ahora.month - 1]} {ahora.year} {ahora:%H:%M} (Cuba)"
     if vista[0] == "cripto":
         ventana = vista[1].replace("h", " h").replace("d", " d")
-        return (f"Mapa de calor cripto - {ventana}",
+        return (f"Mapa de calor cripto · {ventana}",
                 f"Tamaño = capitalización · color = variación en {ventana}", gen)
-    return ("Mapa de calor forex - monedas frente al USD",
+    return ("Mapa de calor forex · monedas frente al USD",
             "Tamaño igual · color = variación diaria (referencia BCE)", gen)
 
 
@@ -144,7 +204,9 @@ async def mapa_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await update.message.reply_text(MSG_ERROR)
         asyncio.create_task(track_command_usage(update, context, "/mapa", success=False))
         return
-    await update.message.reply_photo(photo=png, caption=caption, reply_markup=armar_teclado(vista))
+    await update.message.reply_photo(
+        photo=png, caption=caption, parse_mode=ParseMode.HTML, reply_markup=armar_teclado(vista)
+    )
     asyncio.create_task(track_command_usage(update, context, "/mapa", success=True))
 
 
@@ -162,7 +224,7 @@ async def mapa_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         return
     try:
         await query.edit_message_media(
-            media=InputMediaPhoto(media=png, caption=caption),
+            media=InputMediaPhoto(media=png, caption=caption, parse_mode=ParseMode.HTML),
             reply_markup=armar_teclado(vista),
         )
     except BadRequest as e:
