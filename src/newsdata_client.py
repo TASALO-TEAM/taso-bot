@@ -130,10 +130,10 @@ class NewsDataClient:
             results = data.get("results", [])
             return [self._normalize_article(item) for item in results[:limit]]
         except httpx.HTTPStatusError as e:
+            # No registrar `e`: su texto incluye la URL con ?apikey=... (H-053).
             logger.warning(
-                "⚠️ NewsData HTTP %s: %s",
+                "⚠️ NewsData HTTP %s",
                 e.response.status_code if e.response is not None else "??",
-                e,
             )
             return None
         except Exception as e:
