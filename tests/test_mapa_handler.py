@@ -232,3 +232,51 @@ def test_callback_con_otro_badrequest_se_propaga(parches):
     q.edit_message_media.side_effect = BadRequest("Chat not found")
     with pytest.raises(BadRequest):
         asyncio.run(mapa.mapa_callback(u, _ctx([])))
+
+
+def _caida(pct, tope=None):
+    """BTC 1e12 y ETH 5e11 con la misma variacion `pct`."""
+    return Snapshot((Celda("BTC", 1e12, pct), Celda("ETH", 5e11, pct)), "Fuente: CoinMarketCap", 5.0)
+
+
+def test_monto_usa_mil_millones_y_billones_en_espanol():
+    assert mapa._monto(2.3e11) == "$230.0 mil millones"
+    assert mapa._monto(-1.5e12) == "$1.5 billones"
+    assert mapa._monto(4.2e8) == "$420.0 millones"
+
+
+def test_caption_incluye_capital_del_top_100_con_signo():
+    txt = mapa.armar_caption(("cripto", "24h"), _cripto(), AHORA)
+    assert "Capital del top 100: <b>+$" in txt
+    txt = mapa.armar_caption(("cripto", "24h"), _caida(-1.0), AHORA)
+    assert "Capital del top 100: <b>-$" in txt
+
+
+def test_caption_lista_principales_con_cayo_subio_y_cashtag():
+    txt = mapa.armar_caption(("cripto", "24h"), _cripto(), AHORA)
+    assert _seccion(txt, "Principales") == [
+        "• $BTC subió 2.00%", "• $ETH cayó 1.00%", "• $SOL subió 10.00%",
+    ]
+
+
+def test_ultima_hora_solo_si_el_movimiento_es_grande_y_calcula_el_monto():
+    # -10 % en todo: capital previo 1.667e12 -> se borran ~$166.7 mil millones
+    txt = mapa.armar_caption(("cripto", "24h"), _caida(-10.0), AHORA)
+    assert "ÚLTIMA HORA" in txt
+    assert "$166.7 mil millones borrados del capital del top 100" in txt
+    assert "las últimas 24 horas" in txt
+    # movimiento normal: sin titular
+    assert "ÚLTIMA HORA" not in mapa.armar_caption(("cripto", "24h"), _caida(-1.0), AHORA)
+    # en 7 d el umbral es mayor (10 %): -6 % no dispara, -12 % si
+    assert "ÚLTIMA HORA" not in mapa.armar_caption(("cripto", "7d"), _caida(-6.0), AHORA)
+    sube = mapa.armar_caption(("cripto", "7d"), _caida(12.0), AHORA)
+    assert "ÚLTIMA HORA" in sube and "añadidos al capital" in sube and "los últimos 7 días" in sube
+
+
+def test_variacion_de_menos_100_no_rompe_el_calculo():
+    snap = Snapshot((Celda("BTC", 1e12, -100.0), Celda("ETH", 5e11, 1.0)), "Fuente: CoinMarketCap", 5.0)
+    assert "Capital del top 100" in mapa.armar_caption(("cripto", "24h"), snap, AHORA)
+
+
+def test_caption_con_titular_sigue_dentro_del_limite_de_telegram():
+    assert len(mapa.armar_caption(("cripto", "24h"), _caida(-10.0), AHORA)) <= 1024

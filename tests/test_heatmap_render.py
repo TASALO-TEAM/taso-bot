@@ -90,3 +90,10 @@ def test_fuente_del_mapa_dibuja_acentos():
     sin_glifo = fuente.getmask("\uffff").getbbox()
     for c in "ñóíáé":
         assert fuente.getmask(c).getbbox() != sin_glifo, c
+
+
+def test_colores_vivos_saturados_en_el_tope_y_visibles_con_poca_variacion():
+    assert color_variacion(5.0, 5.0)[1] >= 190  # verde pleno
+    assert color_variacion(-5.0, 5.0)[0] >= 230  # rojo pleno
+    r, g, b = color_variacion(1.0, 5.0)  # +1 % ya se distingue del neutro
+    assert g - r >= 55

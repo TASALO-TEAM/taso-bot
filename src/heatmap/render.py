@@ -18,10 +18,10 @@ PIE = 28
 GAP = 1  # separacion entre celdas (px)
 
 COLOR_FONDO = (18, 20, 26)
-COLOR_NEUTRO = (68, 71, 78)
+COLOR_NEUTRO = (66, 70, 82)
 COLOR_SIN_DATO = (90, 90, 90)
-COLOR_VERDE = (22, 163, 74)
-COLOR_ROJO = (220, 38, 38)
+COLOR_VERDE = (22, 200, 90)
+COLOR_ROJO = (240, 50, 55)
 COLOR_TEXTO = (240, 242, 245)
 COLOR_TENUE = (150, 156, 168)
 MARCA = "TASALO Bot"
@@ -39,7 +39,7 @@ def color_variacion(variacion, tope):
     """Color de la celda: gris neutro en 0, verde/rojo creciente hasta `tope`."""
     if variacion is None or not isfinite(variacion):
         return COLOR_SIN_DATO
-    t = min(abs(variacion) / tope, 1.0)
+    t = min(abs(variacion) / tope, 1.0) ** 0.65  # curva: las variaciones pequeñas ya se ven
     destino = COLOR_VERDE if variacion > 0 else COLOR_ROJO
     return tuple(round(n + (d - n) * t) for n, d in zip(COLOR_NEUTRO, destino))
 
