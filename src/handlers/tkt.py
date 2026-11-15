@@ -175,7 +175,7 @@ async def tkt_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         return
 
     # sub == "show"
-    if len(args) < 2 or not args[1].lstrip("-").isdigit():
+    if len(args) < 2 or not (args[1].isascii() and args[1].lstrip("-").isdigit()):
         await update.message.reply_text(
             "⚠️ Uso: `/tkt show <id>` (el id es el número que aparece como #N).",
             parse_mode=ParseMode.MARKDOWN,

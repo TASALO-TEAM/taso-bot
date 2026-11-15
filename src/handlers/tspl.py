@@ -454,7 +454,7 @@ async def handle_tspl_hour_input(update: Update, context: ContextTypes.DEFAULT_T
 
     user_id = update.effective_user.id
     text = update.message.text.strip()
-    if not text.isdigit():
+    if not (text.isascii() and text.isdigit()):
         del context.user_data["awaiting_tspl_hour"]
         await update.message.reply_text(
             "⚠️ Operación cancelada. Usa /tspl y seleccioná ⏰ Personalizar hora para intentar de nuevo.",

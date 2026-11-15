@@ -361,7 +361,7 @@ async def handle_year_hour_input(update: Update, context: ContextTypes.DEFAULT_T
         return
     user_id = update.effective_user.id
     text = update.message.text.strip()
-    if not text.isdigit():
+    if not (text.isascii() and text.isdigit()):
         del context.user_data["awaiting_year_hour"]
         await update.message.reply_text(
             "⚠️ Operación cancelada. Usa /y y selecciona ⏰ Personalizar hora para intentar de nuevo.",
