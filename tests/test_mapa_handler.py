@@ -47,13 +47,28 @@ def test_parse_vista(data, esperado):
     assert mapa.parse_vista(data) == esperado
 
 
+def _seccion(txt, titulo):
+    """Lineas de la seccion `titulo` (hasta la siguiente linea en blanco)."""
+    return txt.split(titulo)[1].split("\n\n")[0].split("\n")[1:]
+
+
 def test_caption_cripto_resume_mercado_ganadores_y_perdedores():
     txt = mapa.armar_caption(("cripto", "24h"), _cripto(), AHORA)
-    assert "+1.73%" in txt  # ponderado por capitalizacion, ADA (sin dato) no cuenta
-    assert "2 suben / 1 bajan" in txt
-    assert "SOL +10.00%" in txt.split("Mayores subas:")[1].split("\n")[0]
-    assert "ETH -1.00%" in txt.split("Mayores bajas:")[1].split("\n")[0]
+    assert "<b>+1.73%</b>" in txt  # ponderado por capitalizacion, ADA (sin dato) no cuenta
+    assert "2 suben" in txt and "1 bajan" in txt
+    assert _seccion(txt, "Mayores subas") == ["• SOL +10.00%", "• BTC +2.00%"]
+    assert _seccion(txt, "Mayores bajas") == ["• ETH -1.00%"]
+    assert "ADA" not in txt
     assert "⚠️" not in txt
+    assert len(txt) <= 1024  # limite de caption de Telegram
+
+
+def test_caption_escapa_html_de_simbolos_externos():
+    celdas = (Celda("A<b>&", 1e9, 3.0), Celda("ETH", 1e9, -1.0))
+    snap = Snapshot(celdas, "Fuente: CoinMarketCap", 5.0)
+    txt = mapa.armar_caption(("cripto", "24h"), snap, AHORA)
+    assert "A&lt;b&gt;&amp;" in txt
+    assert "A<b>&" not in txt
 
 
 def test_caption_avisa_si_el_dato_es_viejo():
@@ -63,10 +78,10 @@ def test_caption_avisa_si_el_dato_es_viejo():
 
 def test_caption_forex_muestra_fecha_real_y_aclara_si_no_es_hoy():
     txt = mapa.armar_caption(("forex", None), _forex(), AHORA)
-    assert "2026-11-13" in txt
+    assert "13 nov 2026" in txt
     assert "último día hábil" in txt
-    assert "JPY +1.01%" in txt.split("Más fuertes:")[1].split("\n")[0]
-    assert "EUR -0.99%" in txt.split("Más débiles:")[1].split("\n")[0]
+    assert _seccion(txt, "Más fuertes")[0] == "• JPY +1.01%"
+    assert _seccion(txt, "Más débiles")[0] == "• EUR -0.99%"
     hoy = mapa.armar_caption(("forex", None), _forex("2026-11-15"), AHORA)
     assert "último día hábil" not in hoy
 
@@ -76,6 +91,15 @@ def test_teclado_tiene_las_tres_vistas_y_actualizar_con_la_vista_actual():
     datos = [b.callback_data for fila in kb.inline_keyboard for b in fila]
     assert datos == ["mapa_cripto_24h", "mapa_cripto_7d", "mapa_forex", "mapa_cripto_7d"]
     assert all(len(d) <= 64 for d in datos)
+
+
+def test_teclado_marca_la_vista_activa_y_las_etiquetas_caben():
+    kb = mapa.armar_teclado(("cripto", "7d"))
+    etiquetas = [b.text for b in kb.inline_keyboard[0]]
+    assert etiquetas == ["₿ 24 h", "✅ 7 d", "💱 Forex"]
+    assert all(len(e) <= 10 for e in etiquetas)  # sin truncar con 3 botones por fila
+    forex = [b.text for b in mapa.armar_teclado(("forex", None)).inline_keyboard[0]]
+    assert forex == ["₿ 24 h", "₿ 7 d", "✅ Forex"]
 
 
 def _update_mensaje(texto="/mapa"):
@@ -116,6 +140,7 @@ def test_comando_sin_argumentos_envia_cripto_24h(parches):
     kw = u.message.reply_photo.await_args.kwargs
     assert kw["photo"] == b"PNG"
     assert "Mayores subas" in kw["caption"]
+    assert kw["parse_mode"] == "HTML"
     assert kw["reply_markup"] is not None
 
 
@@ -171,6 +196,7 @@ def test_callback_cambia_de_vista_editando_la_imagen(parches):
     asyncio.run(mapa.mapa_callback(u, _ctx([])))
     of.assert_awaited_once()
     q.edit_message_media.assert_awaited_once()
+    assert q.edit_message_media.await_args.kwargs["media"].parse_mode == "HTML"
 
 
 def test_callback_con_datos_invalidos_no_toca_la_api(parches):
