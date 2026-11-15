@@ -39,7 +39,6 @@ Bienvenido 👋 Estos son los principales comandos del bot.
 /tasalo — Todas las tasas
 /toque — Tasas de El Toque
 /bcc — Tasas del BCC
-/fuel — Combustible
 /qp — Tasas P2P de QvaPay
 /toqueimg — Imagen diaria de El Toque
 
@@ -104,14 +103,6 @@ Uso: `/bcc`
 Tasa oficial de cambio publicada por el BCC (USD, EUR).
 
 Botón: 🔄 Actualizar""",
-
-    "fuel": """⛽ */fuel — Precio del combustible*
-
-Uso: `/fuel`
-
-Precio del combustible en el mercado informal, tomado del mismo feed de El Toque.
-
-_Se actualiza junto con el resto de las tasas, cada 15 minutos aprox._""",
 
     "qp": """💱 */qp — Tasas P2P de QvaPay*
 
@@ -326,8 +317,6 @@ TOPIC_ALIASES: dict[str, str] = {
     "noticias": "news",
     "noticia": "news",
     "mercado": "mk",
-    "combustible": "fuel",
-    "gasolina": "fuel",
     "imagen": "toqueimg",
     "eltoque": "toque",
     "qvapay": "qp",

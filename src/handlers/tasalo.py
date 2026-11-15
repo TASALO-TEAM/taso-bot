@@ -22,7 +22,6 @@ from src.formatters import (
     parse_iso_datetime,
     HAS_DATETIME_ENTITY,
     build_bcc_only_message,
-    build_fuel_only_message,
     build_toque_new_message,
 )
 from src.stats_tracker import track_command_usage
@@ -655,67 +654,6 @@ async def bcc_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     await _handle_source_command(update, context, "bcc", build_bcc_only_message)
 
 
-async def fuel_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Comando /fuel — Precios de combustible del mercado informal (ElToque)."""
-    user_id = update.effective_user.id if update.effective_user else 0
-    logger.info("⛽ /fuel command invoked by user %s", user_id)
-
-    asyncio.create_task(track_command_usage(update, context, "/fuel", source="fuel"))
-
-    if not update.message:
-        logger.warning("⚠️ update.message es None para /fuel")
-        return
-
-    api_client: TasaloApiClient = context.bot_data.get("api_client")
-    if not api_client:
-        logger.error("❌ api_client no está disponible en bot_data")
-        await update.message.reply_text("❌ Error de configuración del bot.")
-        return
-
-    loading_msg = await update.message.reply_text("⏳ Consultando combustible...")
-
-    try:
-        response = await api_client.get_fuel()
-
-        if not response or response.get("rates") is None:
-            logger.warning("⚠️ API respondió None o sin rates para /fuel")
-            await loading_msg.edit_text("⚠️ No se pudieron obtener datos de combustible.")
-            asyncio.create_task(track_command_usage(update, context, "/fuel", source="fuel", success=False))
-            return
-
-        text = build_fuel_only_message(response)
-        ad_block = await get_ad_block(api_client)
-        text = safe_append(text, ad_block)
-        keyboard = _build_source_refresh_keyboard("fuel")
-
-        try:
-            await loading_msg.edit_text(
-                text=text,
-                reply_markup=keyboard,
-                parse_mode="Markdown",
-            )
-            logger.info("✅ /fuel enviado (texto con botones)")
-        except Exception as send_error:
-            logger.error("❌ Error enviando /fuel: %s", send_error, exc_info=True)
-            try:
-                await update.message.reply_text(
-                    text=text,
-                    reply_markup=keyboard,
-                    parse_mode="Markdown",
-                )
-                logger.info("✅ Texto enviado para /fuel (fallback)")
-            except Exception as fallback_error:
-                logger.error("❌ Error en fallback final /fuel: %s", fallback_error, exc_info=True)
-
-    except Exception as e:
-        logger.error("❌ Error en comando /fuel: %s", e, exc_info=True)
-        try:
-            await loading_msg.edit_text("❌ Error consultando combustible.")
-        except Exception:
-            pass
-        asyncio.create_task(track_command_usage(update, context, "/fuel", source="fuel", success=False))
-
-
 async def source_refresh_callback(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> None:
@@ -737,22 +675,7 @@ async def source_refresh_callback(
         return
 
     try:
-        # Fuel tiene su propio endpoint separado de /latest
-        if source == "fuel":
-            response = await api_client.get_fuel()
-            if not response or response.get("rates") is None:
-                logger.warning("⚠️ API respondió None o sin rates en refresh /fuel")
-                await query.answer("⚠️ Error actualizando datos", show_alert=True)
-                return
-            text = build_fuel_only_message(response)
-            ad_block = await get_ad_block(api_client)
-            text = safe_append(text, ad_block)
-            keyboard = _build_source_refresh_keyboard("fuel")
-            await query.edit_message_text(text=text, reply_markup=keyboard, parse_mode="Markdown")
-            logger.info("✅ Refresh /fuel completado")
-            return
-
-        # Resto de fuentes usan /latest
+        # Todas las fuentes usan /latest
         response = await api_client.get_latest()
         if not response or not response.get("ok"):
             logger.warning(f"⚠️ API respondió None o ok=False en refresh /{source}")
@@ -768,7 +691,6 @@ async def source_refresh_callback(
         build_funcs = {
             "toque": build_toque_new_message,
             "bcc": build_bcc_only_message,
-            "fuel": build_fuel_only_message,
         }
         build_func = build_funcs.get(source)
         if not build_func:
