@@ -27,6 +27,10 @@ logger = logging.getLogger(__name__)
 CUBA = ZoneInfo("America/Havana")
 VISTAS = {"cripto_24h": ("cripto", "24h"), "cripto_7d": ("cripto", "7d"), "forex": ("forex", None)}
 MESES = ("ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic")
+PRINCIPALES = ("BTC", "ETH", "BNB", "XRP", "SOL")
+# |variacion ponderada| minima para abrir el caption con el titular "ULTIMA HORA"
+UMBRAL_ULTIMA_HORA = {"24h": 5.0, "7d": 10.0}
+PERIODO = {"24h": "las últimas 24 horas", "7d": "los últimos 7 días"}
 MSG_ERROR = "⚠️ No pude obtener datos de mercado ahora mismo. Intenta de nuevo en unos minutos."
 MSG_USO = "Uso: /mapa [cripto|forex] [24h|7d]\nEjemplos: /mapa, /mapa cripto 7d, /mapa forex"
 
@@ -80,6 +84,34 @@ def _bloque(titulo, emoji, celdas, n=3):
     ]
 
 
+def _monto(v: float) -> str:
+    """Monto en USD con escala del espanol (mil millones = 1e9, billon = 1e12)."""
+    v = abs(v)
+    if v >= 1e12:
+        return f"${v / 1e12:,.1f} billones"
+    if v >= 1e9:
+        return f"${v / 1e9:,.1f} mil millones"
+    return f"${v / 1e6:,.1f} millones"
+
+
+def _delta_capital(celdas) -> float:
+    """Cambio estimado del capital (USD): cap actual - cap previa, con previa = cap / (1 + var)."""
+    return sum(c.peso - c.peso / (1 + c.variacion / 100) for c in celdas if c.variacion > -100)
+
+
+def _principales(celdas):
+    por = {c.simbolo: c for c in celdas}
+    lineas = []
+    for s in PRINCIPALES:
+        c = por.get(s)
+        if c is None:
+            continue
+        v = round(c.variacion, 2)
+        txt = "sin cambios" if v == 0 else f"{'subió' if v > 0 else 'cayó'} {abs(v):.2f}%"
+        lineas.append(f"• ${html.escape(s)} {txt}")
+    return ["", "📌 <b>Principales</b>"] + lineas if lineas else []
+
+
 def _fecha_larga(iso: str) -> str:
     try:
         d = date.fromisoformat(iso)
@@ -100,11 +132,21 @@ def armar_caption(vista, snap, ahora) -> str:
         total = sum(c.peso for c in con)
         pond = sum(c.peso * c.variacion for c in con) / total if total else 0.0
         ventana = vista[1].replace("h", " h").replace("d", " d")
-        lineas += [
-            f"🗺 <b>Mapa de calor cripto · {ventana}</b>",
-            f"Mercado <b>{pond:+.2f}%</b> · {len(suben)} suben · {len(bajan)} bajan",
-            "<i>Ponderado por capitalización</i>",
-        ]
+        delta = _delta_capital(con)
+        lineas.append(f"🗺 <b>Mapa de calor cripto · {ventana}</b>")
+        anomalo = any(c.variacion <= -100 for c in con)  # el delta no es calculable: sin titular
+        titular = abs(pond) >= UMBRAL_ULTIMA_HORA[vista[1]] and not anomalo
+        if titular:
+            verbo = "añadidos al" if delta >= 0 else "borrados del"
+            lineas.append(
+                f"🚨 <b>ÚLTIMA HORA</b>: {_monto(delta)} {verbo} capital del top 100 "
+                f"en {PERIODO[vista[1]]}."
+            )
+        lineas.append(f"Mercado <b>{pond:+.2f}%</b> · {len(suben)} suben · {len(bajan)} bajan")
+        if not titular:  # con titular el monto ya esta arriba
+            lineas.append(f"Capital del top 100: <b>{'+' if delta >= 0 else '-'}{_monto(delta)}</b>")
+        lineas.append("<i>Ponderado por capitalización</i>")
+        lineas += _principales(con)
         lineas += _bloque("Mayores subas", "🟢", suben) + _bloque("Mayores bajas", "🔴", bajan)
     else:
         nota = "" if snap.fecha_dato == ahora.date().isoformat() else " <i>(último día hábil publicado)</i>"
