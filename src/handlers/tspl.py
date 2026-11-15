@@ -20,6 +20,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 from telegram.constants import ParseMode
+from telegram.helpers import escape_markdown
 
 from src.api_client import TasaloApiClient
 from src.config import get_settings
@@ -108,6 +109,12 @@ def _build_keyboard(active_hours: list[int] | None = None) -> InlineKeyboardMark
     return InlineKeyboardMarkup(buttons)
 
 
+def _md(texto) -> str:
+    """Escapa para Markdown v1 un texto que viene del modelo o de noticias de
+    terceros (un '_' o '*' suelto rompe el envio de todo el mensaje)."""
+    return escape_markdown(str(texto or ""), version=1)
+
+
 def _build_news_section(digest: dict | None) -> str:
     """Arma el bloque "📰 Lo más importante del día" a partir del digest.
 
@@ -120,9 +127,11 @@ def _build_news_section(digest: dict | None) -> str:
 
     lines = []
     for item in digest["items"]:
-        emoji = item.get("emoji", "📰")
-        titulo = item.get("titulo", "").strip()
-        parrafo = item.get("parrafo", "").strip()
+        if not isinstance(item, dict):
+            continue
+        emoji = _md(item.get("emoji") or "📰")
+        titulo = _md(item.get("titulo")).strip()
+        parrafo = _md(item.get("parrafo")).strip()
         if not titulo:
             continue
         lines.append(f"{emoji} *{titulo}*")
@@ -168,13 +177,13 @@ def _build_message(digest: dict | None, snapshot: dict | None) -> str:
         "Panorama del mercado cripto de hoy — la sección de noticias no "
         "está disponible en este momento, pero los datos de mercado sí."
     )
-    teaser = (digest or {}).get("teaser")
-    radar = (digest or {}).get("radar")
+    teaser = _md((digest or {}).get("teaser"))
+    radar = _md((digest or {}).get("radar"))
 
     partes = [
         f"📊 *TASALO Spotlight — {fecha}*",
         "",
-        lede,
+        _md(lede),
     ]
 
     if teaser:
