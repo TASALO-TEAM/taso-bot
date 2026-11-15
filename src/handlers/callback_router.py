@@ -37,6 +37,7 @@ ROUTE_MAP: dict[str, str] = {
     "ta":       "_handle_ta",
     "ai":       "_handle_ta",
     "graf":     "_handle_graf",
+    "mapa":     "_handle_mapa",
     "year_sub": "_handle_year",
     "spl":      "_handle_spl",
     "qp":       "_handle_qp",
@@ -367,6 +368,14 @@ async def _handle_graf(update: Update, context: ContextTypes.DEFAULT_TYPE, callb
         duration_ms = (time.time() - handler_start) * 1000
         logger.error("❌ Error in _handle_graf for user %d callback '%s' (%.0fms): %s", user_id, callback_data, duration_ms, e, exc_info=True)
         raise
+
+
+# ── Mapa de calor (/mapa) callbacks ──
+
+async def _handle_mapa(update: Update, context: ContextTypes.DEFAULT_TYPE, callback_data: str) -> None:
+    """Handle mapa_* callbacks (vista cripto/forex y actualizar)."""
+    from src.handlers import mapa
+    await mapa.mapa_callback(update, context)
 
 
 # ── Spotlight (/spl) callbacks ──
