@@ -4,6 +4,7 @@ import io
 from dataclasses import dataclass
 from functools import lru_cache
 from math import isfinite
+from pathlib import Path
 from typing import Optional
 
 from PIL import Image, ImageDraw, ImageFont
@@ -24,6 +25,7 @@ COLOR_ROJO = (220, 38, 38)
 COLOR_TEXTO = (240, 242, 245)
 COLOR_TENUE = (150, 156, 168)
 MARCA = "TASALO Bot"
+FUENTE_MARCA = Path(__file__).resolve().parents[2] / "fonts" / "SpaceGrotesk-Regular.ttf"
 
 
 @dataclass(frozen=True)
@@ -50,7 +52,11 @@ def etiqueta_variacion(variacion):
 
 @lru_cache(maxsize=32)
 def _fuente(tam):
-    return ImageFont.load_default(size=tam)
+    # La embebida de Pillow no trae ñ/ó/í (las pinta como recuadro): se usa la de marca.
+    try:
+        return ImageFont.truetype(str(FUENTE_MARCA), tam)
+    except OSError:
+        return ImageFont.load_default(size=tam)
 
 
 def _texto_celda(draw, rect, celda):
@@ -101,11 +107,11 @@ def render_mapa(celdas, titulo, subtitulo, fuente, generado, tope):
         _texto_celda(draw, (caja[0], caja[1], caja[2] - caja[0], caja[3] - caja[1]), celda)
 
     draw.text((16, 10), titulo, font=_fuente(26), fill=COLOR_TEXTO)
-    draw.text((16, 40), subtitulo, font=_fuente(15), fill=COLOR_TENUE)
+    draw.text((16, 40), subtitulo, font=_fuente(17), fill=COLOR_TENUE)
     pie_y = ALTO - PIE // 2
-    draw.text((16, pie_y), fuente, font=_fuente(13), fill=COLOR_TENUE, anchor="lm")
-    draw.text((ANCHO / 2, pie_y), MARCA, font=_fuente(13), fill=COLOR_TENUE, anchor="mm")
-    draw.text((ANCHO - 16, pie_y), generado, font=_fuente(13), fill=COLOR_TENUE, anchor="rm")
+    draw.text((16, pie_y), fuente, font=_fuente(15), fill=COLOR_TENUE, anchor="lm")
+    draw.text((ANCHO / 2, pie_y), MARCA, font=_fuente(15), fill=COLOR_TENUE, anchor="mm")
+    draw.text((ANCHO - 16, pie_y), generado, font=_fuente(15), fill=COLOR_TENUE, anchor="rm")
 
     buf = io.BytesIO()
     img.save(buf, format="PNG", optimize=True)
