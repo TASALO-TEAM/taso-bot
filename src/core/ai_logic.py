@@ -403,9 +403,9 @@ async def get_groq_crypto_analysis(
         logger.error("Groq network error for %s %s", symbol, timeframe)
         return "⚠️ Error de red al contactar la IA."
 
-    except Exception as e:
+    except Exception:
         logger.exception("Unexpected error in get_groq_crypto_analysis")
-        return f"⚠️ Error inesperado: {e}"
+        return "⚠️ Error inesperado de la IA. Intenta de nuevo más tarde."
 
 
 # ── Public API — Price Spotlight (/p) ───────────────────────────────────────
@@ -668,9 +668,9 @@ async def get_groq_price_spotlight(price_data: dict) -> str:
         logger.error("Groq network error (spotlight) for %s", symbol)
         return "⚠️ Error de red al contactar la IA."
 
-    except Exception as e:
+    except Exception:
         logger.exception("Unexpected error in get_groq_price_spotlight")
-        return f"⚠️ Error inesperado: {e}"
+        return "⚠️ Error inesperado de la IA. Intenta de nuevo más tarde."
 
 
 # ── Prompt Template — Spotlight de Mercado (/spl) ──────────────────────────────────────
@@ -916,9 +916,9 @@ async def get_groq_market_spotlight(snapshot: dict) -> str:
         logger.error("Groq network error (market spotlight)")
         return "⚠️ Error de red al contactar la IA."
 
-    except Exception as e:
+    except Exception:
         logger.exception("Unexpected error in get_groq_market_spotlight")
-        return f"⚠️ Error inesperado: {e}"
+        return "⚠️ Error inesperado de la IA. Intenta de nuevo más tarde."
 
 
 # ── Prompt Template — Digest de Noticias (/tspl) ────────────────────────────
