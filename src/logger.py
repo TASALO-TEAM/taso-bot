@@ -377,28 +377,3 @@ class BotLogger:
 # main.py puede crear su propia instancia con file logging habilitado
 logger = BotLogger(enable_file_logging=False)
 
-
-def get_logger(name: str) -> logging.Logger:
-    """Obtiene un logger estándar para un módulo.
-    
-    Los handlers se configuran en main.py con BotLogger, así que
-    los loggers de módulos heredan esa configuración.
-    
-    Args:
-        name: Nombre del módulo (típicamente __name__)
-    
-    Returns:
-        Logger configurado para el módulo
-    """
-    return logging.getLogger(name)
-
-
-def get_bot_logger() -> BotLogger:
-    """Obtiene la instancia global de BotLogger con métodos especializados.
-    
-    Útil para llamar métodos como log_command_execution, log_api_call, etc.
-    
-    Returns:
-        Instancia global de BotLogger
-    """
-    return logger

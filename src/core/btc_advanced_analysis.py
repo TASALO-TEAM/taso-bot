@@ -209,6 +209,3 @@ class BTCAdvancedAnalyzer:
             'KIJUN': kijun,
             'atr': self.df.iloc[-1].get('ATR', 0)
         }
-
-    def detect_rsi_divergence(self, lookback=5):
-        return None

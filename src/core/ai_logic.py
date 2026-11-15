@@ -230,11 +230,6 @@ def _truncate_smart(text: str, max_chars: int = MAX_RESPONSE_CHARS) -> str:
 
 
 # ── HTTP Client ───────────────────────────────────────────────────────────────
-class GroqAPIError(Exception):
-    """Custom exception for Groq API errors."""
-    pass
-
-
 @retry(
     reraise=True,
     stop=stop_after_attempt(MAX_RETRIES),

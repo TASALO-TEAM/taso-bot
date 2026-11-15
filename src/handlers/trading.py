@@ -55,14 +55,6 @@ _TF_KUCOIN = {
 
 # ─── HELPERS DE DATOS ────────────────────────────────────────────────────────
 
-def _df_from_rows(rows: list) -> pd.DataFrame:
-    df = pd.DataFrame(rows, columns=["time", "open", "high", "low", "close", "volume"])
-    for col in ["open", "high", "low", "close", "volume"]:
-        df[col] = pd.to_numeric(df[col], errors='coerce')
-    df['time'] = pd.to_datetime(df['time'], unit='ms')
-    df.set_index('time', inplace=True)
-    return df
-
 def _get_klines_binance(symbol: str, interval: str, limit: int) -> pd.DataFrame | None:
     for url in ["https://api.binance.com/api/v3/klines", "https://api.binance.us/api/v3/klines"]:
         try:
