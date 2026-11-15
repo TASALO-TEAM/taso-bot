@@ -40,6 +40,7 @@ import time
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from telegram.constants import ParseMode
+from telegram.helpers import escape_markdown
 
 from src.newsdata_client import get_newsdata_client
 from src.stats_tracker import track_command_usage
@@ -117,7 +118,7 @@ def _build_keyboard(subcommand_key: str) -> InlineKeyboardMarkup:
 
 def _format_articles(articles: list[dict], label: str) -> str:
     """Arma el mensaje final a partir de artículos ya normalizados."""
-    lines = [f"📰 *Noticias — {label}*\n"]
+    lines = [f"📰 *Noticias — {escape_markdown(label, version=1)}*\n"]
 
     for art in articles:
         title = art.get("title") or "(sin título)"
@@ -125,12 +126,12 @@ def _format_articles(articles: list[dict], label: str) -> str:
         source = art.get("source_name") or "Fuente desconocida"
         url = art.get("url")
 
-        lines.append(f"*{title}*")
+        lines.append(f"*{escape_markdown(title, version=1)}*")
         if desc:
             # Recortar descripciones largas para no saturar el mensaje
             desc_corto = desc if len(desc) <= 220 else desc[:217] + "..."
-            lines.append(desc_corto)
-        detalle = f"_{source}_"
+            lines.append(escape_markdown(desc_corto, version=1))
+        detalle = f"_{escape_markdown(source, version=1)}_"
         if url:
             detalle += f" · [ver noticia]({url})"
         lines.append(detalle)
