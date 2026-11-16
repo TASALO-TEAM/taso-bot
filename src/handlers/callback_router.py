@@ -19,6 +19,7 @@ from telegram import Update
 from telegram.ext import ContextTypes, CallbackQueryHandler
 from telegram.error import BadRequest
 
+from src.callback_data import parse_v2
 from src.handlers import image_alerts, tasalo, start, toqueimg, p, y, alert as price_alert, spl, ms, msapp, tkt, admin, news, tspl, qp
 
 logger = logging.getLogger(__name__)
@@ -79,7 +80,13 @@ def _resolve_namespace(callback_data: str) -> str:
     *first* join (first + second segment) is attempted so that prefixes
     like ``year_sub`` are matched as one key instead of yielding only
     ``"year"``.
+
+    Un callback v2 (``ns:arg:arg``, F6-T3) con namespace conocido se resuelve
+    directo; todo lo demas sigue por la via vieja, sin cambios.
     """
+    v2 = parse_v2(callback_data)
+    if v2 and (v2[0] in ROUTE_MAP or v2[0] in _extra_routes()):
+        return v2[0]
     parts = callback_data.split("_")
     if len(parts) >= 2:
         candidate = f"{parts[0]}_{parts[1]}"
