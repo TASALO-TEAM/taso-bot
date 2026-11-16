@@ -62,6 +62,25 @@ class Cmd:
     descripcion: str  # 1-256 caracteres (límite de Telegram)
     admin: bool = False
     alias: tuple[str, ...] = ()
+    # Contrato de extension (F6-T2): con `callback` el comando atiende sus
+    # propios botones, sin tocar callback_router.py. Firma:
+    # async (update, context, callback_data). `namespaces` por defecto es
+    # (name,). `menu=(seccion, etiqueta)` lo lista en el menu principal; su
+    # boton abre `<namespace>_open`.
+    callback: Callable | None = None
+    namespaces: tuple[str, ...] = ()
+    menu: tuple[str, str] | None = None
+
+    def rutas(self) -> tuple[str, ...]:
+        if self.callback is None:
+            return ()
+        return self.namespaces or (self.name,)
+
+
+@dataclass(frozen=True)
+class MenuEntry:
+    label: str
+    callback_data: str
 
 
 COMANDOS: tuple[Cmd, ...] = (
@@ -102,6 +121,15 @@ def menu_publico() -> list[BotCommand]:
 
 def menu_admin() -> list[BotCommand]:
     return [BotCommand(c.name, c.descripcion) for c in COMANDOS]
+
+
+def menu_entries(seccion: str, es_admin: bool = False) -> list[MenuEntry]:
+    """Botones del menu principal para `seccion`, en el orden de COMANDOS."""
+    return [
+        MenuEntry(c.menu[1], f"{(c.namespaces or (c.name,))[0]}_open")
+        for c in COMANDOS
+        if c.menu and c.menu[0] == seccion and (es_admin or not c.admin)
+    ]
 
 
 def register_commands(application: Application) -> int:

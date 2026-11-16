@@ -53,6 +53,24 @@ ROUTE_MAP: dict[str, str] = {
 _NS_PREFIXES: tuple[str, ...] = tuple(k for k in ROUTE_MAP if "_" in k)
 
 
+def _extra_routes() -> dict:
+    """Namespaces declarados en COMANDOS (Cmd.callback), F6-T2.
+
+    Un modulo nuevo se registra con una linea en COMANDOS, sin editar este
+    archivo. Un namespace repetido (o que choque con ROUTE_MAP) es un error
+    de configuracion: falla al arrancar, no en silencio.
+    """
+    from src import commands  # import tardio: commands importa los handlers
+
+    rutas: dict = {}
+    for c in commands.COMANDOS:
+        for ns in c.rutas():
+            if ns in ROUTE_MAP or ns in rutas:
+                raise ValueError(f"namespace de callbacks duplicado: {ns!r} (comando {c.name})")
+            rutas[ns] = c.callback
+    return rutas
+
+
 def _resolve_namespace(callback_data: str) -> str:
     """Resolve the namespace of a callback data string.
 
@@ -65,7 +83,7 @@ def _resolve_namespace(callback_data: str) -> str:
     parts = callback_data.split("_")
     if len(parts) >= 2:
         candidate = f"{parts[0]}_{parts[1]}"
-        if candidate in ROUTE_MAP:
+        if candidate in ROUTE_MAP or candidate in _extra_routes():
             return candidate
     return parts[0]
 
@@ -90,9 +108,10 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         logger.warning("Failed to answer query for user %d: %s", user_id, e)
         return
 
-    handler_name = ROUTE_MAP.get(namespace)
+    extra = _extra_routes().get(namespace)
+    handler_name = ROUTE_MAP.get(namespace) or (namespace if extra else None)
     if handler_name:
-        handler_func = globals().get(handler_name)
+        handler_func = extra or globals().get(handler_name)
         if handler_func:
             logger.debug("Routing '%s' to handler '%s' for user %d", callback_data, handler_name, user_id)
             try:
@@ -465,6 +484,7 @@ async def _handle_msapp(update: Update, context: ContextTypes.DEFAULT_TYPE, call
 
 def get_callback_handler() -> CallbackQueryHandler:
     """Return the router as a CallbackQueryHandler for registration in main.py."""
+    _extra_routes()  # valida namespaces duplicados al arrancar (F6-T2)
     return CallbackQueryHandler(callback_router)
 
 
