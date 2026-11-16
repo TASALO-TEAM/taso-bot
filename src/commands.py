@@ -36,6 +36,7 @@ from src.handlers.tkt import tkt_command
 from src.handlers.toqueimg import toqueimg_command
 from src.handlers.tspl import tspl_command
 from src.handlers.y import y_command
+from src.menu import menu_callback
 
 logger = logging.getLogger(__name__)
 
@@ -85,7 +86,7 @@ class MenuEntry:
 
 COMANDOS: tuple[Cmd, ...] = (
     # Públicos (el orden es el del menú)
-    Cmd("start", start_command, "Menú principal"),
+    Cmd("start", start_command, "Menú principal", callback=menu_callback, namespaces=("menu",)),
     Cmd("help", help_command, "Ayuda y lista de comandos", alias=("ayuda",)),
     Cmd("tasalo", tasalo_command, "Todas las tasas de cambio"),
     Cmd("toque", toque_command, "Tasas de El Toque"),
