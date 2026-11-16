@@ -33,20 +33,21 @@ def _alcanzables(es_admin: bool) -> set[str]:
 def test_inicio_lista_las_categorias_y_no_se_enlaza_a_si_mismo():
     from src.menu import render
 
-    texto, markup = render((), es_admin=False)
+    texto, markup = render(("all",), es_admin=False)
     datas = _datas(markup)
     for sec in ("tasas", "cripto", "analisis", "alertas", "noticias", "mercado", "ayuda"):
         assert f"menu:{sec}" in datas
     assert "menu:admin" not in datas
-    assert "menu:home" not in datas
+    assert "menu:all" not in datas  # no se enlaza a si mismo
+    assert "menu:home" in datas  # Inicio = la bienvenida
     assert texto
 
 
 def test_admin_solo_aparece_para_admins():
     from src.menu import render
 
-    assert "menu:admin" in _datas(render((), es_admin=True)[1])
-    assert "menu:admin" not in _datas(render((), es_admin=False)[1])
+    assert "menu:admin" in _datas(render(("all",), es_admin=True)[1])
+    assert "menu:admin" not in _datas(render(("all",), es_admin=False)[1])
 
 
 def test_toda_pantalla_distinta_del_inicio_tiene_boton_inicio():
@@ -58,6 +59,25 @@ def test_toda_pantalla_distinta_del_inicio_tiene_boton_inicio():
             if d.startswith("menu:") and d != "menu:home":
                 _, markup = render(cd.parse_v2(d)[1], es_admin)
                 assert "menu:home" in _datas(markup), d
+
+
+def test_secciones_tienen_atras_a_las_categorias():
+    from src.menu import SECCIONES, render
+
+    for sec in SECCIONES:
+        assert "menu:all" in _datas(render((sec,), es_admin=False)[1]), sec
+    assert "menu:all" in _datas(render(("admin",), es_admin=True)[1])
+
+
+def test_el_inicio_es_la_bienvenida_y_ofrece_mas():
+    from src.handlers.start import build_start_keyboard
+    from src.menu import _resolve
+
+    texto, markup, html = _resolve((), es_admin=False)
+    assert html is True and "TASALO" in texto
+    assert _datas(markup) == _datas(build_start_keyboard())
+    assert "menu:all" in _datas(markup)
+    assert _resolve(("all",), False)[2] is False
 
 
 def test_pantalla_de_comando_tiene_atras_a_su_seccion():
@@ -174,7 +194,20 @@ def test_start_trae_el_boton_de_menu_completo_sin_mover_las_filas_existentes():
     from src.handlers.start import build_start_keyboard
 
     kb = build_start_keyboard().inline_keyboard
-    assert "menu:home" in [b.callback_data for row in kb for b in row]
+    assert "menu:all" in [b.callback_data for row in kb for b in row]
     assert kb[0][0].callback_data == "start_tasalo"
     assert kb[1][0].callback_data == "start_bcc"
     assert kb[2][0].callback_data == "start_p_help"
+
+
+def test_volver_al_inicio_edita_con_html(monkeypatch):
+    from src import menu
+    from src.handlers import callback_router as r
+
+    monkeypatch.setattr(menu, "_es_admin", lambda uid: False)
+    u, q = _query("menu:home")
+    asyncio.run(r.callback_router(u, MagicMock()))
+    assert q.edit_message_text.await_args.kwargs["parse_mode"] == "HTML"
+    u, q = _query("menu:tasas")
+    asyncio.run(r.callback_router(u, MagicMock()))
+    assert q.edit_message_text.await_args.kwargs["parse_mode"] is None
