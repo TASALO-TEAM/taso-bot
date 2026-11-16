@@ -18,6 +18,7 @@ from telegram import BotCommand, BotCommandScopeChat, BotCommandScopeDefault
 from telegram.ext import Application, CommandHandler
 
 from src.config import settings
+from src.explorer.handler import explorar_command, explorer_callback
 from src.handlers.admin import health_check, refresh_command, status_command
 from src.handlers.ads import ads_command
 from src.handlers.alert import alert_command
@@ -102,6 +103,8 @@ COMANDOS: tuple[Cmd, ...] = (
     Cmd("mk", _lazy("src.handlers.trading", "mk_command"), "Resumen del mercado"),
     Cmd("alert", alert_command, "Alertas de precio"),
     Cmd("mapa", _lazy("src.handlers.mapa", "mapa_command"), "Mapa de calor cripto, forex y acciones"),
+    Cmd("explorar", explorar_command, "Explorador de direcciones, hashes y usuarios de Hive",
+        callback=explorer_callback, namespaces=("explorer",), menu=("mercado", "\U0001f50e Explorador")),
     Cmd("spl", spl_command, "Spotlight del mercado"),
     Cmd("tspl", tspl_command, "TASALO Spotlight completo"),
     Cmd("news", news_command, "Noticias cripto"),

@@ -148,6 +148,10 @@ def create_application() -> Application:
     application.add_handler(get_callback_handler())
     logger.info("✅ Callback router registered (consolidated 13+ handlers into 1)")
 
+    # Explorador: texto libre en privado (direccion, hash, factura). group=-1.
+    from src.explorer.handler import register as register_explorer
+    register_explorer(application)
+
     # Registrar handler para input de hora personalizada del año
     #
     # IMPORTANTE: los 3 MessageHandler globales de más abajo (year hour,
@@ -320,6 +324,9 @@ def main():
         stop_tspl_alert_dispatcher()
         logger.info("✅ /tspl subscription dispatcher stopped")
         
+        from src.explorer import sources as explorer_sources
+        await explorer_sources.cerrar()
+
         # Cerrar cliente HTTP para liberar conexiones
         api_client: TasaloApiClient = app.bot_data.get("api_client")
         if api_client:

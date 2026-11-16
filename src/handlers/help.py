@@ -54,6 +54,7 @@ _Ejemplos: /p btc · /p eth · /p hive · /news btc_
 /graf <par> — Gráfico con indicadores
 /mk — Resumen del mercado
 /mapa — Mapa de calor cripto, forex o acciones
+/explorar — Direcciones, hashes y usuarios de Hive
 _Ejemplos: /ta btcusdt · /graf ethusdt_
 
 🔔 *Alertas*
@@ -174,6 +175,14 @@ Botones:
 🪙 Cripto 24h · 🪙 Cripto 7d · 💱 Forex · 📈 Acciones S&P 500 · 🔄 Actualizar
 
 _El resultado es el mismo para todos y se guarda unos minutos en caché._""",
+
+    "explorar": """🔎 */explorar — Explorador*
+
+Uso: `/explorar <dirección | hash | @usuario>`
+
+Envía una dirección o transacción de Bitcoin, un usuario de Hive o una factura Lightning y te muestro saldo, movimientos y un enlace a un explorador público. También puedes enviarlo directamente al bot en privado, sin comando.
+
+_Solo lectura: nunca se abren enlaces ni se paga nada. Los precios en USD indican fuente y hora._""",
 
     "spl": """🌍 */spl — Spotlight del mercado*
 
