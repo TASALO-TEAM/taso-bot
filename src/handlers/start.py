@@ -75,9 +75,20 @@ def build_start_keyboard() -> InlineKeyboardMarkup:
     # Menu completo (F6-T4): antes de la Web App, sin mover las filas anteriores.
     keyboard.insert(
         len(keyboard) - 1,
-        [InlineKeyboardButton("📋 Menú completo", callback_data="menu:home")],
+        [InlineKeyboardButton("\u2630 M\u00e1s", callback_data="menu:all")],
     )
     return InlineKeyboardMarkup(keyboard)
+
+
+def build_welcome_text(user) -> str:
+    """Texto de bienvenida (HTML). `user` puede ser None (p. ej. al volver desde el menu)."""
+    saludo = f" {user.mention_html()}" if user else ""
+    return (
+        f"👋 ¡Hola{saludo}!\n\n"
+        f"Soy TASALO, un bot para consultar las tasas de cambio de Cuba.\n"
+        f"Puedes consultar tanto el mercado informal de ElToque como el mercado Oficial BCC.\n\n"
+        f"Presiona el botón del tipo de tasas que desees consultar:"
+    )
 
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -104,12 +115,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     try:
         # Construir mensaje de bienvenida
-        welcome_text = (
-            f"👋 ¡Hola {user.mention_html()}!\n\n"
-            f"Soy TASALO, un bot para consultar las tasas de cambio de Cuba.\n"
-            f"Puedes consultar tanto el mercado informal de ElToque como el mercado Oficial BCC.\n\n"
-            f"Presiona el botón del tipo de tasas que desees consultar:"
-        )
+        welcome_text = build_welcome_text(user)
 
         # Construir teclado inline (ya incluye Web App en build_start_keyboard)
         keyboard = build_start_keyboard()
