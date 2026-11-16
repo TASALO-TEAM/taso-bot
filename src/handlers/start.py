@@ -72,6 +72,11 @@ def build_start_keyboard() -> InlineKeyboardMarkup:
             InlineKeyboardButton("🌐 Abrir TASALO Web", web_app=WebAppInfo(url=MINIAPP_URL)),
         ],
     ]
+    # Menu completo (F6-T4): antes de la Web App, sin mover las filas anteriores.
+    keyboard.insert(
+        len(keyboard) - 1,
+        [InlineKeyboardButton("📋 Menú completo", callback_data="menu:home")],
+    )
     return InlineKeyboardMarkup(keyboard)
 
 
