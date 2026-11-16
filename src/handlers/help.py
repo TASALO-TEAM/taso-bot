@@ -53,7 +53,7 @@ _Ejemplos: /p btc · /p eth · /p hive · /news btc_
 /ta <par> — Análisis técnico
 /graf <par> — Gráfico con indicadores
 /mk — Resumen del mercado
-/mapa — Mapa de calor cripto o forex
+/mapa — Mapa de calor cripto, forex o acciones
 _Ejemplos: /ta btcusdt · /graf ethusdt_
 
 🔔 *Alertas*
@@ -166,12 +166,12 @@ _Para un panorama más completo con narrativa de IA, usá `/spl`._""",
 
     "mapa": """🗺 */mapa — Mapa de calor del mercado*
 
-Uso: `/mapa` · `/mapa cripto 7d` · `/mapa forex`
+Uso: `/mapa` · `/mapa cripto 7d` · `/mapa forex` · `/mapa acciones`
 
-Imagen con el tamaño de cada cripto por capitalización y el color por variación (24h o 7 días), o las divisas principales contra USD. Incluye un resumen breve calculado con los mismos datos.
+Imagen con el tamaño de cada cripto por capitalización y el color por variación (24h o 7 días), las divisas principales contra USD, o las mayores empresas del S&P 500. Incluye un resumen breve calculado con los mismos datos.
 
 Botones:
-🪙 Cripto 24h · 🪙 Cripto 7d · 💱 Forex · 🔄 Actualizar
+🪙 Cripto 24h · 🪙 Cripto 7d · 💱 Forex · 📈 Acciones S&P 500 · 🔄 Actualizar
 
 _El resultado es el mismo para todos y se guarda unos minutos en caché._""",
 

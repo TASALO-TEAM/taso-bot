@@ -17,12 +17,18 @@ logger = logging.getLogger(__name__)
 
 TTL_CRIPTO = 600  # 10 min; CMC actualiza cada 60 s y el cupo es limitado
 TTL_FOREX = 6 * 3600  # el BCE publica una vez al dia
+TTL_ACCIONES = 600  # 10 min; el escaner no publica cupo, mantenemos pocas llamadas
 FRANKFURTER_URL = "https://api.frankfurter.dev/v2/rates"
 CMC_LISTINGS = "v1/cryptocurrency/listings/latest"
 
 VENTANAS = {"24h": ("percent_change_24h", 5.0), "7d": ("percent_change_7d", 10.0)}
 FOREX_MONEDAS = ("EUR", "GBP", "JPY", "CHF", "CAD", "AUD", "NZD", "CNY", "MXN", "BRL", "SEK", "NOK")
 FOREX_TOPE = 1.0
+ACCIONES_URL = "https://scanner.tradingview.com/america/scan"
+ACCIONES_TOPE = 3.0  # % diario a partir del cual el color satura
+ACCIONES_FILAS = 80
+# Segunda clase de una empresa ya listada: TradingView repite la capitalizacion completa.
+ACCIONES_DUPLICADAS = frozenset({"GOOG"})
 
 
 class HeatmapError(Exception):
@@ -142,4 +148,45 @@ async def obtener_forex(http: Callable = http_json) -> Snapshot:
     return Snapshot(
         celdas, "Fuente: Banco Central Europeo, via Frankfurter", FOREX_TOPE,
         fecha_dato=fecha, obsoleto_min=None if edad is None else int(edad // 60),
+    )
+
+
+async def http_post_json(url: str, body: dict):
+    import httpx  # import perezoso: solo si se pide el mapa de acciones
+
+    async with httpx.AsyncClient(timeout=10.0) as c:
+        r = await c.post(url, json=body)
+        r.raise_for_status()
+        return r.json()
+
+
+async def obtener_acciones(http_post: Callable = http_post_json) -> Snapshot:
+    """Mayores empresas del S&P 500 (capitalizacion y % del dia) via escaner de TradingView.
+
+    Endpoint no oficial: puede cambiar sin aviso, por eso hay cache y dato viejo de respaldo.
+    """
+    async def cargar():
+        raw = await http_post(ACCIONES_URL, {
+            "symbols": {"query": {"types": []}, "tickers": [],
+                        "groups": [{"type": "index", "values": ["SP:SPX"]}]},
+            "columns": ["name", "market_cap_basic", "change", "sector"],
+            "sort": {"sortBy": "market_cap_basic", "sortOrder": "desc"},
+            "range": [0, ACCIONES_FILAS],
+        })
+        filas = []
+        for f in (raw or {}).get("data") or []:
+            d = f.get("d") or []
+            if len(d) < 3 or not isinstance(d[0], str) or d[0] in ACCIONES_DUPLICADAS:
+                continue
+            cap = _numero(d[1])
+            if cap and cap > 0:
+                filas.append((d[0], cap, _numero(d[2])))
+        if not filas:
+            raise HeatmapError("TradingView sin acciones")
+        return filas
+
+    filas, edad = await _cacheado("acciones", TTL_ACCIONES, cargar)
+    return Snapshot(
+        tuple(Celda(s, cap, var) for s, cap, var in filas), "Fuente: TradingView", ACCIONES_TOPE,
+        obsoleto_min=None if edad is None else int(edad // 60),
     )

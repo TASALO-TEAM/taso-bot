@@ -89,7 +89,7 @@ def test_caption_forex_muestra_fecha_real_y_aclara_si_no_es_hoy():
 def test_teclado_tiene_las_tres_vistas_y_actualizar_con_la_vista_actual():
     kb = mapa.armar_teclado(("cripto", "7d"))
     datos = [b.callback_data for fila in kb.inline_keyboard for b in fila]
-    assert datos == ["mapa_cripto_24h", "mapa_cripto_7d", "mapa_forex", "mapa_cripto_7d"]
+    assert datos == ["mapa_cripto_24h", "mapa_cripto_7d", "mapa_forex", "mapa_acciones", "mapa_cripto_7d"]
     assert all(len(d) <= 64 for d in datos)
 
 
@@ -280,3 +280,50 @@ def test_variacion_de_menos_100_no_rompe_el_calculo():
 
 def test_caption_con_titular_sigue_dentro_del_limite_de_telegram():
     assert len(mapa.armar_caption(("cripto", "24h"), _caida(-10.0), AHORA)) <= 1024
+
+
+# --- Vista de acciones S&P 500 ---
+
+def _acciones(obsoleto=None):
+    celdas = (
+        Celda("AAPL", 5e12, -1.0),
+        Celda("NVDA", 4e12, -4.0),
+        Celda("XOM", 5e11, 2.5),
+        Celda("ZZZ", 1e11, None),
+    )
+    return Snapshot(celdas, "Fuente: TradingView", 3.0, obsoleto_min=obsoleto)
+
+
+def test_parse_vista_acciones():
+    assert mapa.parse_vista("mapa_acciones") == ("acciones", None)
+
+
+def test_vista_desde_args_acciones():
+    assert mapa._vista_desde_args(["acciones"]) == ("acciones", None)
+    assert mapa._vista_desde_args(["acciones", "7d"]) is None
+
+
+def test_teclado_incluye_acciones_y_marca_la_activa():
+    tec = mapa.armar_teclado(("acciones", None))
+    botones = [b for fila in tec.inline_keyboard for b in fila]
+    datos = [b.callback_data for b in botones]
+    assert "mapa_acciones" in datos and all(len(d.encode()) <= 64 for d in datos)
+    activo = next(b for b in botones if b.callback_data == "mapa_acciones" and "Actualizar" not in b.text)
+    assert "\u2705" in activo.text
+
+
+def test_caption_acciones_escapa_html_y_usa_mercado_ponderado():
+    txt = mapa.armar_caption(("acciones", None), _acciones(), AHORA)
+    assert "S&amp;P 500" in txt and "S&P 500" not in txt
+    assert "Mercado" in txt and "suben" in txt and "bajan" in txt
+    assert "NVDA -4.00%" in txt and "XOM +2.50%" in txt
+    assert len(txt) <= 1024
+
+
+def test_caption_acciones_avisa_dato_viejo():
+    assert "hace 7 min" in mapa.armar_caption(("acciones", None), _acciones(obsoleto=7), AHORA)
+
+
+def test_textos_imagen_acciones():
+    titulo, sub, gen = mapa._textos_imagen(("acciones", None), AHORA)
+    assert "S&P 500" in titulo and "capitalizaci" in sub and "Cuba" in gen

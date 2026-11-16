@@ -128,3 +128,87 @@ def test_forex_fallo_de_red_sin_cache_lanza_error():
 
     with pytest.raises(HeatmapError):
         asyncio.run(obtener_forex(http))
+
+
+# --- Acciones S&P 500 (escaner de TradingView; forma real de la respuesta) ---
+
+def _fila(sym, cap, chg, sector="Technology Services"):
+    return {"s": f"NASDAQ:{sym}", "d": [sym, cap, chg, sector]}
+
+
+TV = {
+    "totalCount": 503,
+    "data": [
+        _fila("AAPL", 5.1e12, -0.98),
+        _fila("MSFT", 3.8e12, -1.12),
+        _fila("GOOG", 3.45e12, -3.85),  # misma empresa que GOOGL: se descarta
+        _fila("GOOGL", 3.45e12, -4.07),
+        _fila("SINCAP", None, 1.0),
+        _fila("SINCAMBIO", 1e11, None),
+    ],
+}
+
+
+class HttpPostFalso:
+    def __init__(self, respuestas):
+        self.respuestas = list(respuestas)
+        self.llamadas = 0
+        self.args = None
+
+    async def __call__(self, url, body):
+        self.llamadas += 1
+        self.args = (url, body)
+        r = self.respuestas.pop(0) if len(self.respuestas) > 1 else self.respuestas[0]
+        if isinstance(r, Exception):
+            raise r
+        return r
+
+
+def test_acciones_parsea_filtra_y_descarta_clase_duplicada():
+    from src.heatmap.data import obtener_acciones
+
+    http = HttpPostFalso([TV])
+    snap = asyncio.run(obtener_acciones(http))
+    simbolos = [c.simbolo for c in snap.celdas]
+    assert simbolos == ["AAPL", "MSFT", "GOOGL", "SINCAMBIO"]
+    assert snap.fuente == "Fuente: TradingView"
+    assert snap.tope == 3.0
+    assert snap.obsoleto_min is None
+    aapl = snap.celdas[0]
+    assert aapl.peso == 5.1e12 and aapl.variacion == pytest.approx(-0.98)
+    assert snap.celdas[-1].variacion is None  # sin cambio: se dibuja neutro
+
+
+def test_acciones_pide_solo_el_sp500_y_un_tope_de_filas():
+    from src.heatmap.data import obtener_acciones
+
+    http = HttpPostFalso([TV])
+    asyncio.run(obtener_acciones(http))
+    url, body = http.args
+    assert url == "https://scanner.tradingview.com/america/scan"
+    assert body["symbols"]["groups"] == [{"type": "index", "values": ["SP:SPX"]}]
+    assert body["range"] == [0, 80]
+
+
+def test_acciones_cache_y_dato_viejo_si_la_fuente_falla(monkeypatch):
+    from src.heatmap.data import obtener_acciones
+
+    http = HttpPostFalso([TV, RuntimeError("caido")])
+    primero = asyncio.run(obtener_acciones(http))
+    asyncio.run(obtener_acciones(http))
+    assert http.llamadas == 1  # el segundo salio de cache
+    t = data.time.time()
+    monkeypatch.setattr(data.time, "time", lambda: t + data.TTL_ACCIONES + 120)
+    viejo = asyncio.run(obtener_acciones(http))
+    assert http.llamadas == 2
+    assert viejo.celdas == primero.celdas and viejo.obsoleto_min >= 2
+
+
+def test_acciones_sin_datos_levanta_error():
+    from src.heatmap.data import obtener_acciones
+
+    with pytest.raises(HeatmapError):
+        asyncio.run(obtener_acciones(HttpPostFalso([{"totalCount": 0, "data": []}])))
+    data.reset_cache()
+    with pytest.raises(HeatmapError):
+        asyncio.run(obtener_acciones(HttpPostFalso([RuntimeError("x")])))

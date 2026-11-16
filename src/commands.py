@@ -101,7 +101,7 @@ COMANDOS: tuple[Cmd, ...] = (
     Cmd("graf", _lazy("src.handlers.trading", "graf_command"), "Gráfico con indicadores"),
     Cmd("mk", _lazy("src.handlers.trading", "mk_command"), "Resumen del mercado"),
     Cmd("alert", alert_command, "Alertas de precio"),
-    Cmd("mapa", _lazy("src.handlers.mapa", "mapa_command"), "Mapa de calor cripto y forex"),
+    Cmd("mapa", _lazy("src.handlers.mapa", "mapa_command"), "Mapa de calor cripto, forex y acciones"),
     Cmd("spl", spl_command, "Spotlight del mercado"),
     Cmd("tspl", tspl_command, "TASALO Spotlight completo"),
     Cmd("news", news_command, "Noticias cripto"),
