@@ -154,7 +154,7 @@ def test_registrado_por_el_contrato():
 def test_los_botones_de_ayuda_de_p_y_ta_abren_el_selector():
     from src.handlers.start import PICK_DESDE_START
 
-    assert PICK_DESDE_START == {"p_help": "p", "ta_help": "ta"}
+    assert PICK_DESDE_START == {"p_help": "p", "ta_help": "ta", "alert_help": "alert"}
 
 
 def test_el_router_real_despacha_pick():
@@ -167,3 +167,94 @@ def test_el_router_real_despacha_pick():
     asyncio.run(r.callback_router(u, MagicMock()))
     q.edit_message_text.assert_awaited_once()
     assert "pick:ta:BTC" in _datas(q.edit_message_text.call_args.kwargs["reply_markup"])
+
+
+# --- /alert por botones: moneda -> nivel (%) sobre el precio actual ---
+
+
+def _alerta_falsa(monkeypatch, precio):
+    import src.handlers.alert as al
+
+    crypto = MagicMock()
+    crypto.get_crypto_data = AsyncMock(return_value={"price": precio} if precio else None)
+    api = MagicMock()
+    api.create_price_alert = AsyncMock(return_value=True)
+    monkeypatch.setattr(al, "get_crypto_client", lambda: crypto)
+    monkeypatch.setattr(al, "_get_api_client", lambda ctx: api)
+    return api
+
+
+def test_alert_pantallas_moneda_y_nivel():
+    from src.pick import COINS, LEVELS, render
+
+    _, m1 = render(("alert",))
+    d1 = _datas(m1)
+    for c in COINS:
+        assert f"pick:alert:{c}" in d1
+    assert "alert_back" in d1 and "menu:home" in d1  # Atras a "mis alertas"
+
+    _, m2 = render(("alert", "BTC"))
+    d2 = _datas(m2)
+    for k in LEVELS:
+        assert f"pick:alert:BTC:{k}" in d2
+    assert "pick:alert" in d2 and "menu:home" in d2
+    assert all(len(d.encode()) <= 64 for d in d1 + d2)
+
+
+@pytest.mark.parametrize("args", [("alert", "BTC", "m99"), ("alert", "ZZZ"), ("alert", "BTC", "1h"), ("ta", "BTC", "p5")])
+def test_alert_entrada_invalida(args):
+    from src.pick import parse
+
+    assert parse(args) is None
+
+
+def test_alert_crea_con_el_nivel_elegido(monkeypatch):
+    from src.pick import pick_callback
+
+    api = _alerta_falsa(monkeypatch, 100.0)
+    u, q = _update("pick:alert:BTC:p10")
+    asyncio.run(pick_callback(u, MagicMock(), "pick:alert:BTC:p10"))
+    uid, coin, objetivo, actual = api.create_price_alert.call_args.args
+    assert (uid, coin, actual) == (7, "BTC", 100.0)
+    assert objetivo == pytest.approx(110.0)
+    texto = q.edit_message_text.call_args.args[0]
+    assert "Alerta creada" in texto
+    assert "alert_back" in _datas(q.edit_message_text.call_args.kwargs["reply_markup"])
+
+
+def test_alert_nivel_negativo_baja_el_objetivo(monkeypatch):
+    from src.pick import pick_callback
+
+    api = _alerta_falsa(monkeypatch, 200.0)
+    u, _ = _update("pick:alert:ETH:m5")
+    asyncio.run(pick_callback(u, MagicMock(), "pick:alert:ETH:m5"))
+    assert api.create_price_alert.call_args.args[2] == pytest.approx(190.0)
+
+
+def test_alert_sin_precio_no_crea_y_avisa(monkeypatch):
+    from src.pick import pick_callback
+
+    api = _alerta_falsa(monkeypatch, None)
+    u, q = _update("pick:alert:BTC:p5")
+    asyncio.run(pick_callback(u, MagicMock(), "pick:alert:BTC:p5"))
+    api.create_price_alert.assert_not_awaited()
+    assert "precio actual" in q.edit_message_text.call_args.args[0].lower()
+
+
+def test_alert_error_de_la_api_avisa(monkeypatch):
+    from src.pick import pick_callback
+
+    api = _alerta_falsa(monkeypatch, 100.0)
+    api.create_price_alert.return_value = None
+    u, q = _update("pick:alert:BTC:p5")
+    asyncio.run(pick_callback(u, MagicMock(), "pick:alert:BTC:p5"))
+    assert "Alerta creada" not in q.edit_message_text.call_args.args[0]
+
+
+def test_crear_alerta_desde_el_menu_abre_el_selector():
+    from src.handlers.alert import alert_create_callback
+
+    u, q = _update("alert_create")
+    q.answer = AsyncMock()
+    asyncio.run(alert_create_callback(u, MagicMock()))
+    assert "pick:alert:BTC" in _datas(q.edit_message_text.call_args.kwargs["reply_markup"])

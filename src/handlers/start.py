@@ -23,7 +23,7 @@ MINIAPP_URL = "https://tasalo.duckdns.org/miniapp"
 
 
 # /p y /ta abren un selector por botones en vez de un texto de ayuda (F6-T5).
-PICK_DESDE_START = {"p_help": "p", "ta_help": "ta"}
+PICK_DESDE_START = {"p_help": "p", "ta_help": "ta", "alert_help": "alert"}
 
 
 def build_start_keyboard() -> InlineKeyboardMarkup:
