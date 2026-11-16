@@ -101,6 +101,9 @@ def test_cada_comando_publico_es_alcanzable_con_botones():
     todos = _alcanzables(es_admin=False)
     cubiertos = {d.split(":")[2] for d in todos if d.startswith("menu:cmd:")}
     cubiertos |= {ACCESO_DIRECTO[d] for d in todos if d in ACCESO_DIRECTO}
+    # Modulos registrados por el contrato (F6-T2): su boton abre `<namespace>_open`.
+    abiertos = {f"{(c.namespaces or (c.name,))[0]}_open": c.name for c in COMANDOS if c.menu}
+    cubiertos |= {abiertos[d] for d in todos if d in abiertos}
     faltan = {c.name for c in COMANDOS if not c.admin and c.name != "start"} - cubiertos
     assert not faltan, faltan
 

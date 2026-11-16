@@ -95,8 +95,8 @@ def test_dos_comandos_con_el_mismo_namespace_falla(monkeypatch):
 def test_comandos_reales_no_tienen_conflictos():
     from src.handlers import callback_router as r
 
-    # Sin conflictos de namespace; hoy usan el contrato el menu (F6-T4) y pick (F6-T5).
-    assert set(r._extra_routes()) == {"menu", "pick"}
+    # Sin conflictos de namespace; hoy usan el contrato menu (F6-T4), pick (F6-T5) y explorer (F4-T7).
+    assert set(r._extra_routes()) == {"menu", "pick", "explorer"}
 
 
 def test_namespace_desconocido_sigue_avisando(monkeypatch):
@@ -112,20 +112,20 @@ def test_menu_entries_filtra_por_seccion_y_admin(monkeypatch):
 
     commands = _con(
         monkeypatch,
-        Cmd("m1", None, "d", menu=("mercado", "Uno")),
-        Cmd("m2", None, "d", menu=("mercado", "Dos"), admin=True),
+        Cmd("m1", None, "d", menu=("seccion_de_prueba", "Uno")),
+        Cmd("m2", None, "d", menu=("seccion_de_prueba", "Dos"), admin=True),
         Cmd("o1", None, "d", menu=("otra", "Tres")),
     )
-    pub = commands.menu_entries("mercado")
+    pub = commands.menu_entries("seccion_de_prueba")
     assert [e.label for e in pub] == ["Uno"]
-    adm = commands.menu_entries("mercado", es_admin=True)
+    adm = commands.menu_entries("seccion_de_prueba", es_admin=True)
     assert [e.label for e in adm] == ["Uno", "Dos"]
 
 
 def test_menu_entry_callback_data_cabe_en_64_bytes(monkeypatch):
     from src.commands import Cmd
 
-    commands = _con(monkeypatch, Cmd("m1", None, "d", menu=("mercado", "Uno"), namespaces=("m_uno",)))
-    (e,) = commands.menu_entries("mercado")
+    commands = _con(monkeypatch, Cmd("m1", None, "d", menu=("seccion_de_prueba", "Uno"), namespaces=("m_uno",)))
+    (e,) = commands.menu_entries("seccion_de_prueba")
     assert e.callback_data == "m_uno_open"
     assert len(e.callback_data.encode()) <= 64
