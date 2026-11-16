@@ -227,22 +227,10 @@ async def alert_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 # ── Callbacks ──
 
 async def alert_create_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Muestra instrucciones para crear una alerta."""
-    query = update.callback_query
-    await query.answer()
+    """Abre el selector moneda -> nivel (el router ya respondio el callback)."""
+    from src.pick import pick_callback
 
-    text = (
-        "➕ *Crear alerta de precio*\n\n"
-        "Envía el comando con moneda y precio:\n"
-        "`/alert BTC 70000`\n"
-        "`/alert ETH 3500`\n"
-        "`/alert HIVE 0.35`\n\n"
-        "_Recibirás notificación cuando el precio suba o baje del nivel indicado._"
-    )
-    keyboard = [[InlineKeyboardButton("⬅️ Volver", callback_data="alert_back")]]
-    await query.edit_message_text(
-        text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN
-    )
+    await pick_callback(update, context, "pick:alert")
 
 
 async def alert_delete_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
