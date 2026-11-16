@@ -24,6 +24,13 @@ from src.handlers import image_alerts, tasalo, start, toqueimg, p, y, alert as p
 
 logger = logging.getLogger(__name__)
 
+# Antirrebote (F6-T6): PTB procesa los updates en serie, asi que un segundo toque
+# identico llega cuando el primero ya termino; se descarta si ocurre dentro de
+# esta ventana, contada desde que termino el primero.
+_DEBOUNCE_S = 1.0
+_now = time.monotonic
+_recent: dict[tuple, float] = {}
+
 # Route map: prefix → handler function
 # Multi-segment prefixes (e.g. "year_sub") are resolved by _resolve_namespace()
 # before lookup, so the map key must be the full compound prefix.
@@ -95,6 +102,41 @@ def _resolve_namespace(callback_data: str) -> str:
     return parts[0]
 
 
+_MSG_NO_DISPONIBLE = "⚠️ Este botón ya no está disponible. Usa el comando de nuevo."
+_MENSAJE_PERDIDO = ("to edit not found", "can't be edited", "to delete not found")
+
+
+async def _answer(query, text: str | None = None, alert: bool = False) -> bool:
+    """query.answer() tolerante: un boton caducado (BadRequest) no rompe nada."""
+    try:
+        if text:
+            await query.answer(text, show_alert=alert)
+        else:
+            await query.answer()
+        return True
+    except BadRequest as e:
+        logger.warning("Failed to answer query: %s", e)
+        return False
+
+
+def _tap_key(query) -> tuple:
+    msg = query.message
+    return (query.from_user.id, getattr(msg, "chat_id", None), getattr(msg, "message_id", None), query.data)
+
+
+def _is_double_tap(key: tuple) -> bool:
+    ultimo = _recent.get(key)
+    return ultimo is not None and _now() - ultimo < _DEBOUNCE_S
+
+
+def _mark_tap(key: tuple) -> None:
+    ahora = _now()
+    if len(_recent) > 256:
+        for k in [k for k, t in _recent.items() if ahora - t >= _DEBOUNCE_S]:
+            del _recent[k]
+    _recent[key] = ahora
+
+
 async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Route callback queries to appropriate handlers based on namespace prefix."""
     callback_start = time.time()
@@ -108,50 +150,58 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     logger.info("🔘 Callback '%s' from user %d (namespace: %s)", callback_data, user_id, namespace)
 
-    # Answer immediately to remove loading state
-    try:
-        await query.answer()
-    except BadRequest as e:
-        logger.warning("Failed to answer query for user %d: %s", user_id, e)
-        return
-
     extra = _extra_routes().get(namespace)
     handler_name = ROUTE_MAP.get(namespace) or (namespace if extra else None)
-    if handler_name:
-        handler_func = extra or globals().get(handler_name)
-        if handler_func:
-            logger.debug("Routing '%s' to handler '%s' for user %d", callback_data, handler_name, user_id)
-            try:
-                await handler_func(update, context, callback_data)
-                duration_ms = (time.time() - callback_start) * 1000
-                logger.info(
-                    "✅ Callback '%s' completed for user %d via '%s' (%.0fms)",
-                    callback_data, user_id, handler_name, duration_ms,
-                )
-            except Exception as e:
-                duration_ms = (time.time() - callback_start) * 1000
-                logger.error(
-                    "❌ Error handling callback '%s' for user %d via '%s' (%.0fms): %s",
-                    callback_data, user_id, handler_name, duration_ms, e, exc_info=True,
-                )
-                try:
-                    await query.answer("⚠️ Error procesando la acción", show_alert=True)
-                except BadRequest:
-                    pass
-        else:
-            duration_ms = (time.time() - callback_start) * 1000
+    handler_func = (extra or globals().get(handler_name)) if handler_name else None
+
+    # Un callback se responde una sola vez: sin handler, esa unica respuesta es el aviso.
+    if handler_func is None:
+        if handler_name:
             logger.error(
-                "❌ Handler function '%s' not found for callback '%s' from user %d (%.0fms)",
-                handler_name, callback_data, user_id, duration_ms,
+                "❌ Handler function '%s' not found for callback '%s' from user %d",
+                handler_name, callback_data, user_id,
             )
-            await query.answer("⚠️ Acción no reconocida", show_alert=True)
-    else:
+        else:
+            logger.warning(
+                "⚠️ Unknown callback namespace: %s (data: %s) from user %d",
+                namespace, callback_data, user_id,
+            )
+        await _answer(query, "⚠️ Acción no reconocida", alert=True)
+        return
+
+    key = _tap_key(query)
+    if _is_double_tap(key):
+        logger.debug("Double tap '%s' from user %d discarded", callback_data, user_id)
+        await _answer(query)  # quita el spinner sin repetir la accion
+        return
+
+    # Quita el estado de carga; si el boton caduco no hay nada que hacer.
+    if not await _answer(query):
+        return
+
+    try:
+        await handler_func(update, context, callback_data)
         duration_ms = (time.time() - callback_start) * 1000
-        logger.warning(
-            "⚠️ Unknown callback namespace: %s (data: %s) from user %d (%.0fms)",
-            namespace, callback_data, user_id, duration_ms,
+        logger.info(
+            "✅ Callback '%s' completed for user %d via '%s' (%.0fms)",
+            callback_data, user_id, handler_name, duration_ms,
         )
-        await query.answer("⚠️ Acción no reconocida", show_alert=True)
+    except Exception as e:
+        duration_ms = (time.time() - callback_start) * 1000
+        texto = str(e).lower() if isinstance(e, BadRequest) else ""
+        if "message is not modified" in texto:
+            logger.info("↩️ Callback '%s' for user %d: el mensaje ya estaba igual", callback_data, user_id)
+        elif any(m in texto for m in _MENSAJE_PERDIDO):
+            logger.info("↩️ Callback '%s' for user %d: mensaje ya no editable (%s)", callback_data, user_id, e)
+            await _answer(query, _MSG_NO_DISPONIBLE, alert=True)
+        else:
+            logger.error(
+                "❌ Error handling callback '%s' for user %d via '%s' (%.0fms): %s",
+                callback_data, user_id, handler_name, duration_ms, e, exc_info=True,
+            )
+            await _answer(query, "⚠️ Error procesando la acción", alert=True)
+    finally:
+        _mark_tap(key)
 
 
 # ── Start callbacks ──
