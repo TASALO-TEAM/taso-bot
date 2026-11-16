@@ -37,6 +37,7 @@ from src.handlers.toqueimg import toqueimg_command
 from src.handlers.tspl import tspl_command
 from src.handlers.y import y_command
 from src.menu import menu_callback
+from src.pick import pick_callback
 
 logger = logging.getLogger(__name__)
 
@@ -94,7 +95,8 @@ COMANDOS: tuple[Cmd, ...] = (
     Cmd("qp", qp_command, "Tasas P2P de QvaPay"),
     Cmd("toqueimg", toqueimg_command, "Imagen diaria de El Toque"),
     Cmd("y", y_command, "Estado del año"),
-    Cmd("p", p_command, "Precio de criptomonedas"),
+    # `pick` (F6-T5): selectores por botones de /p, /ta y /graf.
+    Cmd("p", p_command, "Precio de criptomonedas", callback=pick_callback, namespaces=("pick",)),
     Cmd("ta", _lazy("src.handlers.ta", "ta_command"), "Análisis técnico"),
     Cmd("graf", _lazy("src.handlers.trading", "graf_command"), "Gráfico con indicadores"),
     Cmd("mk", _lazy("src.handlers.trading", "mk_command"), "Resumen del mercado"),
