@@ -22,6 +22,10 @@ logger = logging.getLogger(__name__)
 MINIAPP_URL = "https://tasalo.duckdns.org/miniapp"
 
 
+# /p y /ta abren un selector por botones en vez de un texto de ayuda (F6-T5).
+PICK_DESDE_START = {"p_help": "p", "ta_help": "ta"}
+
+
 def build_start_keyboard() -> InlineKeyboardMarkup:
     """Construye el teclado inline con botones de acceso rápido + Web App.
 
@@ -192,6 +196,13 @@ async def start_button_callback(update: Update, context: ContextTypes.DEFAULT_TY
                 "✅ Spotlight (from /start) sent to user %d (@%s) (%.0fms)",
                 user_id, username, duration_ms,
             )
+            return
+
+        if command in PICK_DESDE_START:
+            from src.pick import render
+
+            texto, markup = render((PICK_DESDE_START[command],))
+            await query.edit_message_text(texto, reply_markup=markup)
             return
 
         # Botones de ayuda para comandos que requieren argumentos (/p, /ta,

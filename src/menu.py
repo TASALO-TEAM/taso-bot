@@ -28,8 +28,10 @@ ACCESO_DIRECTO = {
     "start_p_help": "p",
     "start_ta_help": "ta",
     "start_alert_help": "alert",
+    "pick:graf": "graf",
 }
 _ETIQUETA_DIRECTA = {
+    "pick:graf": "\U0001f4c8 Gr\u00e1fico /graf",
     "start_tasalo": "🌐 Todas las tasas",
     "start_toque": "📈 El Toque",
     "start_bcc": "🏛 BCC",
@@ -47,7 +49,7 @@ SECCIONES = {
     "cripto": ("🪙 Cripto", "Precios y resúmenes del mercado cripto.",
                ("start_spl", "start_p_help", "mk", "tspl")),
     "analisis": ("📊 Análisis", "Análisis técnico y gráficos.",
-                 ("start_ta_help", "graf")),
+                 ("start_ta_help", "pick:graf")),
     "alertas": ("🔔 Alertas", "Avisos de precio.", ("start_alert_help",)),
     "noticias": ("📰 Noticias", "Noticias del mercado.", ("news",)),
     "mercado": ("🗺 Mercado", "Vista general del mercado.", ("mapa",)),

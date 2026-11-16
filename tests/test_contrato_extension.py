@@ -95,8 +95,8 @@ def test_dos_comandos_con_el_mismo_namespace_falla(monkeypatch):
 def test_comandos_reales_no_tienen_conflictos():
     from src.handlers import callback_router as r
 
-    # Sin conflictos de namespace; hoy solo el menu (F6-T4) usa el contrato.
-    assert set(r._extra_routes()) == {"menu"}
+    # Sin conflictos de namespace; hoy usan el contrato el menu (F6-T4) y pick (F6-T5).
+    assert set(r._extra_routes()) == {"menu", "pick"}
 
 
 def test_namespace_desconocido_sigue_avisando(monkeypatch):
