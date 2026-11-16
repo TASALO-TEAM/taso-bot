@@ -56,7 +56,7 @@ def test_toda_pantalla_distinta_del_inicio_tiene_boton_inicio():
 
     for es_admin in (False, True):
         for d in _alcanzables(es_admin):
-            if d.startswith("menu:") and d != "menu:home":
+            if d.startswith("menu:") and d != "menu:home" and not d.startswith("menu:run:"):
                 _, markup = render(cd.parse_v2(d)[1], es_admin)
                 assert "menu:home" in _datas(markup), d
 

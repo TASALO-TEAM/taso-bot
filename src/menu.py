@@ -57,6 +57,10 @@ SECCIONES = {
 }
 _ADMIN = ("🛠 Admin", "Comandos de administración. Escríbelos en el chat.")
 
+# Comandos que corren sin argumentos y para cualquier usuario: su ficha ofrece
+# "Ejecutar". Lista cerrada a proposito (nada de admin ni de flujos con texto).
+EJECUTABLES = ("qp", "news", "mapa", "tspl", "toqueimg", "help")
+
 _TEXTO_CATEGORIAS = "\u2630 Categor\u00edas\n\nElige una categor\u00eda."
 
 
@@ -125,8 +129,13 @@ def _pantalla_cmd(args: tuple, es_admin: bool):
     c = _cmds().get(nombre)
     if c is None:
         return None
-    texto = f"/{nombre} — {c.descripcion}\n\nEscríbelo en el chat para usarlo."
-    return texto, InlineKeyboardMarkup([_fila_nav(sec)])
+    if nombre in EJECUTABLES and not c.admin:
+        texto = f"/{nombre} — {c.descripcion}\n\nToca Ejecutar o escríbelo en el chat."
+        filas = [[_btn("▶ Ejecutar", cd.build("menu", "run", nombre))], _fila_nav(sec)]
+    else:
+        texto = f"/{nombre} — {c.descripcion}\n\nEscríbelo en el chat para usarlo."
+        filas = [_fila_nav(sec)]
+    return texto, InlineKeyboardMarkup(filas)
 
 
 def _resolve(args: tuple, es_admin: bool, user=None):
@@ -150,10 +159,38 @@ def render(args: tuple, es_admin: bool, user=None):
     return _resolve(args, es_admin, user)[:2]
 
 
+class _UpdateEquivalente:
+    """Lo que leen los handlers de EJECUTABLES, como si el usuario escribiera el comando."""
+
+    callback_query = None
+
+    def __init__(self, message, user):
+        self.message = self.effective_message = message
+        self.effective_user = user
+        self.effective_chat = message.chat
+
+
+async def _ejecutar(query, context, nombre: str) -> bool:
+    """Corre el handler real de `nombre`. False si no esta permitido (cae en el inicio)."""
+    c = _cmds().get(nombre)
+    if nombre not in EJECUTABLES or c is None or c.admin:
+        return False
+    context.args = []
+    try:
+        await c.handler(_UpdateEquivalente(query.message, query.from_user), context)
+    except Exception:
+        logger.exception("menu: fallo al ejecutar /%s", nombre)
+        await query.message.reply_text(f"⚠️ No pude ejecutar /{nombre} ahora. Inténtalo de nuevo en un momento.")
+    return True
+
+
 async def menu_callback(update, context, callback_data: str) -> None:
     """Navega el menu editando el mensaje; si no es editable, envia uno nuevo."""
     query = update.callback_query
     parsed = cd.parse_v2(callback_data)
+    if parsed and len(parsed[1]) == 2 and parsed[1][0] == "run":
+        if await _ejecutar(query, context, parsed[1][1]):
+            return
     texto, markup, html = _resolve(parsed[1] if parsed else (), _es_admin(query.from_user.id), query.from_user)
     modo = "HTML" if html else None
     try:
