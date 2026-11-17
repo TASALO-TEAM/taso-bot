@@ -155,7 +155,7 @@ async def handle_time_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     time_str = update.message.text.strip()
 
-    logger.info("⏰ Alert time-input received '%s' from user %d", time_str, user_id)
+    logger.debug("⏰ Alert time-input received (%d chars) from user %d", len(time_str), user_id)
 
     if not context.user_data.get("waiting_for_time"):
         logger.debug("⏰ Alert time-input ignored - not waiting for time from user %d", user_id)
@@ -165,8 +165,8 @@ async def handle_time_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
     format_start = time.time()
     if not re.match(r"^\d{2}:\d{2}$", time_str):
         format_duration_ms = (time.time() - format_start) * 1000
-        logger.warning("⚠️ Alert time-input format validation failed for user %d: '%s' (%.0fms)",
-                       user_id, time_str, format_duration_ms)
+        logger.warning("⚠️ Alert time-input format validation failed for user %d (%.0fms)",
+                       user_id, format_duration_ms)
         await update.message.reply_text(
             "❌ Formato inválido. Usa `HH:MM` (ej: `08:30`)",
             parse_mode="Markdown"
@@ -180,8 +180,8 @@ async def handle_time_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
             raise ValueError()
         logger.info("✅ Alert time-input validation passed for user %d: %s", user_id, time_str)
     except ValueError:
-        logger.warning("⚠️ Alert time-input value validation failed for user %d: '%s'",
-                       user_id, time_str)
+        logger.warning("⚠️ Alert time-input value validation failed for user %d",
+                       user_id)
         await update.message.reply_text(
             "❌ Hora inválida. Usa formato 24h (00:00 - 23:59)",
             parse_mode="Markdown"
