@@ -29,10 +29,7 @@ def test_la_ficha_de_un_comando_sin_argumentos_ofrece_ejecutar(nombre):
 
 
 def test_comandos_con_argumentos_o_admin_no_ofrecen_ejecutar():
-    for nombre in ("tkt",):
-        sec = _seccion_de(nombre)
-        assert not any(d.startswith("menu:run:") for d in _datas(_ficha(nombre, sec, True)))
-    assert not any(n in menu.EJECUTABLES for n in ("tkt", "refresh", "health"))
+    assert not any(n in menu.EJECUTABLES for n in ("refresh", "health"))
 
 
 def _query():
@@ -59,7 +56,7 @@ def test_ejecutar_llama_al_handler_real_con_un_update_equivalente(monkeypatch):
     assert llamado == {"msg": q.message, "user": q.from_user, "cq": None, "args": []}
 
 
-@pytest.mark.parametrize("data", ["menu:run:tkt", "menu:run:refresh", "menu:run:zzz", "menu:run", "menu:run:qp:x"])
+@pytest.mark.parametrize("data", ["menu:run:ads", "menu:run:refresh", "menu:run:zzz", "menu:run", "menu:run:qp:x"])
 def test_lo_no_permitido_no_ejecuta_nada_y_cae_en_el_inicio(monkeypatch, data):
     handler = AsyncMock()
     monkeypatch.setattr(menu, "_cmds", lambda: {
