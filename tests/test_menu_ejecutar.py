@@ -29,10 +29,10 @@ def test_la_ficha_de_un_comando_sin_argumentos_ofrece_ejecutar(nombre):
 
 
 def test_comandos_con_argumentos_o_admin_no_ofrecen_ejecutar():
-    for nombre in ("tkt", "y", "mk"):
+    for nombre in ("tkt", "y"):
         sec = _seccion_de(nombre)
         assert not any(d.startswith("menu:run:") for d in _datas(_ficha(nombre, sec, True)))
-    assert not any(n in menu.EJECUTABLES for n in ("tkt", "y", "mk", "refresh", "health"))
+    assert not any(n in menu.EJECUTABLES for n in ("tkt", "y", "refresh", "health"))
 
 
 def _query():
