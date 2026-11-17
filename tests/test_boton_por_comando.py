@@ -4,7 +4,7 @@ from src.commands import COMANDOS
 
 # Comandos publicos que hoy solo tienen una ficha de texto ("escribelo en el
 # chat"). Al darles un flujo por botones, quitarlos de aqui (el test lo exige).
-SOLO_FICHA = {"tkt"}
+SOLO_FICHA = set()
 
 
 def _publicos():
