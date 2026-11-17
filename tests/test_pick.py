@@ -59,7 +59,7 @@ def test_todo_callback_cabe_en_64_bytes():
 
 @pytest.mark.parametrize(
     "args",
-    [(), ("x",), ("p", "ZZZ"), ("ta", "BTC", "9x"), ("ta", "BTC", "1h", "extra"), ("p", "BTC", "1h"), ("graf", "btc;rm")],
+    [(), ("x",), ("p", "zz!"), ("ta", "BTC", "9x"), ("ta", "BTC", "1h", "extra"), ("p", "BTC", "1h"), ("graf", "btc;rm")],
 )
 def test_entrada_invalida_no_se_resuelve(args):
     from src.pick import parse
@@ -138,8 +138,8 @@ def test_dato_falso_cae_en_la_bienvenida_sin_ejecutar_nada(monkeypatch):
 
     llamado = AsyncMock()
     monkeypatch.setattr(ta, "ta_command", llamado)
-    u, q = _update("pick:ta:ZZZ:4h")
-    asyncio.run(pick.pick_callback(u, MagicMock(), "pick:ta:ZZZ:4h"))
+    u, q = _update("pick:ta:zz!:4h")
+    asyncio.run(pick.pick_callback(u, MagicMock(), "pick:ta:zz!:4h"))
     llamado.assert_not_awaited()
     q.edit_message_text.assert_awaited_once()  # bienvenida
 
@@ -201,7 +201,7 @@ def test_alert_pantallas_moneda_y_nivel():
     assert all(len(d.encode()) <= 64 for d in d1 + d2)
 
 
-@pytest.mark.parametrize("args", [("alert", "BTC", "m99"), ("alert", "ZZZ"), ("alert", "BTC", "1h"), ("ta", "BTC", "p5")])
+@pytest.mark.parametrize("args", [("alert", "BTC", "m99"), ("alert", "zz!"), ("alert", "BTC", "1h"), ("ta", "BTC", "p5")])
 def test_alert_entrada_invalida(args):
     from src.pick import parse
 

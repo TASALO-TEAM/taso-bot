@@ -152,6 +152,10 @@ def create_application() -> Application:
     from src.explorer.handler import register as register_explorer
     register_explorer(application)
 
+    # Selectores: 'otra moneda' por texto (group=-2, antes que el explorador).
+    from src.pick import register as register_pick
+    register_pick(application)
+
     # Registrar handler para input de hora personalizada del año
     #
     # IMPORTANTE: los 3 MessageHandler globales de más abajo (year hour,
