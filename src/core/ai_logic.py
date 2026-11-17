@@ -12,6 +12,7 @@ import httpx
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 from src.config import settings
+from src.core import ia_identidad
 
 logger = logging.getLogger(__name__)
 
@@ -47,9 +48,9 @@ MAX_RETRIES = 3
 DEFAULT_REASONING_EFFORT = "low"
 
 # ── Prompt Template — Análisis Técnico Profesional (/ta) ─────────────────────
-CRYPTO_ANALYSIS_PROMPT = """Eres un analista técnico senior con experiencia en mesas de trading
+CRYPTO_ANALYSIS_PROMPT = """Eres TASALO IA, el analista técnico de TASALO Bot, con experiencia en mesas de trading
 institucionales. Tu trabajo es traducir un reporte de indicadores crudos en
-un análisis claro y accionable para un trader que ya conoce los conceptos
+un análisis claro para un trader que ya conoce los conceptos
 básicos pero no tiene tiempo de interpretar cada número por separado.
 
 === REPORTE TÉCNICO ===
@@ -74,8 +75,8 @@ TAREA — analiza el reporte y cubre estos siete puntos, en este orden:
 2. Fuerza de la tendencia: usa el ADX y el score compra/venta para calificarla (fuerte/moderada/débil) y justifica por qué.
 3. Osciladores y momentum: interpreta RSI, MFI, CCI, WR y OBV en conjunto — señala si confirman o contradicen la tendencia.
 4. Niveles de soporte y resistencia: cuáles son los más relevantes ahora mismo y qué pasaría si se rompen.
-5. Riesgo y oportunidad: qué podría invalidar la lectura actual, y dónde está el mejor punto de entrada/salida si la tendencia se mantiene.
-6. Recomendación: una acción concreta (COMPRAR / VENDER / MANTENER) con la justificación más fuerte que la respalde, no una lista de razones.
+5. Riesgo y oportunidad: qué podría invalidar la lectura actual y qué zonas del reporte vigilar si la tendencia se mantiene.
+6. Sesgo y escenarios: sesgo general (alcista, bajista o neutral) con convicción baja, media o alta, y dos escenarios breves (el base y el alternativo) con los niveles del reporte que los confirmarían o invalidarían. No des órdenes de comprar o vender.
 7. Conclusión: una o dos frases que resuman el panorama completo.
 
 FORMATO EXACTO DE SALIDA (usa estos títulos con asteriscos exactamente como se muestra):
@@ -94,7 +95,7 @@ FORMATO EXACTO DE SALIDA (usa estos títulos con asteriscos exactamente como se 
 📚 *Riesgo y Oportunidad*
 [Texto breve]
 
-📚 *Recomendación*
+📚 *Sesgo y Escenarios*
 [Texto breve]
 
 📚 *Conclusión*
@@ -113,7 +114,7 @@ REGLAS:
 
 
 # ── Prompt Template — Spotlight de Mercado (/p) ──────────────────────────────
-PRICE_SPOTLIGHT_PROMPT = """Eres un analista profesional de criptomonedas.
+PRICE_SPOTLIGHT_PROMPT = """Eres TASALO IA, el analista de criptomonedas de TASALO Bot.
 
 Tu tarea NO es hacer un análisis técnico tradicional.
 
@@ -331,7 +332,7 @@ async def get_groq_crypto_analysis(
     payload = {
         "model": DEFAULT_MODEL,
         "messages": [
-            {"role": "system", "content": "Eres un analista financiero profesional que explica conceptos técnicos en español de forma clara y concisa."},
+            {"role": "system", "content": ia_identidad.system_message("Explicas indicadores técnicos de forma clara y concisa.")},
             {"role": "user", "content": prompt},
         ],
         "temperature": 0.6,
@@ -368,15 +369,11 @@ async def get_groq_crypto_analysis(
         content = _sanitize_telegram_markdown_v1(content)
         content = _truncate_smart(content, MAX_RESPONSE_CHARS)
 
-        # Quitar cualquier disclaimer que el modelo haya añadido por su cuenta
-        for variant in (
-            "Análisis generado por IA — no es asesoramiento financiero.",
-            "*Análisis generado por IA — no es asesoramiento financiero.*",
-        ):
-            content = content.replace(variant, "").strip()
+        # Quitar cualquier descargo que el modelo haya añadido por su cuenta
+        content = ia_identidad.quitar_descargo(content)
 
-        # Disclaimer siempre añadido por el código, con salto de línea propio
-        content += "\n\n*Análisis generado por IA — no es asesoramiento financiero.*"
+        # Descargo siempre añadido por el código, con salto de línea propio
+        content += "\n\n" + ia_identidad.descargo("*")
 
         return content
 
@@ -580,7 +577,7 @@ async def get_groq_price_spotlight(price_data: dict) -> str:
     payload = {
         "model": DEFAULT_MODEL,
         "messages": [
-            {"role": "system", "content": "Eres un analista de mercado de criptomonedas que escribe comentarios breves, claros y conversacionales en español, sin tecnicismos de trading."},
+            {"role": "system", "content": ia_identidad.system_message("Escribes comentarios breves, claros y conversacionales, sin tecnicismos de trading.")},
             {"role": "user", "content": prompt},
         ],
         "temperature": 0.7,
@@ -616,13 +613,9 @@ async def get_groq_price_spotlight(price_data: dict) -> str:
         # se aplica _escape_telegram_markdown aquí — solo truncado de seguridad.
         content = _truncate_smart(content, MAX_RESPONSE_CHARS)
 
-        # Quitar cualquier disclaimer que el modelo haya añadido por su cuenta
+        # Quitar cualquier descargo que el modelo haya añadido por su cuenta
         # (se le pidió que no lo hiciera, pero por seguridad se limpia aquí)
-        for variant in (
-            "Análisis generado por IA. No constituye asesoramiento financiero.",
-            "Análisis generado por IA — no es asesoramiento financiero.",
-        ):
-            content = content.replace(variant, "").strip()
+        content = ia_identidad.quitar_descargo(content)
 
         # Asegurar separación visual en párrafos (evita el "muro de texto")
         content = _normalize_spotlight_paragraphs(content)
@@ -641,7 +634,7 @@ async def get_groq_price_spotlight(price_data: dict) -> str:
         # Disclaimer siempre añadido por el código (no por el modelo),
         # con su propio salto de línea y formato en cursiva para que se
         # distinga visualmente del cuerpo del análisis.
-        content += "\n\n_Análisis generado por IA. No constituye asesoramiento financiero._"
+        content += "\n\n" + ia_identidad.descargo("_")
 
         return content
 
@@ -669,7 +662,7 @@ async def get_groq_price_spotlight(price_data: dict) -> str:
 
 
 # ── Prompt Template — Spotlight de Mercado (/spl) ──────────────────────────────────────
-MARKET_SPOTLIGHT_PROMPT = """Eres un analista profesional de mercado de criptomonedas.
+MARKET_SPOTLIGHT_PROMPT = """Eres TASALO IA, el analista de mercado cripto de TASALO Bot.
 
 Tu tarea es generar un comentario tipo "Spotlight" de mercado, similar al
 que aparece en la portada de CoinMarketCap, pero basado UNICAMENTE en los
@@ -851,7 +844,7 @@ async def get_groq_market_spotlight(snapshot: dict) -> str:
     payload = {
         "model": DEFAULT_MODEL,
         "messages": [
-            {"role": "system", "content": "Eres un analista de mercado de criptomonedas que escribe comentarios breves, claros y conversacionales en español, sin tecnicismos de trading."},
+            {"role": "system", "content": ia_identidad.system_message("Escribes comentarios breves, claros y conversacionales, sin tecnicismos de trading.")},
             {"role": "user", "content": prompt},
         ],
         "temperature": 0.7,
@@ -888,8 +881,9 @@ async def get_groq_market_spotlight(snapshot: dict) -> str:
 
         import re as _re
         content = _re.sub(r"\n{3,}", "\n\n", content.strip())
+        content = ia_identidad.quitar_descargo(content)
 
-        content += "\n\n_Análisis generado por IA. No constituye asesoramiento financiero._"
+        content += "\n\n" + ia_identidad.descargo("_")
 
         return content
 
@@ -917,7 +911,7 @@ async def get_groq_market_spotlight(snapshot: dict) -> str:
 
 
 # ── Prompt Template — Digest de Noticias (/tspl) ────────────────────────────
-TSPL_DIGEST_PROMPT = """Eres un editor de un newsletter cripto diario en espanol,
+TSPL_DIGEST_PROMPT = """Eres TASALO IA, editor del newsletter cripto diario de TASALO Bot, en español,
 estilo "TASALO Spotlight". Tu trabajo es curar y redactar un resumen de las
 noticias del dia a partir de titulares y descripciones crudas, siempre en
 espanol, sin importar en que idioma vengan los articulos originales.
@@ -931,38 +925,38 @@ espanol, sin importar en que idioma vengan los articulos originales.
 === FIN ARTICULOS ===
 
 TAREA:
-1. Elegi entre 4 y 6 articulos realmente relevantes (regulacion, mercados,
+1. Elige entre 4 y 6 articulos realmente relevantes (regulacion, mercados,
    instituciones, tecnologia cripto) - ignora contenido irrelevante o
    generico (ej. articulos de bolsa/petroleo/acciones que solo mencionan
    cripto de pasada).
-2. Para cada uno, escribi un titulo breve en espanol (si el original esta
-   en ingles, traducilo) y un parrafo de 2 a 5 frases con el contexto real
+2. Para cada uno, escribe un título breve en espanol (si el original esta
+   en ingles, tradúcelo) y un parrafo de 2 a 5 frases con el contexto real
    (cifras, nombres, cargos, instituciones) tal como aparecen en la
    descripcion original - no inventes datos que no esten ahi, y no
    rellenes ni repitas la misma idea con otras palabras solo para alargar:
    usa 5 frases solo si la descripcion original realmente sostiene esa
    extension, menos esta bien si no.
-3. Elegi un emoji representativo para cada noticia (regulacion, internacional,
+3. Elige un emoji representativo para cada noticia (regulacion, internacional,
    legislacion, mercados/exchanges, IA/tecnologia, institucional/ETF,
    seguridad, etc.).
-4. Escribi un "lede" de 3-4 frases con el panorama general del dia. Si hay
+4. Escribe un "lede" de 3-4 frases con el panorama general del dia. Si hay
    DATOS DE MERCADO REALES arriba, la PRIMERA frase tiene que abrir con el
    Fear & Greed y el precio de BTC de esos datos (forma: "El indicador
    Miedo y Codicia se situa en {{valor}} ({{clasificacion}}) y el BTC en
    {{precio}} dolares {{momento del dia}}."), y seguir con 2-3 frases de
    color sobre el movimiento del mercado segun el signo/magnitud del
-   cambio 24h y las noticias elegidas - podes sumar la dominancia BTC, el
+   cambio 24h y las noticias elegidas - puedes sumar la dominancia BTC, el
    cambio del market cap total o el Altcoin Season Index si estan
    presentes en los DATOS DE MERCADO REALES y aportan al hilo de esta
    edicion en particular (no hace falta forzarlos todos siempre) - sin
    inventar otros niveles de precio ni cifras que no esten ahi. Si NO hay
    datos de mercado, arranca el lede directo con el panorama de las
    noticias, sin mencionar Fear & Greed ni precio de BTC.
-5. Escribi un "teaser" de 2-3 frases cortas tipo gancho (una por cada
+5. Escribe un "teaser" de 2-3 frases cortas tipo gancho (una por cada
    noticia mas fuerte del dia, sin el detalle completo - eso va en
-   "items") y cerra siempre con la frase exacta "Vamos a empezar." como
+   "items") y cierra siempre con la frase exacta "Vamos a empezar." como
    ultima oracion.
-6. Escribi un "radar" de 1-2 frases sobre que vigilar en los proximos dias
+6. Escribe un "radar" de 1-2 frases sobre que vigilar en los proximos dias
    segun lo que sugieren estas noticias.
 
 Responde EXCLUSIVAMENTE con un objeto JSON valido, sin texto antes ni
@@ -1133,7 +1127,7 @@ async def get_groq_tspl_digest(articles: list[dict], market_data: Optional[dict]
     payload = {
         "model": DEFAULT_MODEL,
         "messages": [
-            {"role": "system", "content": "Eres un editor de noticias cripto que responde exclusivamente con JSON valido, sin texto adicional."},
+            {"role": "system", "content": ia_identidad.system_message("Editas noticias cripto y respondes exclusivamente con JSON válido, sin texto adicional.")},
             {"role": "user", "content": prompt},
         ],
         "temperature": 0.5,
