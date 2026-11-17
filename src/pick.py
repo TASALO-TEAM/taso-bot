@@ -6,9 +6,12 @@ listas fijas, y lo que no encaje cae en la bienvenida sin ejecutar nada.
 """
 
 import logging
+import re
+import time
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import BadRequest
+from telegram.ext import ApplicationHandlerStop, MessageHandler, filters
 
 from src import callback_data as cd
 
@@ -16,6 +19,11 @@ logger = logging.getLogger(__name__)
 
 COINS = ("BTC", "ETH", "BNB", "SOL", "XRP", "ADA", "DOGE", "TON")
 TFS = ("15m", "1h", "4h", "1d")
+_SYM = re.compile(r"^[A-Z0-9]{2,10}$")  # simbolo libre ("otra moneda"): solo mayusculas y digitos
+ESPERA = "pick_awaiting"  # user_data: (flujo, instante) mientras se espera el simbolo
+ESPERA_TTL = 120.0
+# flags de otros flujos de texto libre: pedir una moneda cancela cualquiera pendiente
+_OTROS_FLAGS = ("tkt_awaiting", "awaiting_tspl_hour", "awaiting_year_hour")
 LEVELS = ("m10", "m5", "p5", "p10")  # /alert: % sobre el precio actual (m = menos, p = mas)
 FLOWS = {"p": "\U0001f4b2 Precio /p", "ta": "\U0001f4ca An\u00e1lisis /ta", "graf": "\U0001f4c8 Gr\u00e1fico /graf", "alert": "\U0001f514 Alerta /alert"}
 
@@ -27,7 +35,7 @@ def parse(args: tuple):
     flow = args[0]
     coin = args[1] if len(args) > 1 else None
     tf = args[2] if len(args) > 2 else None
-    if coin is not None and coin not in COINS:
+    if coin is not None and coin not in COINS and not _SYM.match(coin):
         return None
     opciones = {"p": (), "ta": TFS, "graf": TFS, "alert": LEVELS}[flow]
     if tf is not None and tf not in opciones:
@@ -61,6 +69,7 @@ def render(args: tuple):
     if coin is None:
         botones = [_btn(c, cd.build("pick", flow, c)) for c in COINS]
         filas = [botones[i : i + 4] for i in range(0, len(botones), 4)]
+        filas.append([_btn("\u270f\ufe0f Otra moneda", cd.build("pick", flow, "otra"))])
         filas.append(_nav("alert_back" if flow == "alert" else None))
         return f"{FLOWS[flow]}\n\nElige la moneda:", InlineKeyboardMarkup(filas)
     if flow == "alert":
@@ -145,6 +154,9 @@ async def pick_callback(update, context, callback_data: str) -> None:
     query = update.callback_query
     parsed = cd.parse_v2(callback_data)
     args = parsed[1] if parsed else ()
+    if len(args) == 2 and args[0] in FLOWS and args[1] == "otra":
+        await _pedir_simbolo(update, context, args[0])
+        return
     p = parse(args)
     if p is None:
         from src.menu import menu_callback
@@ -156,3 +168,50 @@ async def pick_callback(update, context, callback_data: str) -> None:
         await _ejecutar(update, context, *p)
         return
     await _mostrar(query, *pantalla)
+
+
+def _cancelar_otras_esperas(user_data) -> None:
+    user_data["waiting_for_time"] = False
+    user_data["alert_action"] = None
+    for f in _OTROS_FLAGS:
+        user_data.pop(f, None)
+    user_data.pop("explorer_waiting", None)
+
+
+async def _pedir_simbolo(update, context, flow: str) -> None:
+    _cancelar_otras_esperas(context.user_data)
+    context.user_data[ESPERA] = (flow, time.monotonic())
+    texto = f"{FLOWS[flow]}\n\nEscribe el s\u00edmbolo de la moneda (por ejemplo LINK)."
+    await _mostrar(update.callback_query, texto, InlineKeyboardMarkup([_nav(cd.build("pick", flow))]))
+
+
+async def pick_text(update, context) -> None:
+    """Texto libre mientras se espera un simbolo. Sin espera no hace nada ni corta la cadena."""
+    espera = context.user_data.get(ESPERA)
+    if not espera:
+        return
+    flow, t0 = espera
+    msg = update.message
+    if time.monotonic() - t0 > ESPERA_TTL or not msg or not msg.text:
+        context.user_data.pop(ESPERA, None)
+        return
+    sym = msg.text.strip().upper()
+    if not _SYM.match(sym):
+        context.user_data[ESPERA] = (flow, time.monotonic())  # puede reintentar
+        await msg.reply_text("S\u00edmbolo no v\u00e1lido. Usa solo letras y n\u00fameros (2 a 10), por ejemplo LINK.")
+        raise ApplicationHandlerStop
+    context.user_data.pop(ESPERA, None)
+    if flow == "p":
+        from src.handlers.p import p_command
+
+        context.args = [sym]
+        await p_command(update, context)
+    else:
+        texto, markup = render((flow, sym))
+        await msg.reply_text(texto, reply_markup=markup)
+    raise ApplicationHandlerStop
+
+
+def register(app) -> None:
+    """Antes que el explorador (-1): mientras se espera un simbolo, ese texto es de pick."""
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, pick_text), group=-2)
