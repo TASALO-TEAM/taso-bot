@@ -47,9 +47,22 @@ SOURCES_LABELS = {
 }
 
 
+# Monedas de ElToque que muestran /tasalo y /toque, en este orden. La API manda ~20:
+# el mensaje de Telegram tiene tope de 4096 caracteres, asi que la lista es fija.
+ELTOQUE_FIAT = ["EUR", "USD", "ZELLE", "MLC", "CLA"]
+ELTOQUE_CRYPTO = ["BTC", "TRX", "USDT", "BNB"]
+ELTOQUE_PRIORITY = ELTOQUE_FIAT + ELTOQUE_CRYPTO
+
+
 # =============================================================================
 # FUNCIONES AUXILIARES
 # =============================================================================
+
+
+def _eltoque_currencies(eltoque_data: Dict[str, Any]) -> List[str]:
+    """Claves de eltoque_data que se muestran, en el orden de ELTOQUE_PRIORITY."""
+    by_upper = {k.upper(): k for k in eltoque_data}
+    return [by_upper[c] for c in ELTOQUE_PRIORITY if c in by_upper]
 
 
 def get_change_indicator(change: Optional[str]) -> str:
@@ -174,12 +187,7 @@ def build_eltoque_block(data: Dict[str, Any]) -> str:
 
     logger.debug("📊 ElToque data: %d currencies", len(eltoque_data))
 
-    # Ordenar monedas: legacy order - EUR, USD, MLC, BTC, TRX, USDT
-    priority = ["EUR", "USD", "MLC", "BTC", "TRX", "USDT"]
-    sorted_currencies = sorted(
-        eltoque_data.keys(),
-        key=lambda x: (priority.index(x.upper()) if x.upper() in priority else 99, x),
-    )
+    sorted_currencies = _eltoque_currencies(eltoque_data)
 
     for currency in sorted_currencies:
         currency_info = eltoque_data[currency]
@@ -434,11 +442,7 @@ def build_full_message_with_datetime(
 
     eltoque_data = data.get("eltoque", {})
     if eltoque_data:
-        priority = ["EUR", "USD", "MLC", "BTC", "TRX", "USDT"]
-        sorted_currencies = sorted(
-            eltoque_data.keys(),
-            key=lambda x: (priority.index(x.upper()) if x.upper() in priority else 99, x),
-        )
+        sorted_currencies = _eltoque_currencies(eltoque_data)
         for currency in sorted_currencies:
             currency_info = eltoque_data[currency]
             if isinstance(currency_info, dict):
@@ -757,12 +761,12 @@ def build_toque_new_message(api_data: Dict[str, Any]) -> str:
 
     logger.debug("📊 /toque new format: %d currencies", len(eltoque_data))
 
-    # Sección 1: Valores actuales del mercado (Fiat - EUR, USD, MLC)
+    # Sección 1: Valores actuales del mercado (Fiat - EUR, USD, ZELLE, MLC, CLA)
     lines.append("» Valores actuales del mercado:")
     lines.append("")
 
-    fiat_priority = ["EUR", "USD", "MLC"]
-    fiat_flags = {"EUR": "🇪🇺", "USD": "🇺🇸", "MLC": "💳"}
+    fiat_priority = ELTOQUE_FIAT
+    fiat_flags = {"EUR": "🇪🇺", "USD": "🇺🇸", "MLC": "💳", "ZELLE": "💸", "CLA": "🏧"}
 
     for currency in fiat_priority:
         if currency in eltoque_data:
@@ -778,12 +782,12 @@ def build_toque_new_message(api_data: Dict[str, Any]) -> str:
 
     lines.append("")
 
-    # Sección 2: Mercado Criptomonedas (BTC, TRX, USDT)
+    # Sección 2: Mercado Criptomonedas (BTC, TRX, USDT, BNB)
     lines.append("» Mercado Criptomonedas")
     lines.append("")
 
-    crypto_priority = ["BTC", "TRX", "USDT"]
-    crypto_icons = {"BTC": "🪙", "TRX": "⚡", "USDT": "💰"}
+    crypto_priority = ELTOQUE_CRYPTO
+    crypto_icons = {"BTC": "🪙", "TRX": "⚡", "USDT": "💰", "BNB": "🟡"}
 
     for currency in crypto_priority:
         if currency in eltoque_data:
