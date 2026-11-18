@@ -983,6 +983,59 @@ async def get_groq_market_spotlight(snapshot: dict) -> str:
         return "⚠️ Error inesperado de la IA. Intenta de nuevo más tarde."
 
 
+
+# ── Analisis del mapa de calor (/mapa, F3-T4) ───────────────────────────────
+MAPA_PROMPT = """Eres TASALO IA, el analista de mercado de TASALO Bot.
+A partir del resumen de un mapa de calor, escribe un análisis breve en español.
+
+=== DATOS DEL MAPA (reales; no inventes otras cifras) ===
+{contexto}
+=== FIN DATOS ===
+
+Estructura: 1) una frase con el panorama general; 2) quién lidera la subida o la caída y por qué importa; 3) una observación prudente sobre qué vigilar.
+Máximo 90 palabras, sin listas largas y con 2 emojis como máximo. No prometas rentabilidad ni des órdenes de comprar o vender.
+Usa solo formato simple de Telegram (*negrita*). No añadas descargo: lo agrego yo."""
+
+
+async def get_mapa_analysis(contexto: str) -> str:
+    """Comentario breve de TASALO IA sobre un mapa de calor (datos publicos de mercado).
+
+    Devuelve el texto (con descargo) o un mensaje de error legible que empieza por "⚠️".
+    """
+    if not contexto.strip():
+        return "⚠️ No hay datos suficientes para analizar el mapa."
+    payload = {
+        "model": DEFAULT_MODEL,
+        "messages": [
+            {"role": "system", "content": ia_identidad.system_message("Escribes análisis de mercado breves, claros y prudentes.")},
+            {"role": "user", "content": MAPA_PROMPT.format(contexto=contexto)},
+        ],
+        "temperature": 0.6,
+        "max_completion_tokens": 600,
+        "reasoning_effort": DEFAULT_REASONING_EFFORT,
+    }
+    try:
+        data = await _call_ai_async(payload)
+        choices = data.get("choices", [])
+        content = (choices[0].get("message", {}).get("content", "") if choices else "").strip()
+        if not content:
+            logger.warning("IA (mapa) devolvio contenido vacio")
+            return "⚠️ La IA devolvió contenido vacío. Intenta de nuevo."
+        content = _preparar_respuesta(content)
+        content = ia_identidad.quitar_descargo(content)
+        return content + "\n\n" + ia_identidad.descargo("_")
+    except httpx.HTTPStatusError as e:
+        status = e.response.status_code if e.response else "??"
+        logger.error("IA HTTP error %s (mapa)", status)
+        return "⚠️ Límite de la IA excedido. Intenta en 1 minuto." if status == 429 else f"⚠️ Error HTTP {status} de la IA. Intenta más tarde."
+    except httpx.TimeoutException:
+        logger.error("IA timeout (mapa)")
+        return "⚠️ La IA tardó demasiado en responder. Intenta de nuevo."
+    except Exception:
+        logger.exception("Error inesperado en get_mapa_analysis")
+        return "⚠️ Error inesperado de la IA. Intenta de nuevo más tarde."
+
+
 # ── Prompt Template — Digest de Noticias (/tspl) ────────────────────────────
 TSPL_DIGEST_PROMPT = """Eres TASALO IA, editor del newsletter cripto diario de TASALO Bot, en español,
 estilo "TASALO Spotlight". Tu trabajo es curar y redactar un resumen de las

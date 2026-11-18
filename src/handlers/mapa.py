@@ -2,13 +2,14 @@
 
 Un solo punto de registro: una linea en COMANDOS (src/commands.py) y otra en
 ROUTE_MAP (callback_router.py). Datos en src/heatmap/data.py, dibujo en
-src/heatmap/render.py. El resumen es calculado (sin IA); TASALO IA lo ampliara
-cuando F5 defina su contrato (F3-T4).
+src/heatmap/render.py. El resumen es calculado; el boton "Analisis TASALO IA" agrega un comentario
+del modelo en un mensaje aparte (F3-T4).
 """
 
 import asyncio
 import html
 import logging
+import re
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
@@ -17,6 +18,7 @@ from telegram.constants import ParseMode
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 
+from src.core import ai_logic
 from src.handlers.p import get_crypto_client
 from src.heatmap.data import HeatmapError, obtener_acciones, obtener_cripto, obtener_forex
 from src.heatmap.render import render_mapa
@@ -33,14 +35,20 @@ PRINCIPALES = ("BTC", "ETH", "BNB", "XRP", "SOL")
 UMBRAL_ULTIMA_HORA = {"24h": 5.0, "7d": 10.0}
 PERIODO = {"24h": "las últimas 24 horas", "7d": "los últimos 7 días"}
 MSG_ERROR = "⚠️ No pude obtener datos de mercado ahora mismo. Intenta de nuevo en unos minutos."
+MSG_IA_NO = "⚠️ El análisis con IA no está disponible ahora mismo."
 MSG_USO = ("Uso: /mapa [cripto|forex|acciones] [24h|7d]\n"
            "Ejemplos: /mapa, /mapa cripto 7d, /mapa forex, /mapa acciones")
 
 _png: dict = {}  # vista -> (snapshot, bytes): evita re-dibujar mientras el dato no cambie
 
 
+_ia_cache: dict = {}  # clave -> (snapshot, texto): mismo dato, mismo analisis (cuida el limite de la IA)
+_ia_locks: dict = {}
+
+
 def reset_cache_png() -> None:
     _png.clear()
+    _ia_cache.clear()
 
 
 def parse_vista(data: str):
@@ -75,6 +83,7 @@ def armar_teclado(vista) -> InlineKeyboardMarkup:
         [boton("cripto_24h", "₿", "24 h"), boton("cripto_7d", "₿", "7 d"), boton("forex", "💱", "Forex")],
         [boton("acciones", "📈", "Acciones S&P 500")],
         [InlineKeyboardButton("🔄 Actualizar", callback_data=f"mapa_{activa}")],
+        [InlineKeyboardButton("🧠 Análisis TASALO IA", callback_data=f"mapa_ia_{activa}")],
     ])
 
 
@@ -183,14 +192,18 @@ def _textos_imagen(vista, ahora):
             "Tamaño igual · color = variación diaria (referencia BCE)", gen)
 
 
+async def _snapshot(vista):
+    """Datos de la vista (con su cache de data.py). Lanza HeatmapError si no hay datos."""
+    if vista[0] == "cripto":
+        return await obtener_cripto(get_crypto_client()._cmc_get, vista[1])
+    if vista[0] == "acciones":
+        return await obtener_acciones()
+    return await obtener_forex()
+
+
 async def _preparar(vista):
     """Devuelve (png, caption). Lanza HeatmapError si no hay datos."""
-    if vista[0] == "cripto":
-        snap = await obtener_cripto(get_crypto_client()._cmc_get, vista[1])
-    elif vista[0] == "acciones":
-        snap = await obtener_acciones()
-    else:
-        snap = await obtener_forex()
+    snap = await _snapshot(vista)
     ahora = datetime.now(CUBA)
     clave = _clave(vista)
     previo = _png.get(clave)
@@ -204,6 +217,79 @@ async def _preparar(vista):
         )
         _png[clave] = (snap, png)
     return png, armar_caption(vista, snap, ahora)
+
+
+def _limpio(simbolo) -> str:
+    """Simbolo de un proveedor externo: solo caracteres inocuos y corto."""
+    return re.sub(r"[^A-Za-z0-9.&-]", "", str(simbolo))[:12]
+
+
+def contexto_ia(vista, snap) -> str:
+    """Resumen de DATOS PUBLICOS de mercado para TASALO IA: solo simbolos y cifras, nada de usuarios."""
+    con = [c for c in snap.celdas if c.variacion is not None]
+    total = sum(c.peso for c in con)
+    pond = sum(c.peso * c.variacion for c in con) / total if total else 0.0
+    suben = sorted((c for c in con if c.variacion > 0), key=lambda c: -c.variacion)
+    bajan = sorted((c for c in con if c.variacion < 0), key=lambda c: c.variacion)
+    if vista[0] == "cripto":
+        titulo = f"Cripto, top 100 por capitalización, variación en {vista[1]}"
+    elif vista[0] == "acciones":
+        titulo = "Acciones del S&P 500, mayores empresas, variación de la sesión"
+    else:
+        titulo = "Forex, monedas frente al USD, variación diaria (referencia BCE)"
+    lineas = [titulo, f"Variación ponderada del mercado: {pond:+.2f}%",
+              f"Suben: {len(suben)}; bajan: {len(bajan)}"]
+    if vista[0] == "cripto":
+        if not any(c.variacion <= -100 for c in con):
+            lineas.append(f"Cambio estimado del capital del top 100: {_delta_capital(con) / 1e9:+,.1f} mil millones de USD")
+        por = {c.simbolo: c for c in con}
+        lineas.append("Principales: " + ", ".join(
+            f"{s} {por[s].variacion:+.2f}%" for s in PRINCIPALES if s in por))
+    lineas.append("Mayores subas: " + ", ".join(f"{_limpio(c.simbolo)} {c.variacion:+.2f}%" for c in suben[:5]))
+    lineas.append("Mayores bajas: " + ", ".join(f"{_limpio(c.simbolo)} {c.variacion:+.2f}%" for c in bajan[:5]))
+    if snap.obsoleto_min is not None:
+        lineas.append(f"Nota: datos de hace {snap.obsoleto_min} min.")
+    if snap.fecha_dato:
+        lineas.append(f"Fecha del dato: {snap.fecha_dato}")
+    return "\n".join(lineas)
+
+
+async def _analisis(vista) -> str:
+    """Analisis de TASALO IA para la vista; reutiliza el anterior si el dato no cambio."""
+    snap = await _snapshot(vista)
+    clave = _clave(vista)
+    previo = _ia_cache.get(clave)
+    if previo and previo[0] == snap:
+        return previo[1]
+    async with _ia_locks.setdefault(clave, asyncio.Lock()):
+        previo = _ia_cache.get(clave)
+        if previo and previo[0] == snap:
+            return previo[1]
+        texto = await ai_logic.get_mapa_analysis(contexto_ia(vista, snap))
+        if not texto.startswith("⚠️"):  # un error no se guarda: el siguiente toque reintenta
+            _ia_cache[clave] = (snap, texto)
+        return texto
+
+
+async def _ia_callback(query) -> None:
+    """Boton "Analisis TASALO IA": envia el comentario como mensaje nuevo bajo el mapa."""
+    vista = VISTAS.get(query.data[len("mapa_ia_"):]) if len(query.data) <= 32 else None
+    if vista is None:
+        logger.warning("mapa ia callback invalido: %r", query.data[:40])
+        return
+    if not ai_logic._ia_configurada():
+        await query.message.reply_text(MSG_IA_NO)
+        return
+    await query.message.chat.send_action("typing")
+    try:
+        texto = await _analisis(vista)
+    except HeatmapError:
+        await query.message.reply_text(MSG_ERROR)
+        return
+    try:
+        await query.message.reply_text(texto, parse_mode=ParseMode.MARKDOWN)
+    except BadRequest:  # Markdown del modelo mal formado: se reenvia como texto plano
+        await query.message.reply_text(texto)
 
 
 async def mapa_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -230,6 +316,9 @@ async def mapa_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 async def mapa_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Botones del mapa: cambia de vista o actualiza editando la misma imagen."""
     query = update.callback_query
+    if query.data.startswith("mapa_ia_"):
+        await _ia_callback(query)
+        return
     vista = parse_vista(query.data)
     if vista is None:
         logger.warning("mapa callback invalido: %r", query.data[:40])
