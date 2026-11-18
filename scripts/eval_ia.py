@@ -8,9 +8,10 @@ import json
 import re
 import sys
 
-_NUM = re.compile(r"(?<![\w.])(\d[\d.,]*\d|\d)(?:\s?(mil millones|millones|miles|mil|[MBK])\b)?")
-_ESCALA = {"mil millones": 1e9, "millones": 1e6, "M": 1e6, "B": 1e9, "miles": 1e3, "mil": 1e3, "K": 1e3}
+_NUM = re.compile(r"(?<![\w.])(\d[\d.,]*\d|\d)(?:\s?(mil\s+millones|millones|miles|mil|MM|[MBK])\b)?")
+_ESCALA = {"mil millones": 1e9, "millones": 1e6, "MM": 1e6, "M": 1e6, "B": 1e9, "miles": 1e3, "mil": 1e3, "K": 1e3}
 _MILES = re.compile(r"^\d{1,3}(,\d{3})+$|^\d{1,3}(\.\d{3})+$")
+_UN_SEPARADOR_Y_3 = re.compile(r"^\d{1,3}[.,]\d{3}$")
 
 
 def _parse(raw: str) -> tuple[float, int]:
@@ -31,7 +32,7 @@ def _numeros(texto: str):
     for m in _NUM.finditer(texto):
         raw, suf = m.group(1), m.group(2)
         valor, dec = _parse(raw)
-        escala = _ESCALA.get(suf, 1.0)
+        escala = _ESCALA.get(re.sub(r"\s+", " ", suf), 1.0) if suf else 1.0
         yield m, raw, valor * escala, dec, escala
 
 
@@ -48,8 +49,13 @@ def numeros_inventados(texto: str, entrada: str) -> list[str]:
         )
         if not relevante:
             continue
-        tol = 0.5 * 10 ** -dec * escala
-        if not any(abs(abs(valor) - abs(b)) <= tol * (1 + 1e-9) + 1e-9 for b in base):
+        lecturas = [(valor, dec)]
+        if _UN_SEPARADOR_Y_3.match(raw):  # "330.700" puede ser 330,7 o 330 700
+            lecturas.append((float(re.sub(r"[.,]", "", raw)) * escala, 0))
+        if not any(
+            abs(abs(v) - abs(b)) <= 0.5 * 10 ** -d * escala * (1 + 1e-9) + 1e-9
+            for v, d in lecturas for b in base
+        ):
             fuera.append(raw)
     return fuera
 
