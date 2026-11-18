@@ -94,7 +94,7 @@ async def _pedir(metodo: str, url: str, cuerpo=None):
                         raise _Fallo("respuesta_grande")
                     trozos.append(t)
             return json.loads(b"".join(trozos))
-        except (httpx.HTTPError, ValueError) as e:
+        except (httpx.HTTPError, ValueError, RecursionError) as e:   # RecursionError: JSON muy anidado
             raise _Fallo(type(e).__name__) from e
 
 
@@ -240,7 +240,9 @@ async def hive_cuenta(nombre: str) -> dict:
         cuentas = await _hive_rpc("condenser_api.get_accounts", [[nombre]])
         if not cuentas:
             raise ExplorerError("no_encontrado")
-        c = cuentas[0]
+        c = cuentas[0] if isinstance(cuentas, list) else None
+        if not isinstance(c, dict):
+            raise ExplorerError("respuesta_invalida")
         try:
             props = await _hive_rpc("condenser_api.get_dynamic_global_properties", [])
             fondo, vests_tot = _monto(props["total_vesting_fund_hive"]), _monto(props["total_vesting_shares"])
