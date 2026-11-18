@@ -37,6 +37,7 @@ from src.handlers.tkt import tkt_command
 from src.handlers.toqueimg import toqueimg_command
 from src.handlers.tspl import tspl_command
 from src.handlers.y import y_command
+from src.ia_admin import ia_callback, ia_command
 from src.menu import menu_callback
 from src.pick import pick_callback
 
@@ -118,6 +119,8 @@ COMANDOS: tuple[Cmd, ...] = (
     Cmd("ads", ads_command, "Gestión de anuncios", admin=True),
     Cmd("ms", ms_command, "Difundir mensaje a los usuarios", admin=True),
     Cmd("msapp", msapp_command, "Publicar mensaje en la app Android", admin=True),
+    Cmd("ia", ia_command, "Proveedor y modelo de TASALO IA", admin=True,
+        callback=ia_callback, namespaces=("ia",)),
 )
 
 

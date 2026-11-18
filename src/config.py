@@ -115,6 +115,13 @@ class Settings(BaseSettings):
         examples=["gsk_...", "gsk_primera...,gsk_segunda..."]
     )
 
+    # Respaldo de IA (NVIDIA, API compatible con OpenAI). Opcional: sin clave no se usa.
+    nvidia_api_key: str = Field(
+        default="",
+        description="NVIDIA API key (nvapi-...) para el respaldo de TASALO IA",
+        examples=["nvapi-..."]
+    )
+
     # Noticias (NewsData.io) — usado por /news y /tspl
     # Plan gratis vigente (200 créditos/día, endpoint Crypto & Coin News,
     # uso comercial permitido) — confirmado en newsdata.io/pricing jun 2026.

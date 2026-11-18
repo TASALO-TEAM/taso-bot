@@ -11,6 +11,8 @@ from typing import Optional
 import httpx
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
+from src.core import ai_config
+
 from src.config import settings
 from src.core import ia_identidad
 
@@ -304,6 +306,69 @@ async def _call_groq_async(payload: dict, timeout: int = DEFAULT_TIMEOUT) -> dic
         raise RuntimeError("Groq: no se pudo completar la llamada (sin API keys configuradas)")
 
 
+# ── Proveedores de IA (F5-T7) ────────────────────────────────────────────────
+NVIDIA_API_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
+NVIDIA_TIMEOUT = 60
+NVIDIA_MIN_TOKENS = 2048  # los modelos de razonamiento gastan tokens pensando
+NVIDIA_MAX_TOKENS = 4096
+
+
+def _nvidia_key() -> str:
+    key = getattr(settings, "nvidia_api_key", "")
+    return key.strip() if isinstance(key, str) else ""
+
+
+def _ia_configurada() -> bool:
+    return bool(settings.groq_api_key) or bool(_nvidia_key())
+
+
+async def _call_nvidia_async(payload: dict, timeout: int = NVIDIA_TIMEOUT, transport=None) -> dict:
+    """Llamada a NVIDIA (API compatible con OpenAI) con el modelo que eligio un admin.
+
+    Adapta el payload pensado para Groq: sin reasoning_effort ni max_completion_tokens
+    y con mas margen de tokens. Un contenido nulo se normaliza a "".
+    """
+    body = {k: v for k, v in payload.items() if k not in ("model", "reasoning_effort", "max_completion_tokens")}
+    body["model"] = ai_config.get()["nvidia_model"]
+    pedido = payload.get("max_completion_tokens")
+    pedido = pedido if isinstance(pedido, int) else 0
+    body["max_tokens"] = min(NVIDIA_MAX_TOKENS, max(NVIDIA_MIN_TOKENS, pedido * 4))
+    headers = {"Authorization": f"Bearer {_nvidia_key()}", "Content-Type": "application/json"}
+
+    async with httpx.AsyncClient(timeout=timeout, transport=transport) as client:
+        try:
+            response = await client.post(NVIDIA_API_URL, headers=headers, json=body)
+            response.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            logger.error("NVIDIA HTTP error %s", e.response.status_code if e.response is not None else "?")
+            raise
+        data = response.json()
+
+    for choice in data.get("choices") or []:
+        msg = choice.setdefault("message", {})
+        if msg.get("content") is None:
+            msg["content"] = ""
+    return data
+
+
+async def _call_ai_async(payload: dict, timeout: int = DEFAULT_TIMEOUT) -> dict:
+    """Llama al proveedor principal y, si falla, al de respaldo (ver core/ai_config)."""
+    ultimo: Optional[Exception] = None
+    for prov in ai_config.orden():
+        if prov == "nvidia" and not _nvidia_key():
+            continue
+        try:
+            if prov == "groq":
+                return await _call_groq_async(payload, timeout=timeout)
+            return await _call_nvidia_async(payload)
+        except Exception as e:
+            ultimo = e
+            logger.warning("IA: %s fallo (%s)", prov, type(e).__name__)
+    if ultimo is not None:
+        raise ultimo
+    raise RuntimeError("IA: ningun proveedor configurado")
+
+
 # ── Public API ────────────────────────────────────────────────────────────────
 async def get_groq_crypto_analysis(
     symbol: str,
@@ -323,7 +388,7 @@ async def get_groq_crypto_analysis(
     Returns:
         AI analysis string (narrative in Spanish) or error message.
     """
-    if not settings.groq_api_key:
+    if not _ia_configurada():
         logger.error("GROQ_API_KEY not configured")
         return "⚠️ *Error:* Variable de entorno GROQ_API_KEY no configurada."
 
@@ -348,7 +413,7 @@ async def get_groq_crypto_analysis(
 
     try:
         start = asyncio.get_event_loop().time()
-        data = await _call_groq_async(payload)
+        data = await _call_ai_async(payload)
         elapsed = asyncio.get_event_loop().time() - start
 
         choices = data.get("choices", [])
@@ -570,7 +635,7 @@ async def get_groq_price_spotlight(price_data: dict) -> str:
     Returns:
         Texto del análisis (español) o mensaje de error legible.
     """
-    if not settings.groq_api_key:
+    if not _ia_configurada():
         logger.error("GROQ_API_KEY not configured")
         return "⚠️ *Error:* Variable de entorno GROQ_API_KEY no configurada."
 
@@ -592,7 +657,7 @@ async def get_groq_price_spotlight(price_data: dict) -> str:
 
     try:
         start = asyncio.get_event_loop().time()
-        data = await _call_groq_async(payload)
+        data = await _call_ai_async(payload)
         elapsed = asyncio.get_event_loop().time() - start
 
         choices = data.get("choices", [])
@@ -839,7 +904,7 @@ async def get_groq_market_spotlight(snapshot: dict) -> str:
     Returns:
         Texto del comentario (español) o mensaje de error legible.
     """
-    if not settings.groq_api_key:
+    if not _ia_configurada():
         logger.error("GROQ_API_KEY not configured")
         return "⚠️ *Error:* Variable de entorno GROQ_API_KEY no configurada."
 
@@ -863,7 +928,7 @@ async def get_groq_market_spotlight(snapshot: dict) -> str:
 
     try:
         start = asyncio.get_event_loop().time()
-        data = await _call_groq_async(payload)
+        data = await _call_ai_async(payload)
         elapsed = asyncio.get_event_loop().time() - start
 
         choices = data.get("choices", [])
@@ -1120,7 +1185,7 @@ async def get_groq_tspl_digest(articles: list[dict], market_data: Optional[dict]
         configurada, no hay articulos, o Groq no devolvio JSON valido tras
         el reintento.
     """
-    if not settings.groq_api_key:
+    if not _ia_configurada():
         logger.error("GROQ_API_KEY not configured (tspl digest)")
         return None
 
@@ -1146,7 +1211,7 @@ async def get_groq_tspl_digest(articles: list[dict], market_data: Optional[dict]
     for attempt in range(2):
         try:
             start = asyncio.get_event_loop().time()
-            data = await _call_groq_async(payload)
+            data = await _call_ai_async(payload)
             elapsed = asyncio.get_event_loop().time() - start
 
             choices = data.get("choices", [])
