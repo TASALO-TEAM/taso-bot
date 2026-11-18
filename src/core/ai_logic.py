@@ -1306,3 +1306,56 @@ async def get_groq_tspl_digest(articles: list[dict], market_data: Optional[dict]
     return None
 
 
+
+
+# -- Analisis de una consulta del explorador (F4-T6) ------------------------------------
+EXPLORER_PROMPT = """Eres TASALO IA, el analista de TASALO Bot.
+A partir de las cifras de una consulta en cadena (Bitcoin o Hive), explica en español qué se observa.
+
+=== CIFRAS (reales; no inventes otras) ===
+{contexto}
+=== FIN CIFRAS ===
+
+Estructura: 1) qué muestran las cifras, en una frase; 2) un dato que destaque (saldo, actividad, comisión, antigüedad...); 3) una advertencia prudente sobre los límites de lo que se puede concluir.
+Máximo 80 palabras y 2 emojis como máximo. Sé neutral: no atribuyas identidad (no digas de quién es ni si pertenece a un exchange, empresa o persona), no juzgues si es sospechoso y no des consejos ni órdenes de comprar o vender.
+Usa solo formato simple de Telegram (*negrita*). No añadas descargo: lo agrego yo."""
+
+
+async def get_explorer_analysis(contexto: str) -> str:
+    """Comentario breve y neutral de TASALO IA sobre cifras agregadas de una consulta en cadena.
+
+    El contexto no lleva direcciones, hashes ni nombres (ver src/explorer/analisis.py).
+    Devuelve el texto (con descargo) o un mensaje de error legible que empieza por "⚠️".
+    """
+    if not contexto.strip():
+        return "⚠️ No hay datos suficientes para analizar."
+    payload = {
+        "model": DEFAULT_MODEL,
+        "messages": [
+            {"role": "system", "content": ia_identidad.system_message("Interpretas datos de cadena de forma breve, clara y neutral.")},
+            {"role": "user", "content": EXPLORER_PROMPT.format(contexto=contexto)},
+        ],
+        "temperature": 0.5,
+        "max_completion_tokens": 500,
+        "reasoning_effort": DEFAULT_REASONING_EFFORT,
+    }
+    try:
+        data = await _call_ai_async(payload)
+        choices = data.get("choices", [])
+        content = (choices[0].get("message", {}).get("content", "") if choices else "").strip()
+        if not content:
+            logger.warning("IA (explorador) devolvio contenido vacio")
+            return "⚠️ La IA devolvió contenido vacío. Intenta de nuevo."
+        content = _preparar_respuesta(content)
+        content = ia_identidad.quitar_descargo(content)
+        return content + "\n\n" + ia_identidad.descargo("_")
+    except httpx.HTTPStatusError as e:
+        status = e.response.status_code if e.response else "??"
+        logger.error("IA HTTP error %s (explorador)", status)
+        return "⚠️ Límite de la IA excedido. Intenta en 1 minuto." if status == 429 else f"⚠️ Error HTTP {status} de la IA. Intenta más tarde."
+    except httpx.TimeoutException:
+        logger.error("IA timeout (explorador)")
+        return "⚠️ La IA tardó demasiado en responder. Intenta de nuevo."
+    except Exception:
+        logger.exception("Error inesperado en get_explorer_analysis")
+        return "⚠️ Error inesperado de la IA. Intenta de nuevo más tarde."
