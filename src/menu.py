@@ -61,7 +61,7 @@ _ADMIN = ("🛠 Admin", "Comandos de administración. Escríbelos en el chat.")
 # "Ejecutar". Lista cerrada a proposito (nada de admin ni de flujos con texto).
 EJECUTABLES = ("qp", "news", "mapa", "tspl", "toqueimg", "help", "mk", "y", "tkt")
 
-_TEXTO_CATEGORIAS = "\u2630 Categor\u00edas\n\nElige una categor\u00eda."
+_CABECERA_CATEGORIAS = "\u2630 Categor\u00edas\n\nElige una categor\u00eda:"
 
 
 def _es_admin(user_id: int) -> bool:
@@ -99,7 +99,11 @@ def _categorias(es_admin: bool):
         botones.append(_btn(_ADMIN[0], cd.build("menu", "admin")))
     filas = [botones[i:i + 2] for i in range(0, len(botones), 2)]
     filas.append(_fila_nav())
-    return _TEXTO_CATEGORIAS, InlineKeyboardMarkup(filas)
+    lineas = [f"{v[0]} \u2014 {v[1]}" for v in SECCIONES.values()]
+    if es_admin:
+        lineas.append(f"{_ADMIN[0]} \u2014 {_ADMIN[1]}")
+    texto = _CABECERA_CATEGORIAS + "\n\n" + "\n".join(lineas)
+    return texto, InlineKeyboardMarkup(filas)
 
 
 def _pantalla_seccion(sec: str, es_admin: bool):
