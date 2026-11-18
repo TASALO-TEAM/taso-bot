@@ -48,3 +48,16 @@ def test_informe_resume_casos():
     assert [x["id"] for x in r] == ["a", "b"]
     assert r[0]["inventadas"] == [] and r[1]["inventadas"] == ["71.9"]
     assert r[1]["largo"] == len("RSI 71.9")
+
+
+def test_espacios_no_separables_entre_mil_y_millones():
+    assert ev.numeros_inventados("$1230\u00a0mil\u202fmillones", ENTRADA) == []
+
+
+def test_punto_de_miles_con_escala_es_ambiguo_y_se_acepta_si_una_lectura_cuadra():
+    assert ev.numeros_inventados("capital de 1.230.000 M", ENTRADA) == []
+    assert ev.numeros_inventados("capital de 330.700 M", "caida de 330.7 mil millones") == []
+
+
+def test_mm_son_millones_y_una_escala_equivocada_se_marca():
+    assert ev.numeros_inventados("salida de 39.7 MM USD", "capital: -39.7 mil millones") == ["39.7"]
