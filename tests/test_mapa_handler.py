@@ -89,7 +89,7 @@ def test_caption_forex_muestra_fecha_real_y_aclara_si_no_es_hoy():
 def test_teclado_tiene_las_tres_vistas_y_actualizar_con_la_vista_actual():
     kb = mapa.armar_teclado(("cripto", "7d"))
     datos = [b.callback_data for fila in kb.inline_keyboard for b in fila]
-    assert datos == ["mapa_cripto_24h", "mapa_cripto_7d", "mapa_forex", "mapa_acciones", "mapa_cripto_7d"]
+    assert datos == ["mapa_cripto_24h", "mapa_cripto_7d", "mapa_forex", "mapa_acciones", "mapa_cripto_7d", "mapa_ia_cripto_7d"]
     assert all(len(d) <= 64 for d in datos)
 
 
