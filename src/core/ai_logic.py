@@ -994,7 +994,7 @@ A partir del resumen de un mapa de calor, escribe un análisis breve en español
 
 Estructura: 1) una frase con el panorama general; 2) quién lidera la subida o la caída y por qué importa; 3) una observación prudente sobre qué vigilar.
 Máximo 90 palabras, sin listas largas y con 2 emojis como máximo. No prometas rentabilidad ni des órdenes de comprar o vender.
-Usa solo formato simple de Telegram (*negrita*). No añadas descargo: lo agrego yo."""
+Escribe los montos con "mil millones de USD" completo (nunca MM, mm ni MUSD) y copia los porcentajes tal cual, sin truncar. Usa solo formato simple de Telegram (*negrita*). No añadas descargo: lo agrego yo."""
 
 
 async def get_mapa_analysis(contexto: str) -> str:
