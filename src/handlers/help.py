@@ -94,7 +94,7 @@ Botones:
 
 Uso: `/toque`
 
-Tasa del mercado informal (USD, EUR, MLC) según El Toque, con flecha de tendencia (🔺🔻) respecto a la consulta anterior.
+Tasa del mercado informal (EUR, USD, Zelle, MLC, CLA) y cripto según El Toque, con flecha de tendencia (🔺🔻) respecto a la consulta anterior.
 
 Botón: 🔄 Actualizar""",
 
