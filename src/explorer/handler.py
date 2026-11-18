@@ -17,7 +17,8 @@ from telegram.ext import MessageHandler, filters
 
 from src import callback_data as cd
 from src.cache import cache
-from src.explorer import sources
+from src.core import ai_logic
+from src.explorer import analisis, sources
 from src.explorer.classify import clasificar, etiqueta_log
 from src.explorer.guard import UserLimiter
 from src.explorer.present import formatear, mensaje_error
@@ -25,6 +26,11 @@ from src.explorer.present import formatear, mensaje_error
 logger = logging.getLogger(__name__)
 
 LIMITER = UserLimiter(max_calls=5, window=60.0)
+IA_LIMITER = UserLimiter(max_calls=3, window=60.0)   # solo cuenta llamadas reales a la IA
+_IA_CTX = "explorer_ia"   # user_data: {"t", "n", "ctx", "txt"} de la ultima consulta analizable
+_IA_TTL = 900.0
+_IA_CADUCO = "Esa consulta ya caduc\u00f3. Vuelve a consultarla para pedir el an\u00e1lisis."
+_IA_NO = "\u26a0\ufe0f El an\u00e1lisis con IA no est\u00e1 disponible ahora mismo."
 _ESPERA = "explorer_waiting"   # user_data: instante (monotonic) en que se pidio la entrada
 _ESPERA_TTL = 120.0
 # Flags de otros flujos que esperan texto libre: si hay uno, el explorador no actua.
@@ -94,8 +100,9 @@ async def _consultar_real(e):
 _consultar = _consultar_real   # los tests sustituyen este nombre
 
 
-async def _responder(msg, user_id, e) -> None:
+async def _responder(msg, user_id, e, user_data=None) -> None:
     """Consulta (si el tipo se consulta) y contesta. Solo mensajes fijos ante errores."""
+    markup = None
     if e.tipo not in _CONSULTABLES:
         texto = formatear(e)   # LN se decodifica local; EVM/LNURL/address solo se reconocen
     else:
@@ -116,7 +123,8 @@ async def _responder(msg, user_id, e) -> None:
             return
         logger.info("explorer: consulta %s", etiqueta_log(e))
         texto = formatear(e, datos, txs=txs, precio=precio)
-    await msg.reply_text(texto, parse_mode="HTML", disable_web_page_preview=True)
+        markup = _boton_ia(user_data, e, datos, txs, precio)
+    await msg.reply_text(texto, parse_mode="HTML", disable_web_page_preview=True, reply_markup=markup)
 
 
 def _esperando(user_data) -> bool:
@@ -140,7 +148,7 @@ async def explorer_text(update, context) -> None:
         context.user_data.pop(_ESPERA, None)   # se consume: un solo mensaje por peticion
     if e.tipo == "desconocido" and not esperando:
         return
-    await _responder(msg, update.effective_user.id, e)
+    await _responder(msg, update.effective_user.id, e, context.user_data)
 
 
 async def explorar_command(update, context) -> None:
@@ -150,12 +158,19 @@ async def explorar_command(update, context) -> None:
         await msg.reply_text(_PEDIR)
         return
     e = clasificar(" ".join(context.args), nombre_hive_suelto=True)
-    await _responder(msg, update.effective_user.id, e)
+    await _responder(msg, update.effective_user.id, e, context.user_data)
 
 
 async def explorer_callback(update, context, callback_data: str) -> None:
     """Boton del menu (`explorer_open`): pide la entrada editando el mismo mensaje."""
     query = update.callback_query
+    if callback_data.startswith("explorer:ia"):
+        n = _ia_nonce(callback_data)
+        if n is None:
+            logger.warning("explorer: callback de analisis invalido")
+            return
+        await _ia_callback(update, context, n)
+        return
     context.user_data[_ESPERA] = time.monotonic()
     teclado = InlineKeyboardMarkup(
         [[
@@ -170,6 +185,57 @@ async def explorer_callback(update, context, callback_data: str) -> None:
             return
         logger.info("explorer: mensaje no editable (%s); se envia uno nuevo", ex)
         await query.message.reply_text(_PEDIR, reply_markup=teclado)
+
+
+def _boton_ia(user_data, e, datos, txs, precio):
+    """Boton de analisis bajo el resultado. El contexto agregado queda en user_data (nunca en
+    callback_data); el numero del boton evita que uno viejo analice otra consulta."""
+    if user_data is None or not ai_logic._ia_configurada():
+        return None
+    ctx = analisis.contexto(e, datos, txs, precio)
+    if not ctx:
+        user_data.pop(_IA_CTX, None)
+        return None
+    prev = user_data.get(_IA_CTX)
+    n = (prev["n"] + 1) % 100 if prev else 1
+    user_data[_IA_CTX] = {"t": time.monotonic(), "n": n, "ctx": ctx, "txt": None}
+    return InlineKeyboardMarkup(
+        [[InlineKeyboardButton("\U0001f916 An\u00e1lisis TASALO IA", callback_data=cd.build("explorer", "ia", str(n)))]]
+    )
+
+
+def _ia_nonce(data: str):
+    p = data.split(":")
+    if len(p) == 3 and p[0] == "explorer" and p[1] == "ia" and p[2].isascii() and p[2].isdigit():
+        return int(p[2])
+    return None
+
+
+async def _ia_callback(update, context, n: int) -> None:
+    """Boton "Analisis TASALO IA": responde con un mensaje nuevo bajo el resultado."""
+    query = update.callback_query
+    msg = query.message
+    ent = context.user_data.get(_IA_CTX)
+    if not ent or ent["n"] != n or time.monotonic() - ent["t"] > _IA_TTL:
+        await msg.reply_text(_IA_CADUCO)
+        return
+    texto = ent.get("txt")
+    if texto is None:
+        if not ai_logic._ia_configurada():
+            await msg.reply_text(_IA_NO)
+            return
+        permitido, _ = IA_LIMITER.allow(query.from_user.id)
+        if not permitido:
+            await msg.reply_text(mensaje_error("limite"))
+            return
+        await msg.chat.send_action("typing")
+        texto = await ai_logic.get_explorer_analysis(ent["ctx"])
+        if not texto.startswith("\u26a0"):   # un error no se guarda: el siguiente toque reintenta
+            ent["txt"] = texto
+    try:
+        await msg.reply_text(texto, parse_mode="Markdown")
+    except BadRequest:   # Markdown del modelo mal formado: se reenvia como texto plano
+        await msg.reply_text(texto)
 
 
 def register(app) -> None:
