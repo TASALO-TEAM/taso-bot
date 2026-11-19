@@ -14,7 +14,7 @@ import time
 
 logger = logging.getLogger(__name__)
 
-BOT_VERSION = "0.41.3.1"
+BOT_VERSION = "0.41.3.2"
 
 # Timestamp de arranque del proceso — usado para calcular uptime en /status.
 BOT_START_TIME = time.time()
