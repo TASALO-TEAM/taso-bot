@@ -99,11 +99,11 @@ async def alert_enable_default_callback(update: Update, context: ContextTypes.DE
     except httpx.HTTPError as http_err:
         logger.error("❌ Alert enable-default HTTP error for user %d: %s",
                      user_id, http_err, exc_info=True)
-        await _safe_edit_message(query, f"❌ Error de conexión: {str(http_err)}")
+        await _safe_edit_message(query, "❌ No se pudo conectar con el servicio. Intenta de nuevo en un momento.")
     except Exception as e:
         logger.error("❌ Alert enable-default unexpected error for user %d: %s",
                      user_id, e, exc_info=True)
-        await _safe_edit_message(query, f"❌ Error: {str(e)}")
+        await _safe_edit_message(query, "❌ Ocurrió un error inesperado. Intenta de nuevo.")
     finally:
         duration_ms = (time.time() - action_start) * 1000
         logger.info("✅ Alert enable-default action '%s' completed for user %d (%.0fms)",
@@ -142,7 +142,7 @@ async def alert_custom_time_callback(update: Update, context: ContextTypes.DEFAU
     except Exception as e:
         logger.error("❌ Alert custom-time error for user %d: %s",
                      user_id, e, exc_info=True)
-        await _safe_edit_message(query, f"❌ Error: {str(e)}")
+        await _safe_edit_message(query, "❌ Ocurrió un error inesperado. Intenta de nuevo.")
     finally:
         duration_ms = (time.time() - action_start) * 1000
         logger.info("✅ Alert custom-time action '%s' completed for user %d (%.0fms)",
@@ -225,11 +225,11 @@ async def handle_time_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except httpx.HTTPError as http_err:
         logger.error("❌ Alert time-input HTTP error for user %d: %s",
                      user_id, http_err, exc_info=True)
-        await update.message.reply_text(f"❌ Error de conexión: {str(http_err)}")
+        await update.message.reply_text("❌ No se pudo conectar con el servicio. Intenta de nuevo en un momento.")
     except Exception as e:
         logger.error("❌ Alert time-input error for user %d: %s",
                      user_id, e, exc_info=True)
-        await update.message.reply_text(f"❌ Error: {str(e)}")
+        await update.message.reply_text("❌ Ocurrió un error inesperado. Intenta de nuevo.")
     finally:
         # Clear state
         context.user_data["waiting_for_time"] = False
@@ -283,11 +283,11 @@ async def alert_disable_callback(update: Update, context: ContextTypes.DEFAULT_T
     except httpx.HTTPError as http_err:
         logger.error("❌ Alert disable HTTP error for user %d: %s",
                      user_id, http_err, exc_info=True)
-        await _safe_edit_message(query, f"❌ Error de conexión: {str(http_err)}")
+        await _safe_edit_message(query, "❌ No se pudo conectar con el servicio. Intenta de nuevo en un momento.")
     except Exception as e:
         logger.error("❌ Alert disable error for user %d: %s",
                      user_id, e, exc_info=True)
-        await _safe_edit_message(query, f"❌ Error: {str(e)}")
+        await _safe_edit_message(query, "❌ Ocurrió un error inesperado. Intenta de nuevo.")
     finally:
         duration_ms = (time.time() - action_start) * 1000
         logger.info("✅ Alert disable action '%s' completed for user %d (%.0fms)",
@@ -325,7 +325,7 @@ async def alert_change_time_callback(update: Update, context: ContextTypes.DEFAU
     except Exception as e:
         logger.error("❌ Alert change-time error for user %d: %s",
                      user_id, e, exc_info=True)
-        await _safe_edit_message(query, f"❌ Error: {str(e)}")
+        await _safe_edit_message(query, "❌ Ocurrió un error inesperado. Intenta de nuevo.")
     finally:
         duration_ms = (time.time() - action_start) * 1000
         logger.info("✅ Alert change-time action '%s' completed for user %d (%.0fms)",
@@ -372,7 +372,7 @@ async def alert_change_format_callback(update: Update, context: ContextTypes.DEF
     except Exception as e:
         logger.error("❌ Alert change-format error for user %d: %s",
                      user_id, e, exc_info=True)
-        await _safe_edit_message(query, f"❌ Error: {str(e)}")
+        await _safe_edit_message(query, "❌ Ocurrió un error inesperado. Intenta de nuevo.")
     finally:
         duration_ms = (time.time() - action_start) * 1000
         logger.info("✅ Alert change-format action '%s' completed for user %d (%.0fms)",
@@ -443,11 +443,11 @@ async def alert_format_callback(update: Update, context: ContextTypes.DEFAULT_TY
     except httpx.HTTPError as http_err:
         logger.error("❌ Alert format-save HTTP error for user %d: %s",
                      user_id, http_err, exc_info=True)
-        await _safe_edit_message(query, f"❌ Error de conexión: {str(http_err)}")
+        await _safe_edit_message(query, "❌ No se pudo conectar con el servicio. Intenta de nuevo en un momento.")
     except Exception as e:
         logger.error("❌ Alert format-save error for user %d: %s",
                      user_id, e, exc_info=True)
-        await _safe_edit_message(query, f"❌ Error: {str(e)}")
+        await _safe_edit_message(query, "❌ Ocurrió un error inesperado. Intenta de nuevo.")
     finally:
         duration_ms = (time.time() - action_start) * 1000
         logger.info("✅ Alert format-save action '%s' completed for user %d, format=%s (%.0fms)",
@@ -508,11 +508,11 @@ async def alert_status_callback(update: Update, context: ContextTypes.DEFAULT_TY
     except httpx.HTTPError as http_err:
         logger.error("❌ Alert status HTTP error for user %d: %s",
                      user_id, http_err, exc_info=True)
-        await _safe_edit_message(query, f"❌ Error de conexión: {str(http_err)}")
+        await _safe_edit_message(query, "❌ No se pudo conectar con el servicio. Intenta de nuevo en un momento.")
     except Exception as e:
         logger.error("❌ Alert status error for user %d: %s",
                      user_id, e, exc_info=True)
-        await _safe_edit_message(query, f"❌ Error: {str(e)}")
+        await _safe_edit_message(query, "❌ Ocurrió un error inesperado. Intenta de nuevo.")
     finally:
         duration_ms = (time.time() - action_start) * 1000
         logger.info("✅ Alert status action '%s' completed for user %d (%.0fms)",
@@ -541,7 +541,7 @@ async def alert_cancel_callback(update: Update, context: ContextTypes.DEFAULT_TY
     except Exception as e:
         logger.error("❌ Alert cancel error for user %d: %s",
                      user_id, e, exc_info=True)
-        await _safe_edit_message(query, f"❌ Error: {str(e)}")
+        await _safe_edit_message(query, "❌ Ocurrió un error inesperado. Intenta de nuevo.")
     finally:
         duration_ms = (time.time() - action_start) * 1000
         logger.info("✅ Alert cancel action '%s' completed for user %d (%.0fms)",
