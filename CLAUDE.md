@@ -9,6 +9,13 @@ Hay un objetivo vigente de reducir el consumo de recursos en el VPS: nada que lo
 - No reiniciar servicios entre las 8:10 y las 9:00 hora de Cuba (captura de la imagen de El Toque).
 - Despliegue: `git pull` en el VPS y reinicio con confirmacion del propietario.
 
+## Skills en cada sesion (el propietario las pide siempre)
+- Al empezar: `claude-mem:mem-search` (o `cmem-pro:mem-search`) para recuperar trabajo previo; luego leer `task/registro/` (PLAN, BOARD, ultimos handoffs).
+- Al escribir codigo: `ponytail:ponytail` (cambio minimo), `andrej-karpathy-skills:karpathy-guidelines` (supuestos explicitos, cambios quirurgicos, criterio verificable) y `ecc:python-review` antes de abrir el PR.
+- Trabajo multiagente: `ecc:dev-team`, `ecc:claude-devfleet`, `ecc:team-agent-orchestration` (ver la regla Jefe + ayudante abajo).
+- Al cerrar: `claude-mem:handoff` y dejar BOARD, LOG y handoff al dia en `task/registro/`.
+- Si una skill o herramienta no esta disponible en la sesion, decirlo y seguir sin ella; no inventar su resultado.
+
 ## Jefe + ayudante (regla permanente, todos los repos y sesiones de TASALO)
 
 - **Jefe (modelo principal):** escribe el codigo y los tests, piensa, investiga a fondo, decide, abre PR y despliega.
