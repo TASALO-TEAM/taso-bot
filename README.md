@@ -3,9 +3,9 @@
 Bot de Telegram para consultar tasas de cambio de Cuba, precios y análisis cripto, y noticias del mercado — con alertas, panel admin y sistema de tickets.
 
 ![Estado](https://img.shields.io/badge/estado-activo-success)
-![Versión](https://img.shields.io/badge/versión-0.11.1-blue)
-![Python](https://img.shields.io/badge/python-3.12+-blue)
-![Tests](https://img.shields.io/badge/tests-344%2B%20passing-success)
+![Versión](https://img.shields.io/badge/versión-0.41-blue)
+![Python](https://img.shields.io/badge/python-3.14-blue)
+![Tests](https://img.shields.io/badge/tests-1190%2B%20passing-success)
 
 ## Features
 
@@ -13,6 +13,7 @@ Bot de Telegram para consultar tasas de cambio de Cuba, precios y análisis crip
 - ✅ `/tasalo` — El Toque y BCC juntas, con botones de actualizar/provincias/históricos
 - ✅ `/toque`, `/bcc` — tasas individuales con flecha de tendencia
 - ✅ `/toqueimg` — imagen diaria de El Toque, con alertas configurables (hora personalizada, foto/documento)
+- ✅ `/qp` — tasas P2P de QvaPay
 
 ### 🪙 Cripto y trading
 - ✅ `/p` — precio detallado (CoinGecko + CoinMarketCap con rotación de fuentes), ATH/ATL, supply
@@ -22,16 +23,22 @@ Bot de Telegram para consultar tasas de cambio de Cuba, precios y análisis crip
 - ✅ `/tspl` — spotlight completo estilo newsletter (lede + noticias curadas por IA + resumen de mercado + radar), digest diario vía scheduler
 - ✅ `/news` — noticias cripto directas (por moneda, tópico o texto libre) vía NewsData.io, sin curación de IA
 - ✅ `/alert` — alertas de precio, creables también desde botones de `/p`, `/ta` y `/graf`
+- ✅ `/mapa` — mapa de calor (treemap) de cripto 24 h / 7 d, forex y acciones del S&P 500, con resumen y análisis breve de TASALO IA
+- ✅ `/explorar` — pega una dirección Bitcoin, una factura Lightning, un usuario de Hive o un hash de transacción y el bot lo identifica y consulta (solo lectura)
 
 ### 🔑 Administración
 - ✅ `/refresh`, `/status` (panel con botones + métricas + jobs del scheduler), `/health`
 - ✅ `/log` — logs de bot/api/web/gcg sin necesitar SSH, con rotación y entrega por Telegram
 - ✅ `/ads` — gestión de anuncios inyectados (crear/activar/desactivar/patrocinar/peso)
 - ✅ `/ms` — difusión de mensajes o fotos a todos los usuarios, con vista previa y confirmación
+- ✅ `/msapp` — publicar mensajes en la app Android
+- ✅ `/db` — backups y mantenimiento de la base de datos
+- ✅ `/ia` — elegir proveedor principal y de respaldo (Groq / NVIDIA) y el modelo de TASALO IA
 - ✅ `/tkt list` / `/tkt active` / `/tkt show <id>` — gestión de tickets de usuarios
 
 ### ℹ️ Utilidades
 - ✅ `/start` — menú principal con accesos directos
+- ✅ Todo el bot se puede usar solo con botones: `/start` abre un menú con Inicio y Atrás en cada pantalla, y los comandos con argumentos tienen selectores (moneda, temporalidad, otra moneda por texto)
 - ✅ `/help` / `/ayuda` — ayuda en dos niveles (resumen + ficha por comando), con alias en lenguaje natural
 - ✅ `/tkt` — reportar bugs o pedir promoción/anuncio, con notificaciones de estado
 - ✅ `/y` — progreso del año y frase del día
@@ -40,13 +47,13 @@ Bot de Telegram para consultar tasas de cambio de Cuba, precios y análisis crip
 ## Requisitos del Sistema
 
 ### Mínimos
-- Python 3.12+
-- 256 MB RAM
+- Python 3.14 (el usado en producción y en las pruebas; no se verificó un mínimo menor)
+- 256 MB RAM (medido en producción: ~70 MB en reposo, ~150 MB tras horas de uso)
 - 50 MB almacenamiento
 - Conexión a Internet
 
 ### Recomendados
-- Python 3.12+
+- Python 3.14 (el usado en producción y en las pruebas; no se verificó un mínimo menor)
 - 512 MB RAM
 - 100 MB almacenamiento
 - Conexión estable a taso-api
@@ -134,6 +141,7 @@ python src/main.py
 | `/toque` | Tasa de El Toque | Todos los usuarios |
 | `/bcc` | Tasa oficial del Banco Central de Cuba | Todos los usuarios |
 | `/toqueimg` | Imagen diaria de El Toque, con alertas configurables | Todos los usuarios |
+| `/qp` | Tasas P2P de QvaPay | Todos los usuarios |
 
 **Criptomonedas y trading**
 
@@ -147,6 +155,8 @@ python src/main.py
 | `/tspl` | Spotlight completo tipo newsletter | Todos los usuarios |
 | `/news` | Noticias cripto directas, por moneda, tema o texto libre | Todos los usuarios |
 | `/alert` | Ver o crear alertas de precio | Todos los usuarios |
+| `/mapa` | Mapa de calor cripto, forex y acciones, con análisis de TASALO IA | Todos los usuarios |
+| `/explorar` | Explorador de direcciones BTC, facturas Lightning, usuarios de Hive y hashes | Todos los usuarios |
 
 **Año y utilidades**
 
@@ -167,6 +177,9 @@ python src/main.py
 | `/log` | Logs de bot, api, web y gcg sin SSH | Solo administradores |
 | `/ads` | Gestión de anuncios inyectados | Solo administradores |
 | `/ms` | Difundir mensaje o foto a todos los usuarios | Solo administradores |
+| `/msapp` | Publicar mensaje en la app Android | Solo administradores |
+| `/db` | Backups y mantenimiento de la BD | Solo administradores |
+| `/ia` | Proveedor, respaldo y modelo de TASALO IA | Solo administradores |
 | `/tkt list` `/tkt active` `/tkt show` | Gestión de tickets de usuarios | Solo administradores |
 
 ## Botones Inline
@@ -278,6 +291,12 @@ taso-bot/
     ├── core/               # i18n, config compartida, análisis avanzado de BTC
     ├── services/           # Schedulers y jobs de fondo (alertas, digest diario, logs)
     ├── utils/               # Permisos, manejo de archivos, suscripciones
+    ├── menu.py             # Menú por botones (Inicio / Atrás)
+    ├── pick.py             # Selectores de moneda y temporalidad
+    ├── callback_data.py    # Formato v2 de callback_data (un separador, tope de 64 bytes)
+    ├── ia_admin.py         # /ia (proveedor y modelo de TASALO IA)
+    ├── heatmap/            # /mapa: datos, treemap y render con Pillow
+    ├── explorer/           # /explorar: clasificador, fuentes, presentación, límite por usuario
     └── handlers/
         ├── start.py        # /start
         ├── help.py         # /help, /ayuda
@@ -296,6 +315,10 @@ taso-bot/
         ├── ms.py            # /ms
         ├── tkt.py           # /tkt
         ├── y.py             # /y
+        ├── mapa.py          # /mapa
+        ├── qp.py            # /qp
+        ├── db.py            # /db
+        ├── msapp.py         # /msapp
         └── callback_router.py # Router consolidado de callbacks inline
 ```
 
