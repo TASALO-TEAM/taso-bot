@@ -343,7 +343,7 @@ async def _do_graf(
     else:
         if msg_wait:
             try: await msg_wait.delete()
-            except: pass
+            except Exception: pass
         await update.message.reply_photo(
             photo=chart_bytes, caption=caption, parse_mode=ParseMode.MARKDOWN, reply_markup=keyboard
         )
