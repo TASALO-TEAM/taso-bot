@@ -79,15 +79,6 @@ class TasaloApiClient:
             await self._client.aclose()
             logger.debug("🔌 API client HTTP cerrado")
 
-    # ── Retry decorator helper ──
-
-    def _log_retry(self, retry_state):
-        """Log cuando se reintenta una petición."""
-        exception = retry_state.outcome.exception()
-        logger.warning(
-            f"⚠️ Reintento {retry_state.attempt_number}/3 tras {exception.__class__.__name__}: {exception}"
-        )
-
     # ── Public API methods ──
 
     @retry(
