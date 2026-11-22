@@ -256,7 +256,7 @@ async def _send_one(bot, user_id: int, payload: dict, semaphore: asyncio.Semapho
             return "error"
 
 
-async def _run_broadcast(bot, payload: dict, user_ids: list, status_message) -> None:
+async def _run_broadcast(bot, payload: dict, user_ids: list, status_message, api_client=None) -> None:
     """Envía el broadcast a todos los user_ids, editando status_message con progreso."""
     semaphore = asyncio.Semaphore(CONCURRENCY)
     counts = {"ok": 0, "blocked": 0, "error": 0}
@@ -266,6 +266,9 @@ async def _run_broadcast(bot, payload: dict, user_ids: list, status_message) -> 
     async def _run_one(uid: int):
         result = await _send_one(bot, uid, payload, semaphore)
         counts[result] += 1
+        if result == "blocked" and api_client is not None:
+            # Cubre bloqueos anteriores a my_chat_member: la API lo excluye de los proximos /ms.
+            await api_client.set_user_reachability(user_id=uid, reachable=False)
 
     tasks = [asyncio.create_task(_run_one(uid)) for uid in user_ids]
 
@@ -340,6 +343,7 @@ async def confirm_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         if result == "ok":
             await query.edit_message_text(f"✅ Mensaje enviado a @{payload['target_username']}.")
         elif result == "blocked":
+            await _get_api_client(context).set_user_reachability(user_id=target_user_id, reachable=False)
             await query.edit_message_text(
                 f"🚫 No se pudo enviar: @{payload['target_username']} bloqueó al bot."
             )
@@ -361,7 +365,7 @@ async def confirm_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
     status_message = await query.edit_message_text(f"📤 Enviando... 0/{len(user_ids)}")
     try:
-        await _run_broadcast(context.bot, payload, user_ids, status_message)
+        await _run_broadcast(context.bot, payload, user_ids, status_message, api_client)
     finally:
         pending.pop(owner_id, None)
 
