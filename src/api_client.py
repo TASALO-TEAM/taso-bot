@@ -355,6 +355,23 @@ class TasaloApiClient:
         except Exception as e:
             logger.debug("Error registrando usuario visto %s: %s", user_id, e)
 
+    async def set_user_reachability(self, user_id: int, reachable: bool) -> None:
+        """
+        Marca en la API si el usuario bloqueo (False) o desbloqueo (True) el bot.
+        Fire-and-forget: errores son silenciosos. Ver taso-bot#72, Fase 2.
+        """
+        try:
+            client = self._get_client()
+            response = await client.post(
+                f"{self.api_url}/api/v1/admin/stats/users/reachability",
+                headers=self._admin_headers,
+                json={"user_id": user_id, "reachable": reachable},
+                timeout=httpx.Timeout(5.0, connect=2.0),
+            )
+            response.raise_for_status()
+        except Exception as e:
+            logger.debug("Error marcando alcanzabilidad de %s: %s", user_id, e)
+
     async def get_stats_summary(self) -> Optional[Dict[str, Any]]:
         """Obtiene resumen de estadísticas del bot."""
         if not self.admin_key:

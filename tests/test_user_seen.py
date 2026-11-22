@@ -136,8 +136,9 @@ def test_register_usa_grupo_previo_y_no_bloquea_el_update():
     app = MagicMock()
     register(app)
 
-    handler = app.add_handler.call_args.args[0]
+    primera = app.add_handler.call_args_list[0]  # el TypeHandler; el 2o es el de my_chat_member
+    handler = primera.args[0]
     assert isinstance(handler, TypeHandler)
     assert handler.block is False
-    assert app.add_handler.call_args.kwargs["group"] == GROUP
+    assert primera.kwargs["group"] == GROUP
     assert GROUP < -2  # antes que pick (-2) y el explorador (-1)
