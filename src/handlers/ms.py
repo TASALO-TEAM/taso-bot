@@ -45,6 +45,7 @@ PROGRESS_EVERY = 50         # editar el mensaje de status cada N usuarios proces
 
 TARGET_USERNAME_RE = re.compile(r"^@([\w]{5,32})$")
 
+SEGMENTS = ("activos", "alertas", "tspl", "year")  # /ms #segmento <texto> (#72 F4)
 HISTORY_LIMIT = 10          # difusiones que muestra /ms historial
 CUBA_TZ = ZoneInfo("America/Havana")
 
@@ -80,6 +81,11 @@ def _extract_payload(update: Update) -> dict | None:
         target_username = tokens[0][1:]  # sin el "@"
         tokens = tokens[1:]
 
+    segment = "todos"
+    if not target_username and tokens and tokens[0].startswith("#") and tokens[0][1:].lower() in SEGMENTS:
+        segment = tokens[0][1:].lower()
+        tokens = tokens[1:]
+
     args_text = " ".join(tokens).strip()
     source = message.reply_to_message if message.reply_to_message else None
 
@@ -90,15 +96,15 @@ def _extract_payload(update: Update) -> dict | None:
         caption = args_text if args_text else source.caption
         return {
             "kind": "photo", "photo_file_id": photo_file_id, "caption": caption,
-            "target_username": target_username,
+            "target_username": target_username, "segment": segment,
         }
 
     if source and source.text:
         text = args_text if args_text else source.text
-        return {"kind": "text", "text": text, "target_username": target_username} if text else None
+        return {"kind": "text", "text": text, "target_username": target_username, "segment": segment} if text else None
 
     if args_text:
-        return {"kind": "text", "text": args_text, "target_username": target_username}
+        return {"kind": "text", "text": args_text, "target_username": target_username, "segment": segment}
 
     return None
 
@@ -121,6 +127,12 @@ def _validate_payload(payload: dict) -> str | None:
     return None
 
 
+def _segment_suffix(payload: dict) -> str:
+    """' del segmento X' para la vista previa; vacio si es a todos."""
+    segment = payload.get("segment", "todos")
+    return f" del segmento *{segment}*" if segment != "todos" else ""
+
+
 def _preview_text(payload: dict, total_users: int) -> str:
     """Arma el texto de preview mostrado antes de confirmar el envío."""
     header = "📢 *Vista previa del mensaje*\n──────────────────\n"
@@ -132,7 +144,7 @@ def _preview_text(payload: dict, total_users: int) -> str:
     if payload.get("target_username"):
         footer = f"\n──────────────────\nSe enviará solo a *@{payload['target_username']}*."
     else:
-        footer = f"\n──────────────────\nSe enviará a *{total_users}* usuarios."
+        footer = f"\n──────────────────\nSe enviará a *{total_users}* usuarios{_segment_suffix(payload)}."
     return header + body + footer
 
 
@@ -200,6 +212,7 @@ async def ms_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
             "`/ms <texto>` — difunde ese texto a todos los usuarios\n"
             "`/ms @usuario <texto>` — envía ese texto solo a @usuario\n"
             "`/ms historial` — muestra las últimas difusiones\n"
+            "`/ms #segmento <texto>` — solo a un segmento: activos, alertas, tspl o year\n"
             "o responde (reply) con `/ms [@usuario]` a un mensaje con foto/texto "
             "para difundir o enviar *ese* contenido.",
             parse_mode=ParseMode.MARKDOWN,
@@ -228,7 +241,13 @@ async def ms_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         payload["target_user_id"] = target_user_id
         total_users = 1
     else:
-        user_ids = await api_client.admin_list_user_ids()
+        segment = payload.get("segment", "todos")
+        user_ids = await api_client.admin_list_user_ids(segment)
+        if not user_ids and segment != "todos":
+            await update.message.reply_text(
+                f"⚠️ No hay usuarios en el segmento «{segment}». No se envía nada."
+            )
+            return
         if not user_ids:
             await update.message.reply_text(
                 "⚠️ No hay usuarios registrados todavía (o falló la consulta a taso-api). "
@@ -328,7 +347,7 @@ async def _run_broadcast(
     if api_client is not None and admin_id is not None:
         # Antes del mensaje final: si editarlo falla, la difusión igual queda registrada.
         await api_client.log_broadcast(
-            admin_id=admin_id, kind=payload["kind"], segment="todos",
+            admin_id=admin_id, kind=payload["kind"], segment=payload.get("segment", "todos"),
             recipients=len(user_ids), ok=counts["ok"], blocked=counts["blocked"],
             errors=counts["error"], duration_s=duration_s,
         )
@@ -398,7 +417,7 @@ async def confirm_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         return
 
     api_client = _get_api_client(context)
-    user_ids = await api_client.admin_list_user_ids()
+    user_ids = await api_client.admin_list_user_ids(payload.get("segment", "todos"))
     if not user_ids:
         await query.edit_message_text("⚠️ No se pudo obtener la lista de usuarios. Cancelado.")
         pending.pop(owner_id, None)
