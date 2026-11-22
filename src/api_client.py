@@ -372,6 +372,52 @@ class TasaloApiClient:
         except Exception as e:
             logger.debug("Error marcando alcanzabilidad de %s: %s", user_id, e)
 
+    async def erase_user_data(self, user_id: int) -> Optional[Dict[str, Any]]:
+        """
+        Borra los datos del usuario en la API y anonimiza sus tickets.
+        Devuelve la respuesta, o None si no se pudo (a diferencia de los
+        fire-and-forget: /privacidad no debe decir "borrado" si fallo).
+        Ver taso-bot#72, Fase 5.
+        """
+        if not self.admin_key:
+            logger.error("❌ erase_user_data requiere admin_key configurado")
+            return None
+        try:
+            client = self._get_client()
+            response = await client.post(
+                f"{self.api_url}/api/v1/admin/stats/users/privacy",
+                headers=self._admin_headers,
+                json={"user_id": user_id},
+                timeout=httpx.Timeout(10.0, connect=2.0),
+            )
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            logger.warning("Error borrando datos del usuario %s: %s", user_id, e)
+            return None
+
+    async def set_user_muted(self, user_id: int, muted: bool) -> Optional[bool]:
+        """
+        Activa o quita el silencio del usuario. Devuelve `found` de la API
+        (False si el usuario no esta registrado) o None si fallo. Fase 5.
+        """
+        if not self.admin_key:
+            logger.error("❌ set_user_muted requiere admin_key configurado")
+            return None
+        try:
+            client = self._get_client()
+            response = await client.post(
+                f"{self.api_url}/api/v1/admin/stats/users/mute",
+                headers=self._admin_headers,
+                json={"user_id": user_id, "muted": muted},
+                timeout=httpx.Timeout(5.0, connect=2.0),
+            )
+            response.raise_for_status()
+            return bool(response.json().get("found"))
+        except Exception as e:
+            logger.warning("Error cambiando el silencio de %s: %s", user_id, e)
+            return None
+
     async def log_broadcast(
         self, admin_id: int, kind: str, segment: str, recipients: int,
         ok: int, blocked: int, errors: int, duration_s: float,

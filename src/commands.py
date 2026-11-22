@@ -29,6 +29,12 @@ from src.handlers.ms import ms_command
 from src.handlers.msapp import msapp_command
 from src.handlers.news import news_command
 from src.handlers.p import p_command
+from src.handlers.privacidad import (
+    privacidad_callback,
+    privacidad_command,
+    silencio_callback,
+    silencio_command,
+)
 from src.handlers.qp import qp_command
 from src.handlers.spl import spl_command
 from src.handlers.start import start_command
@@ -110,6 +116,10 @@ COMANDOS: tuple[Cmd, ...] = (
     Cmd("tspl", tspl_command, "TASALO Spotlight completo"),
     Cmd("news", news_command, "Noticias cripto"),
     Cmd("tkt", tkt_command, "Contactar a los administradores"),
+    Cmd("privacidad", privacidad_command, "Borrar mis datos",
+        callback=privacidad_callback),
+    Cmd("silencio", silencio_command, "Dejar de recibir difusiones",
+        callback=silencio_callback),
     # Solo administradores
     Cmd("status", status_command, "Panel de estado del bot", admin=True),
     Cmd("refresh", refresh_command, "Refrescar las tasas ahora", admin=True),
