@@ -8,6 +8,7 @@ Hay un objetivo vigente de reducir el consumo de recursos en el VPS: nada que lo
 - Tests primero (rojo, luego verde) y suite completa antes de proponer un PR.
 - No reiniciar servicios entre las 8:10 y las 9:00 hora de Cuba (captura de la imagen de El Toque).
 - Despliegue: `git pull` en el VPS y reinicio con confirmacion del propietario.
+- Permisos de Windows (D-030): si SmartScreen, Control de acceso, Defender, el firewall o un aviso de permisos bloquea una app o herramienta, no lo esquives ni pruebes rutas o ejecutables alternativos: detente, avisa a Ersus de que app y que permiso hace falta, y reintenta solo tras su confirmacion.
 
 ## Skills en cada sesion (el propietario las pide siempre)
 - Al empezar: `claude-mem:mem-search` (o `cmem-pro:mem-search`) para recuperar trabajo previo; luego leer `task/registro/` (PLAN, BOARD, ultimos handoffs).
