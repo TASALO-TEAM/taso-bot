@@ -156,6 +156,10 @@ def create_application() -> Application:
     from src.pick import register as register_pick
     register_pick(application)
 
+    # Registro automatico de usuarios en la API (group=-10, no bloquea; taso-bot#72 F1).
+    from src.user_seen import register as register_user_seen
+    register_user_seen(application)
+
     # Registrar handler para input de hora personalizada del año
     #
     # IMPORTANTE: los 3 MessageHandler globales de más abajo (year hour,

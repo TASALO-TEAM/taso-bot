@@ -333,6 +333,28 @@ class TasaloApiClient:
         except Exception as e:
             logger.debug("⚠️ Error trackeando comando %s: %s", command, e)
 
+    async def mark_user_seen(
+        self,
+        user_id: int,
+        username: Optional[str] = None,
+        first_name: Optional[str] = None,
+    ) -> None:
+        """
+        Registra en la API que el usuario existe (no cuenta como comando).
+        Fire-and-forget: errores son silenciosos. Ver taso-bot#72, Fase 1.
+        """
+        try:
+            client = self._get_client()
+            response = await client.post(
+                f"{self.api_url}/api/v1/admin/stats/users/seen",
+                headers=self._admin_headers,
+                json={"user_id": user_id, "username": username, "first_name": first_name},
+                timeout=httpx.Timeout(5.0, connect=2.0),
+            )
+            response.raise_for_status()
+        except Exception as e:
+            logger.debug("Error registrando usuario visto %s: %s", user_id, e)
+
     async def get_stats_summary(self) -> Optional[Dict[str, Any]]:
         """Obtiene resumen de estadísticas del bot."""
         if not self.admin_key:
