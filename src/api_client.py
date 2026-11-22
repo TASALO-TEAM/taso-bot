@@ -372,6 +372,50 @@ class TasaloApiClient:
         except Exception as e:
             logger.debug("Error marcando alcanzabilidad de %s: %s", user_id, e)
 
+    async def log_broadcast(
+        self, admin_id: int, kind: str, segment: str, recipients: int,
+        ok: int, blocked: int, errors: int, duration_s: float,
+    ) -> None:
+        """
+        Registra en la API una difusion de /ms terminada: solo contadores, nunca el texto.
+        Fire-and-forget: errores son silenciosos. Ver taso-bot#72, Fase 3.
+        """
+        try:
+            client = self._get_client()
+            response = await client.post(
+                f"{self.api_url}/api/v1/admin/stats/broadcasts",
+                headers=self._admin_headers,
+                json={
+                    "admin_id": admin_id, "kind": kind, "segment": segment,
+                    "recipients": recipients, "ok": ok, "blocked": blocked,
+                    "errors": errors, "duration_s": round(duration_s, 2),
+                },
+                timeout=httpx.Timeout(5.0, connect=2.0),
+            )
+            response.raise_for_status()
+        except Exception as e:
+            logger.debug("Error registrando difusion de %s: %s", admin_id, e)
+
+    async def list_broadcasts(self, limit: int = 10) -> list:
+        """
+        Ultimas difusiones de /ms (la mas reciente primero), o [] si hay error.
+        Endpoint admin-only (requiere admin_key). Ver taso-bot#72, Fase 3.
+        """
+        if not self.admin_key:
+            logger.error("list_broadcasts requiere admin_key configurado")
+            return []
+        url = f"{self.api_url}/api/v1/admin/stats/broadcasts"
+        try:
+            data = await self._get_with_retry(
+                url, headers=self._admin_headers, params={"limit": limit}
+            )
+            if data and data.get("ok"):
+                return data.get("data", [])
+            return []
+        except Exception as e:
+            logger.error("Error en list_broadcasts: %s", e)
+            return []
+
     async def get_stats_summary(self) -> Optional[Dict[str, Any]]:
         """Obtiene resumen de estadísticas del bot."""
         if not self.admin_key:
