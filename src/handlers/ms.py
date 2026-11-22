@@ -7,6 +7,7 @@ docs/plans/2026-07-08-ms-directo-y-tkt-mejoras.md (envío a un usuario).
 Uso:
     /ms <texto>                → difunde ese texto a todos los usuarios
     /ms @usuario <texto>       → envía ese texto solo a @usuario
+    /ms historial              → muestra las últimas difusiones (solo contadores)
     (reply a foto/foto+caption) + /ms [@usuario]  → difunde/envía esa foto
         (con o sin caption) a todos los usuarios o solo a @usuario
 
@@ -23,6 +24,8 @@ import asyncio
 import logging
 import re
 import time
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
@@ -41,6 +44,9 @@ BATCH_PAUSE_SECONDS = 1.0   # pausa entre lotes (~20 msg/s, bajo el límite de T
 PROGRESS_EVERY = 50         # editar el mensaje de status cada N usuarios procesados
 
 TARGET_USERNAME_RE = re.compile(r"^@([\w]{5,32})$")
+
+HISTORY_LIMIT = 10          # difusiones que muestra /ms historial
+CUBA_TZ = ZoneInfo("America/Havana")
 
 
 def _get_api_client(context: ContextTypes.DEFAULT_TYPE) -> TasaloApiClient:
@@ -137,6 +143,29 @@ def _confirm_keyboard(admin_id: int) -> InlineKeyboardMarkup:
     ]])
 
 
+def _is_history_request(update: Update) -> bool:
+    """True solo para `/ms historial` a secas (sin reply): cualquier otra cosa es una difusión."""
+    message = update.message
+    return not message.reply_to_message and (message.text or "").lower().split()[1:] == ["historial"]
+
+
+def _history_text(items: list) -> str:
+    """Texto de `/ms historial`: una línea por difusión, con la hora de Cuba."""
+    if not items:
+        return "📜 Todavía no hay difusiones registradas (o falló la consulta a taso-api)."
+    lines = ["📜 *Últimas difusiones*", ""]
+    for it in items:
+        when = datetime.fromisoformat(it["created_at"])
+        if when.tzinfo is None:
+            when = when.replace(tzinfo=timezone.utc)
+        kind = "🖼 foto" if it["kind"] == "photo" else "✉️ texto"
+        lines.append(
+            f"• {when.astimezone(CUBA_TZ):%d/%m %H:%M} · {kind} · {it['recipients']} dest. · "
+            f"✅ {it['ok']} · 🚫 {it['blocked']} · ⚠️ {it['errors']} · {it['duration_s']:.1f}s"
+        )
+    return "\n".join(lines)
+
+
 async def ms_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handler principal de /ms. Arma el preview y espera confirmación."""
     admin_id = update.effective_user.id
@@ -159,12 +188,18 @@ async def ms_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         )
         return
 
+    if _is_history_request(update):
+        items = await api_client.list_broadcasts(HISTORY_LIMIT)
+        await update.message.reply_text(_history_text(items), parse_mode=ParseMode.MARKDOWN)
+        return
+
     payload = _extract_payload(update)
     if payload is None:
         await update.message.reply_text(
             "⚠️ Uso:\n"
             "`/ms <texto>` — difunde ese texto a todos los usuarios\n"
             "`/ms @usuario <texto>` — envía ese texto solo a @usuario\n"
+            "`/ms historial` — muestra las últimas difusiones\n"
             "o responde (reply) con `/ms [@usuario]` a un mensaje con foto/texto "
             "para difundir o enviar *ese* contenido.",
             parse_mode=ParseMode.MARKDOWN,
@@ -256,7 +291,9 @@ async def _send_one(bot, user_id: int, payload: dict, semaphore: asyncio.Semapho
             return "error"
 
 
-async def _run_broadcast(bot, payload: dict, user_ids: list, status_message, api_client=None) -> None:
+async def _run_broadcast(
+    bot, payload: dict, user_ids: list, status_message, api_client=None, admin_id=None
+) -> None:
     """Envía el broadcast a todos los user_ids, editando status_message con progreso."""
     semaphore = asyncio.Semaphore(CONCURRENCY)
     counts = {"ok": 0, "blocked": 0, "error": 0}
@@ -288,6 +325,13 @@ async def _run_broadcast(bot, payload: dict, user_ids: list, status_message, api
             await asyncio.sleep(BATCH_PAUSE_SECONDS)
 
     duration_s = time.time() - start
+    if api_client is not None and admin_id is not None:
+        # Antes del mensaje final: si editarlo falla, la difusión igual queda registrada.
+        await api_client.log_broadcast(
+            admin_id=admin_id, kind=payload["kind"], segment="todos",
+            recipients=len(user_ids), ok=counts["ok"], blocked=counts["blocked"],
+            errors=counts["error"], duration_s=duration_s,
+        )
     await status_message.edit_text(
         "✅ *Broadcast completado*\n\n"
         f"✅ Enviado: {counts['ok']}\n"
@@ -365,7 +409,9 @@ async def confirm_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
     status_message = await query.edit_message_text(f"📤 Enviando... 0/{len(user_ids)}")
     try:
-        await _run_broadcast(context.bot, payload, user_ids, status_message, api_client)
+        await _run_broadcast(
+            context.bot, payload, user_ids, status_message, api_client, admin_id=owner_id
+        )
     finally:
         pending.pop(owner_id, None)
 
