@@ -53,13 +53,13 @@ SECCIONES = {
     "alertas": ("🔔 Alertas", "Avisos de precio.", ("start_alert_help",)),
     "noticias": ("📰 Noticias", "Noticias del mercado.", ("news",)),
     "mercado": ("🗺 Mercado", "Vista general del mercado.", ("mapa",)),
-    "ayuda": ("❓ Ayuda", "Ayuda y contacto con el equipo.", ("help", "tkt")),
+    "ayuda": ("❓ Ayuda", "Ayuda y contacto con el equipo.", ("help", "tkt", "silencio", "privacidad")),
 }
 _ADMIN = ("🛠 Admin", "Comandos de administración. Escríbelos en el chat.")
 
 # Comandos que corren sin argumentos y para cualquier usuario: su ficha ofrece
 # "Ejecutar". Lista cerrada a proposito (nada de admin ni de flujos con texto).
-EJECUTABLES = ("qp", "news", "mapa", "tspl", "toqueimg", "help", "mk", "y", "tkt")
+EJECUTABLES = ("qp", "news", "mapa", "tspl", "toqueimg", "help", "mk", "y", "tkt", "silencio", "privacidad")
 
 _CABECERA_CATEGORIAS = "\u2630 Categor\u00edas\n\nElige una categor\u00eda:"
 

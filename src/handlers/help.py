@@ -67,6 +67,8 @@ _Ejemplos: /ta btcusdt · /graf ethusdt_
 ℹ️ *Utilidades*
 /start — Menú principal
 /tkt — Contactar a los administradores
+/silencio — Dejar de recibir difusiones
+/privacidad — Borrar mis datos
 
 💡 _Toca los botones de cualquier mensaje para IA, análisis técnico, gráficos o alertas._
 💡 _Usa `/help <comando>` para ver el detalle de uno en particular (ej. `/help p`)._"""
@@ -251,6 +253,18 @@ Muestra el mensaje de bienvenida con botones de acceso directo a Tasalo, Toque, 
 Uso: `/tkt`
 
 Abre un menú para reportar un bug o pedir que te promocionen/publiquen un anuncio. Elegís una opción, contás en un mensaje qué pasa, y un admin te contacta directamente. Te avisamos cuando tu ticket se toma y cuando se resuelve (o se aprueba/rechaza si es un anuncio).""",
+
+    "silencio": """🔕 */silencio — Dejar de recibir difusiones*
+
+Uso: `/silencio`
+
+Elegís silenciar o reactivar. Silenciado, no recibís los mensajes masivos de los administradores. Seguís recibiendo tus alertas, suscripciones y avisos de tickets.""",
+
+    "privacidad": """🗑 */privacidad — Borrar mis datos*
+
+Uso: `/privacidad`
+
+Pide confirmación y borra tu registro, tus estadísticas, tus alertas de precio e imagen y tus suscripciones (/tspl y /y). Tus tickets quedan anónimos. No es un bloqueo: si volvés a escribirle al bot, te registra de nuevo. Las copias de seguridad conservan los datos hasta que se roten.""",
 
     # Solo visibles/respondidas si is_admin:
     "ads": """📢 */ads — Gestión de anuncios* (admin)

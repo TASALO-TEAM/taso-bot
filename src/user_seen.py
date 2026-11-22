@@ -30,6 +30,10 @@ async def mark_seen(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     # my_chat_member llega cuando alguien bloquea el bot: no es actividad.
     if user is None or user.is_bot or update.my_chat_member is not None:
         return
+    # Confirmar /privacidad no cuenta como actividad: recrearia al usuario recien borrado.
+    query = update.callback_query
+    if query is not None and isinstance(query.data, str) and query.data == "privacidad:ok":
+        return
 
     now = time.monotonic()
     if now - _last_sent.get(user.id, -RESEND_SECONDS) < RESEND_SECONDS:
