@@ -933,7 +933,7 @@ class TasaloApiClient:
 
     # ── Broadcast (/ms) API methods ─────────────────────────────────────────────
 
-    async def admin_list_user_ids(self) -> list:
+    async def admin_list_user_ids(self, segment: str = "todos") -> list:
         """Lista el user_id de TODOS los usuarios registrados del bot.
 
         Endpoint admin-only (requiere admin_key). Usado por el comando /ms
@@ -948,7 +948,8 @@ class TasaloApiClient:
             return []
         url = f"{self.api_url}/api/v1/admin/stats/users/ids"
         try:
-            data = await self._get_with_retry(url, headers=self._admin_headers)
+            params = {"segmento": segment} if segment != "todos" else None  # #72 F4
+            data = await self._get_with_retry(url, headers=self._admin_headers, params=params)
             if data and data.get("ok"):
                 return data.get("data", [])
             return []
