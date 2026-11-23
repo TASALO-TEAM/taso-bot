@@ -182,7 +182,7 @@ _El resultado es el mismo para todos y se guarda unos minutos en caché._""",
 
 Uso: `/explorar <dirección | hash | @usuario>`
 
-Envía una dirección o transacción de Bitcoin, un usuario de Hive o una factura Lightning y te muestro saldo, movimientos y un enlace a un explorador público. También puedes enviarlo directamente al bot en privado, sin comando.
+Envía una dirección o transacción de Bitcoin o EVM (0x...), un usuario de Hive o una factura Lightning y te muestro saldo, movimientos y un enlace a un explorador público. También puedes enviarlo directamente al bot en privado, sin comando.
 
 _Solo lectura: nunca se abren enlaces ni se paga nada. Los precios en USD indican fuente y hora._""",
 

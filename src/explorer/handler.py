@@ -35,13 +35,13 @@ _ESPERA = "explorer_waiting"   # user_data: instante (monotonic) en que se pidio
 _ESPERA_TTL = 120.0
 # Flags de otros flujos que esperan texto libre: si hay uno, el explorador no actua.
 _OTROS_FLUJOS = ("waiting_for_time", "tkt_awaiting", "awaiting_tspl_hour", "awaiting_year_hour")
-_CONSULTABLES = ("btc_address", "btc_tx", "hive_account", "hive_tx")
+_CONSULTABLES = ("btc_address", "btc_tx", "hive_account", "hive_tx", "evm_address", "evm_tx")
 _PRECIO_KEY = "explorer:btc_usd"
 _PRECIO_TTL = 60
 _OPCIONAL_TIMEOUT = 6.0
 _PEDIR = (
     "\U0001f50e Explorador\n\n"
-    "Env\u00edame una direcci\u00f3n o transacci\u00f3n de Bitcoin, un usuario de Hive (@usuario) "
+    "Env\u00edame una direcci\u00f3n o transacci\u00f3n de Bitcoin o EVM (0x...), un usuario de Hive (@usuario) "
     "o una factura Lightning, y te muestro lo que hay en la cadena."
 )
 
@@ -94,6 +94,10 @@ async def _consultar_real(e):
         return await sources.hive_cuenta(e.valor), None, None
     if e.tipo == "hive_tx":
         return await sources.hive_tx(e.valor), None, None
+    if e.tipo == "evm_address":
+        return await sources.evm_address(e.valor), None, None
+    if e.tipo == "evm_tx":
+        return await sources.evm_tx(e.valor), None, None
     raise sources.ExplorerError("no_encontrado")
 
 
@@ -104,7 +108,7 @@ async def _responder(msg, user_id, e, user_data=None) -> None:
     """Consulta (si el tipo se consulta) y contesta. Solo mensajes fijos ante errores."""
     markup = None
     if e.tipo not in _CONSULTABLES:
-        texto = formatear(e)   # LN se decodifica local; EVM/LNURL/address solo se reconocen
+        texto = formatear(e)   # LN se decodifica local; LNURL/address solo se reconocen
     else:
         permitido, _ = LIMITER.allow(user_id)
         if not permitido:

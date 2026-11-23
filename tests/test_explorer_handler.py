@@ -114,14 +114,11 @@ def test_la_consulta_exitosa_tampoco_loguea_la_entrada_completa(_aislar, caplog)
     assert BTC not in caplog.text
 
 
-def test_evm_se_reconoce_sin_consultar_nada_ni_gastar_limite(monkeypatch, _aislar):
-    limiter = UserLimiter(max_calls=1, window=60.0)
-    monkeypatch.setattr(h, "LIMITER", limiter)
+def test_evm_no_ofrece_boton_de_ia(_aislar):
+    _aislar.return_value = ({"direccion": EVM, "redes": [], "sin_respuesta": []}, None, None)
     u, m = _upd(EVM)
     _run(h.explorer_text(u, _ctx()))
-    _aislar.assert_not_awaited()
-    assert "EVM" in m.reply_text.await_args.args[0]
-    assert limiter.allow(7)[0] is True   # no consumio el cupo
+    assert m.reply_text.await_args.kwargs.get("reply_markup") is None
 
 
 def test_explorar_sin_argumentos_pide_la_entrada_y_arma_la_espera():

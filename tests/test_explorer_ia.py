@@ -192,9 +192,11 @@ def test_sin_ia_configurada_no_hay_boton(monkeypatch):
     assert _botones(m) == [] and h._IA_CTX not in c.user_data
 
 
-def test_lo_que_no_se_consulta_no_tiene_boton():
+def test_evm_se_consulta_pero_no_tiene_boton(monkeypatch):
+    datos = {"redes": [{"red": "Ethereum", "simbolo": "ETH", "saldo_wei": 10**18, "nonce": 1, "tipo": "cuenta"}]}
+    monkeypatch.setattr(h, "_consultar", AsyncMock(return_value=(datos, None, None)))
     m, c = _consulta("0x" + "ab" * 20)
-    assert _botones(m) == []
+    assert _botones(m) == [] and h._IA_CTX not in c.user_data
 
 
 def _q(data, uid=7):

@@ -277,3 +277,100 @@ async def hive_tx(txid: str) -> dict:
         return {"id": txid, "bloque": _int(j.get("block_num"), None), "operaciones": ops,
                 "total_operaciones": len(j["operations"])}
     return await _cacheado(("hive_tx", txid), 300, cargar)
+
+
+
+# ───────────────────────── EVM (PublicNode, sin clave) ─────────────────────────
+
+EVM_REDES = (("Ethereum", "ETH", "ethereum-rpc"), ("BNB Chain", "BNB", "bsc-rpc"),
+             ("Polygon", "POL", "polygon-bor-rpc"), ("Base", "ETH", "base-rpc"),
+             ("Arbitrum", "ETH", "arbitrum-one-rpc"))
+_QTY = re.compile(r"0x[0-9a-fA-F]{1,64}")        # < 2**256
+_DIR = re.compile(r"0x[0-9a-fA-F]{40}")
+_CODE = re.compile(r"0x(?:[0-9a-fA-F]{2})*")
+
+
+def _hex(v) -> int:
+    if isinstance(v, str) and _QTY.fullmatch(v):
+        return int(v, 16)
+    raise ExplorerError("respuesta_invalida")
+
+
+def _dir(v) -> str:
+    if isinstance(v, str) and _DIR.fullmatch(v):
+        return v
+    raise ExplorerError("respuesta_invalida")
+
+
+async def _rpc(host: str, metodo: str, params):
+    """JSON-RPC a un nodo de PublicNode. `error` del nodo = fallo; `result: null` -> None."""
+    url = f"https://{host}.publicnode.com"
+    cuerpo = {"jsonrpc": "2.0", "method": metodo, "params": params, "id": 1}
+
+    async def uno():
+        j = await _pedir("POST", url, cuerpo)
+        if not isinstance(j, dict) or "error" in j:
+            raise _Fallo("json_invalido")
+        return j.get("result")
+    return await _con_respaldo([uno])
+
+
+async def _evm_red(red, direccion):
+    """Saldo, nonce y tipo de cuenta en una red; None si no tiene actividad."""
+    nombre, simbolo, host = red
+    saldo, nonce = await asyncio.gather(_rpc(host, "eth_getBalance", [direccion, "latest"]),
+                                        _rpc(host, "eth_getTransactionCount", [direccion, "latest"]))
+    saldo, nonce = _hex(saldo), _hex(nonce)
+    if not (saldo or nonce):
+        return None
+    code = await _rpc(host, "eth_getCode", [direccion, "latest"])
+    if not isinstance(code, str) or not _CODE.fullmatch(code):
+        raise ExplorerError("respuesta_invalida")
+    # 0xef0100 = delegacion EIP-7702: es una cuenta normal, no un contrato
+    tipo = "cuenta" if code == "0x" else "delegacion" if code.lower().startswith("0xef0100") else "contrato"
+    return {"red": nombre, "simbolo": simbolo, "saldo_wei": saldo, "nonce": nonce, "tipo": tipo}
+
+
+async def evm_address(direccion: str) -> dict:
+    async def cargar():
+        res = await asyncio.gather(*(_evm_red(r, direccion) for r in EVM_REDES), return_exceptions=True)
+        redes, sin_respuesta = [], []
+        for r, x in zip(EVM_REDES, res):
+            if isinstance(x, ExplorerError):
+                sin_respuesta.append(r[0])
+            elif isinstance(x, BaseException):
+                raise x
+            elif x:
+                redes.append(x)
+        if len(sin_respuesta) == len(EVM_REDES):
+            raise ExplorerError("fuente_no_disponible")
+        return {"direccion": direccion, "redes": redes, "sin_respuesta": sin_respuesta}
+    return await _cacheado(("evm_addr", direccion.lower()), 60, cargar)
+
+
+async def evm_tx(txhash: str) -> dict:
+    """Solo Ethereum: un hash no dice en que red esta."""
+    host = EVM_REDES[0][2]
+
+    async def cargar():
+        tx = await _rpc(host, "eth_getTransactionByHash", [txhash])
+        if tx is None:
+            raise ExplorerError("no_encontrado")
+        if not isinstance(tx, dict):
+            raise ExplorerError("respuesta_invalida")
+        rec, tip = await asyncio.gather(_rpc(host, "eth_getTransactionReceipt", [txhash]),
+                                        _rpc(host, "eth_blockNumber", []))
+        datos = {"hash": txhash, "de": _dir(tx.get("from")), "a": None if tx.get("to") is None else _dir(tx["to"]),
+                 "valor_wei": _hex(tx.get("value"))}
+        if rec is None:   # sin recibo: aun no esta en un bloque
+            return {**datos, "estado": "pendiente", "bloque": None, "confirmaciones": 0}
+        if not isinstance(rec, dict):
+            raise ExplorerError("respuesta_invalida")
+        bloque = _hex(rec.get("blockNumber"))
+        try:
+            conf = max(0, _hex(tip) - bloque + 1)
+        except ExplorerError:
+            conf = None   # el recibo vale aunque no se sepa la altura actual
+        return {**datos, "estado": "exitosa" if _hex(rec.get("status")) == 1 else "fallida",
+                "bloque": bloque, "confirmaciones": conf}
+    return await _cacheado(("evm_tx", txhash.lower()), lambda v: 600 if (v["confirmaciones"] or 0) >= 6 else 30, cargar)

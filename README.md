@@ -24,7 +24,7 @@ Bot de Telegram para consultar tasas de cambio de Cuba, precios y análisis crip
 - ✅ `/news` — noticias cripto directas (por moneda, tópico o texto libre) vía NewsData.io, sin curación de IA
 - ✅ `/alert` — alertas de precio, creables también desde botones de `/p`, `/ta` y `/graf`
 - ✅ `/mapa` — mapa de calor (treemap) de cripto 24 h / 7 d, forex y acciones del S&P 500, con resumen y análisis breve de TASALO IA
-- ✅ `/explorar` — pega una dirección Bitcoin, una factura Lightning, un usuario de Hive o un hash de transacción y el bot lo identifica y consulta (solo lectura)
+- ✅ `/explorar` — pega una dirección Bitcoin o EVM (0x...), una factura Lightning, un usuario de Hive o un hash de transacción y el bot lo identifica y consulta (solo lectura)
 
 ### 🔑 Administración
 - ✅ `/refresh`, `/status` (panel con botones + métricas + jobs del scheduler), `/health`

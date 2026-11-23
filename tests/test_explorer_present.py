@@ -61,11 +61,19 @@ def test_factura_lightning_solo_decodificada_sin_seguir_nada():
 
 
 def test_reconocidas_pero_no_consultadas():
-    for tipo, valor in (("lnurl", "lnurl1xyz"), ("lightning_address", "a@b.com"), ("evm_address", "0x" + "1" * 40),
-                        ("evm_tx", "0x" + "1" * 64)):
-        txt = p.formatear(Entrada(tipo, valor, "evm" if tipo.startswith("evm") else None), None)
+    for tipo, valor in (("lnurl", "lnurl1xyz"), ("lightning_address", "a@b.com")):
+        txt = p.formatear(Entrada(tipo, valor, None), None)
         assert txt and "no" in txt.lower()
         _sin_tags_rotos(txt)
+
+
+def test_evm_escapa_html_de_terceros():
+    e = Entrada("evm_address", "0x" + "ab" * 20, "evm")
+    d = {"direccion": e.valor, "sin_respuesta": ["<b>x</b>"],
+         "redes": [{"red": "<i>x</i>", "simbolo": "<b>", "saldo_wei": 1, "nonce": 1, "tipo": "cuenta"}]}
+    txt = p.formatear(e, d)
+    assert "<i>x</i>" not in txt and "<b>x</b>" not in txt and len(txt) <= p.MAX
+    _sin_tags_rotos(txt)
 
 
 def test_desconocido_da_ayuda():
