@@ -137,3 +137,25 @@ def test_rafaga_concurrente_misma_clave_hace_una_sola_llamada():
         return await asyncio.gather(*[sources.btc_address(DIR) for _ in range(50)])
     res = asyncio.run(rafaga())
     assert len(llamadas) == 1 and all(r["saldo_sats"] == 1 for r in res)
+
+
+EVM_DIR = "0x" + "ab" * 20
+EVM_TX = "0x" + "cd" * 32
+
+
+@pytest.mark.parametrize("forma", FORMAS)
+def test_evm_address_forma_rara(forma):
+    _con(httpx.Response(200, json=forma))
+    _ok_o_explorer_error(sources.evm_address(EVM_DIR))
+
+
+@pytest.mark.parametrize("forma", FORMAS)
+def test_evm_tx_forma_rara(forma):
+    _con(httpx.Response(200, json=forma))
+    _ok_o_explorer_error(sources.evm_tx(EVM_TX))
+
+
+def test_evm_json_profundamente_anidado_no_revienta():
+    _con(httpx.Response(200, content=b"[" * 20000 + b"]" * 20000))
+    _ok_o_explorer_error(sources.evm_address(EVM_DIR))
+    _ok_o_explorer_error(sources.evm_tx(EVM_TX))

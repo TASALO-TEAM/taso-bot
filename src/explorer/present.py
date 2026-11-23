@@ -18,12 +18,11 @@ _ERRORES = {
     "respuesta_invalida": "Una fuente respondió con datos que no pude interpretar.",
 }
 _AYUDA = ("No reconocí ese texto. Puedo consultar:\n• direcciones y transacciones de Bitcoin\n"
-          "• usuarios y transacciones de Hive (@usuario)\n• facturas Lightning (solo decodificar)")
+          "• usuarios y transacciones de Hive (@usuario)\n• direcciones y transacciones EVM (0x…)\n"
+          "• facturas Lightning (solo decodificar)")
 _NO_CONSULTA = {
     "lnurl": "LNURL reconocida. No se consulta ni se abre: puede apuntar a un servicio externo.",
     "lightning_address": "Lightning address reconocida. No se consulta: resolverla implica contactar un servidor externo.",
-    "evm_address": "Dirección EVM reconocida. Por ahora no se consulta (solo Bitcoin y Hive).",
-    "evm_tx": "Hash de transacción EVM reconocido. Por ahora no se consulta (solo Bitcoin y Hive).",
 }
 
 
@@ -34,7 +33,8 @@ def mensaje_error(codigo: str) -> str:
 def enlace(e: Entrada) -> str | None:
     """URL fija a un explorador publico; el valor ya fue validado por el clasificador."""
     base = {"btc_address": "https://mempool.space/address/", "btc_tx": "https://mempool.space/tx/",
-            "hive_tx": "https://hiveblocks.com/tx/"}.get(e.tipo)
+            "hive_tx": "https://hiveblocks.com/tx/", "evm_address": "https://etherscan.io/address/",
+            "evm_tx": "https://etherscan.io/tx/"}.get(e.tipo)
     if base:
         return base + e.valor
     if e.tipo == "hive_account":
@@ -135,6 +135,40 @@ def _hive_tx(e, d):
     return c, []
 
 
+def _eth(wei, simbolo) -> str:
+    return f"{wei / 10**18:.6f} {_e(str(simbolo))}"
+
+
+_TIPO_EVM = {"cuenta": "cuenta normal", "delegacion": "cuenta con delegación EIP-7702 (no es un contrato)",
+             "contrato": "contrato"}
+
+
+def _evm_address(e, d):
+    c = ["🔎 <b>Dirección EVM</b>", f"<code>{_e(e.valor)}</code>", ""]
+    if d["redes"]:
+        c += [f"• <b>{_e(str(r['red']))}</b>: {_eth(r['saldo_wei'], r['simbolo'])} · nonce {_n(r['nonce'])}"
+              f" · {_TIPO_EVM.get(r['tipo'], 'cuenta')}" for r in d["redes"]]
+    else:
+        c.append("ℹ️ Sin actividad (saldo y nonce en cero) en las redes que respondieron.")
+    if d.get("sin_respuesta"):
+        c.append("⚠️ Sin respuesta de: " + ", ".join(_e(str(x)) for x in d["sin_respuesta"]) + ". Ese dato puede faltar.")
+    c.append("ℹ️ Solo saldo nativo y nonce: no incluye tokens ni nombres ENS.")
+    return c, []
+
+
+def _evm_tx(e, d):
+    est = {"exitosa": "✅ Exitosa", "fallida": "❌ Fallida", "pendiente": "⏳ Sin confirmar (pendiente)"}.get(d["estado"], "?")
+    if d["estado"] != "pendiente":
+        if d.get("confirmaciones") is not None:
+            est += f" · {_n(d['confirmaciones'])} confirmaciones"
+        if d.get("bloque") is not None:
+            est += f" · bloque {_n(d['bloque'])}"
+    destino = f"↘️ A: <code>{_e(str(d['a']))}</code>" if d.get("a") else "📄 Creación de contrato (sin destino)"
+    return ["🔎 <b>Transacción EVM</b> · Ethereum", f"<code>{_e(e.valor)}</code>", "", est,
+            f"↗️ De: <code>{_e(str(d['de']))}</code>", destino, f"💸 Valor: <b>{_eth(d['valor_wei'], 'ETH')}</b>",
+            "ℹ️ Solo se consulta Ethereum: las otras redes no se consultan."], []
+
+
 def _ln(e):
     sats = e.info("sats")
     monto = f"{_n(sats)} sats" if sats is not None else (f"{_n(e.info('msat'))} msat" if e.info("msat") else "sin monto fijado")
@@ -157,6 +191,10 @@ def formatear(e: Entrada, datos=None, *, txs=None, precio=None) -> str:
         cab, cola = _hive_cuenta(e, datos)
     elif e.tipo == "hive_tx" and datos:
         cab, cola = _hive_tx(e, datos)
+    elif e.tipo == "evm_address" and datos:
+        cab, cola = _evm_address(e, datos)
+    elif e.tipo == "evm_tx" and datos:
+        cab, cola = _evm_tx(e, datos)
     elif e.tipo == "ln_invoice":
         cab, cola = _ln(e)
     elif e.tipo in _NO_CONSULTA:
