@@ -232,3 +232,98 @@ def test_cripto_ignora_ids_invalidos(malo):
     filas = [{**_listing("BTC", 2e12, 1.5), "id": malo}]
     snap = asyncio.run(obtener_cripto(CmcFalso([filas]), "24h"))
     assert snap.celdas[0].ref is None
+
+
+# --- M2: mapas por indice y de indices mundiales (misma fuente, escaner de TradingView) ---
+
+def _comp(sym, cap, chg):
+    return {"s": f"X:{sym}", "d": [sym, cap, chg, "EUR", "XETR"]}
+
+
+def _ind(ticker, nombre, chg):
+    return {"s": ticker, "d": [nombre, 1000.0, chg, nombre]}
+
+
+def test_mercado_nasdaq_consulta_america_con_el_indice_ndx():
+    from src.heatmap.data import obtener_mercado
+    http = HttpPostFalso([{"totalCount": 2, "data": [_comp("AAPL", 5e12, 1.0), _comp("NVDA", 4e12, -2.0)]}])
+    snap = asyncio.run(obtener_mercado("nasdaq", http))
+    url, body = http.args
+    assert url.endswith("/america/scan")
+    assert body["symbols"]["groups"] == [{"type": "index", "values": ["NASDAQ:NDX"]}]
+    assert [c.simbolo for c in snap.celdas] == ["AAPL", "NVDA"]
+    assert snap.fuente == "Fuente: TradingView"
+
+
+def test_mercado_europa_une_dax_y_cac_sin_repetir_y_ordena_por_capitalizacion():
+    from src.heatmap.data import obtener_mercado
+    http = HttpPostFalso([
+        {"data": [_comp("SAP", 2.1e11, 1.0), _comp("AIR", 1.5e11, 0.5)]},
+        {"data": [_comp("OR", 2.3e11, 0.6), _comp("AIR", 1.5e11, 0.5)]},
+    ])
+    snap = asyncio.run(obtener_mercado("europa", http))
+    assert http.llamadas == 2
+    assert [c.simbolo for c in snap.celdas] == ["OR", "SAP", "AIR"]
+
+
+def test_mercado_limita_a_80_celdas():
+    from src.heatmap.data import obtener_mercado
+    filas = [_comp(f"T{i}", 1e9 + i, 0.1) for i in range(120)]
+    snap = asyncio.run(obtener_mercado("nasdaq", HttpPostFalso([{"data": filas}])))
+    assert len(snap.celdas) == 80
+
+
+def test_mercado_indices_usa_el_endpoint_global_con_peso_igual_y_nombres_cortos():
+    from src.heatmap.data import obtener_mercado
+    http = HttpPostFalso([{"data": [
+        _ind("SP:SPX", "S&P 500", -0.5), _ind("XETR:DAX", "DAX", -1.26), _ind("TVC:NI225", "Nikkei", 2.0),
+    ]}])
+    snap = asyncio.run(obtener_mercado("indices", http))
+    url, body = http.args
+    assert url.endswith("/global/scan")
+    assert "SP:SPX" in body["symbols"]["tickers"] and len(body["symbols"]["tickers"]) == 12
+    assert {c.peso for c in snap.celdas} == {1.0}
+    assert {c.simbolo for c in snap.celdas} == {"S&P 500", "DAX", "Nikkei"}
+
+
+def test_mercado_asia_pide_solo_indices_asiaticos():
+    from src.heatmap.data import obtener_mercado
+    http = HttpPostFalso([{"data": [_ind("TVC:NI225", "Nikkei", 2.0)]}])
+    asyncio.run(obtener_mercado("asia", http))
+    tickers = http.args[1]["symbols"]["tickers"]
+    assert "TVC:NI225" in tickers and "HSI:HSI" in tickers and "SP:SPX" not in tickers
+
+
+def test_mercado_ignora_filas_sin_cambio_y_nombres_raros():
+    from src.heatmap.data import obtener_mercado
+    snap = asyncio.run(obtener_mercado("indices", HttpPostFalso([{"data": [
+        _ind("SP:SPX", "S&P 500", None), _ind("ZZ:NOEXISTE", "x", 1.0), _ind("DJ:DJI", "Dow", 0.8),
+    ]}])))
+    assert [c.simbolo for c in snap.celdas] == ["Dow"]
+
+
+def test_mercado_desconocido_es_error_de_programacion():
+    from src.heatmap.data import obtener_mercado
+    with pytest.raises(ValueError):
+        asyncio.run(obtener_mercado("marte", HttpPostFalso([{"data": []}])))
+
+
+def test_mercado_sin_datos_levanta_heatmap_error():
+    from src.heatmap.data import obtener_mercado
+    with pytest.raises(HeatmapError):
+        asyncio.run(obtener_mercado("nasdaq", HttpPostFalso([{"totalCount": 0, "data": []}])))
+
+
+def test_mercado_cache_por_clave_y_dato_viejo_si_la_fuente_falla(monkeypatch):
+    from src.heatmap.data import obtener_mercado
+    http = HttpPostFalso([{"data": [_comp("AAPL", 5e12, 1.0)]}])
+    asyncio.run(obtener_mercado("nasdaq", http))
+    asyncio.run(obtener_mercado("nasdaq", http))
+    assert http.llamadas == 1
+    otra = HttpPostFalso([{"data": [_comp("MSFT", 4e12, 1.0)]}])
+    asyncio.run(obtener_mercado("dow", otra))  # otra clave: no reutiliza la cache de nasdaq
+    assert otra.llamadas == 1
+    t = data.time.time()
+    monkeypatch.setattr(data.time, "time", lambda: t + data.TTL_ACCIONES + 120)
+    viejo = asyncio.run(obtener_mercado("nasdaq", HttpPostFalso([RuntimeError("x")])))
+    assert viejo.obsoleto_min is not None

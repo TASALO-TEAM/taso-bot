@@ -89,7 +89,9 @@ def test_caption_forex_muestra_fecha_real_y_aclara_si_no_es_hoy():
 def test_teclado_tiene_las_tres_vistas_y_actualizar_con_la_vista_actual():
     kb = mapa.armar_teclado(("cripto", "7d"))
     datos = [b.callback_data for fila in kb.inline_keyboard for b in fila]
-    assert datos == ["mapa_cripto_24h", "mapa_cripto_7d", "mapa_forex", "mapa_acciones", "mapa_cripto_7d", "mapa_ia_cripto_7d"]
+    assert datos == ["mapa_cripto_24h", "mapa_cripto_7d", "mapa_forex", "mapa_acciones",
+                     "mapa_nasdaq", "mapa_dow", "mapa_europa", "mapa_nikkei", "mapa_hsi", "mapa_asia",
+                     "mapa_indices", "mapa_cripto_7d", "mapa_ia_cripto_7d"]
     assert all(len(d) <= 64 for d in datos)
 
 
@@ -378,3 +380,78 @@ def test_celdas_sin_ref_no_llaman_a_la_red(parches):
     with patch.object(mapa, "cargar_logos", new=AsyncMock(return_value={})) as cl:
         asyncio.run(mapa.mapa_command(_update_mensaje(), _ctx([])))
     assert list(cl.await_args.args[0]) == []
+
+
+# ---------------- M2: mapas por indice y de indices mundiales ----------------
+
+def _indices(obsoleto=None):
+    celdas = (Celda("S&P 500", 1.0, -0.5), Celda("Nikkei", 1.0, 2.0), Celda("DAX", 1.0, -1.3), Celda("Dow", 1.0, None))
+    return Snapshot(celdas, "Fuente: TradingView", 2.0, obsoleto_min=obsoleto)
+
+
+def test_parse_vista_mercados_y_callbacks_caben_en_64_bytes():
+    from src.heatmap.data import MERCADOS
+    for m in MERCADOS:
+        assert mapa.parse_vista(f"mapa_{m}") == ("mercado", m)
+        assert len(f"mapa_ia_{m}".encode()) <= 64
+    assert mapa.parse_vista("mapa_marte") is None
+
+
+def test_vista_desde_args_mercados():
+    assert mapa._vista_desde_args(["nasdaq"]) == ("mercado", "nasdaq")
+    assert mapa._vista_desde_args(["indices"]) == ("mercado", "indices")
+    assert mapa._vista_desde_args(["europa", "7d"]) is None
+    assert mapa._vista_desde_args(["marte"]) is None
+
+
+def test_teclado_incluye_los_mercados_marca_el_activo_y_cada_fila_tiene_max_3():
+    from src.heatmap.data import MERCADOS
+    tec = mapa.armar_teclado(("mercado", "europa"))
+    botones = [b for fila in tec.inline_keyboard for b in fila]
+    datos = [b.callback_data for b in botones]
+    assert all(f"mapa_{m}" in datos for m in MERCADOS)
+    assert all(len(f) <= 3 for f in tec.inline_keyboard)
+    activo = next(b for b in botones if b.callback_data == "mapa_europa" and "Actualizar" not in b.text)
+    assert "\u2705" in activo.text
+    assert "mapa_ia_europa" in datos
+
+
+def test_caption_indice_pondera_por_capitalizacion_y_escapa_html():
+    txt = mapa.armar_caption(("mercado", "nasdaq"), _acciones(), AHORA)
+    assert "Nasdaq 100" in txt and "Ponderado" in txt and "NVDA -4.00%" in txt
+    assert len(txt) <= 1024
+
+
+def test_caption_indices_mundiales_media_simple_escapa_html_y_ignora_sin_dato():
+    txt = mapa.armar_caption(("mercado", "indices"), _indices(), AHORA)
+    assert "Media simple" in txt and "S&amp;P 500" in txt and "S&P 500" not in txt
+    assert "Nikkei +2.00%" in txt and "Dow" not in txt
+    assert "hace 9 min" in mapa.armar_caption(("mercado", "indices"), _indices(obsoleto=9), AHORA)
+
+
+def test_textos_imagen_mercados():
+    titulo, sub, gen = mapa._textos_imagen(("mercado", "indices"), AHORA)
+    assert "ndices mundiales" in titulo and "igual" in sub and "Cuba" in gen
+    titulo, sub, _ = mapa._textos_imagen(("mercado", "dow"), AHORA)
+    assert "Dow" in titulo and "capitalizaci" in sub
+
+
+def test_contexto_ia_mercado_solo_datos_publicos():
+    ctx = mapa.contexto_ia(("mercado", "asia"), _indices())
+    assert "ndices de Asia" in ctx and "Nikkei +2.00%" in ctx
+
+
+def test_comando_mapa_nasdaq_usa_obtener_mercado_sin_logos():
+    mapa.reset_cache_png()
+    with patch.object(mapa, "obtener_mercado", new=AsyncMock(return_value=_acciones())) as om, \
+         patch.object(mapa, "render_mapa", return_value=b"PNG") as rm, \
+         patch.object(mapa, "track_command_usage", new=AsyncMock()):
+        u = _update_mensaje()
+        asyncio.run(mapa.mapa_command(u, _ctx(["nasdaq"])))
+    om.assert_awaited_once_with("nasdaq")
+    assert rm.call_args.kwargs["logos"] is None
+    u.message.reply_photo.assert_awaited_once()
+
+
+def test_mapa_uso_menciona_los_mercados():
+    assert "nasdaq" in mapa.MSG_USO and "indices" in mapa.MSG_USO

@@ -53,7 +53,7 @@ _Ejemplos: /p btc · /p eth · /p hive · /news btc_
 /ta <par> — Análisis técnico
 /graf <par> — Gráfico con indicadores
 /mk — Resumen del mercado
-/mapa — Mapa de calor cripto, forex o acciones
+/mapa — Mapa de calor cripto, forex, acciones o índices
 /explorar — Direcciones, hashes y usuarios de Hive
 _Ejemplos: /ta btcusdt · /graf ethusdt_
 
@@ -169,12 +169,14 @@ _Para un panorama más completo con narrativa de IA, usá `/spl`._""",
 
     "mapa": """🗺 */mapa — Mapa de calor del mercado*
 
-Uso: `/mapa` · `/mapa cripto 7d` · `/mapa forex` · `/mapa acciones`
+Uso: `/mapa` · `/mapa cripto 7d` · `/mapa forex` · `/mapa acciones` · `/mapa nasdaq` · `/mapa europa` · `/mapa indices`
 
-Imagen con el tamaño de cada cripto por capitalización y el color por variación (24h o 7 días), las divisas principales contra USD, o las mayores empresas del S&P 500. Incluye un resumen breve calculado con los mismos datos.
+Imagen con el tamaño de cada cripto por capitalización y el color por variación (24h o 7 días), las divisas principales contra USD, o las mayores empresas de un índice bursátil. Incluye un resumen breve calculado con los mismos datos.
+
+Mercados: `nasdaq` · `dow` · `europa` (DAX y CAC 40) · `nikkei` · `hsi` (Hang Seng) · `asia` (índices asiáticos) · `indices` (12 índices mundiales).
 
 Botones:
-🪙 Cripto 24h · 🪙 Cripto 7d · 💱 Forex · 📈 Acciones S&P 500 · 🔄 Actualizar
+🪙 Cripto 24h · 🪙 Cripto 7d · 💱 Forex · 📈 Acciones S&P 500 · mercados · 🔄 Actualizar
 
 _El resultado es el mismo para todos y se guarda unos minutos en caché._""",
 
