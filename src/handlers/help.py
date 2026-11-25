@@ -55,6 +55,7 @@ _Ejemplos: /p btc · /p eth · /p hive · /news btc_
 /mk — Resumen del mercado
 /mapa — Mapa de calor cripto, forex, acciones o índices
 /explorar — Direcciones, hashes y usuarios de Hive
+/liq — Liquidaciones de futuros (longs y shorts)
 _Ejemplos: /ta btcusdt · /graf ethusdt_
 
 🔔 *Alertas*
@@ -179,6 +180,16 @@ Botones:
 🪙 Cripto 24h · 🪙 Cripto 7d · 💱 Forex · 📈 Acciones S&P 500 · mercados · 🔄 Actualizar
 
 _El resultado es el mismo para todos y se guarda unos minutos en caché._""",
+
+    "liq": """💥 */liq — Liquidaciones de futuros*
+
+Uso: `/liq` · `/liq 4h` · `/liq 24h exchanges`
+
+Cuanto dinero se liquido en futuros perpetuos en la ultima ventana (5 min, 15 min, 1 h, 4 h o 24 h): total, reparto entre longs y shorts, y las monedas o exchanges con mas liquidaciones.
+
+Los datos vienen de Binance, Bybit y OKX; el total puede ser menor que el de otras paginas que suman mas exchanges. Si el recolector arranco hace poco, el mensaje avisa desde que hora hay datos.
+
+_Un long liquidado es una posicion de compra cerrada a la fuerza por una caida del precio._""",
 
     "explorar": """🔎 */explorar — Explorador*
 

@@ -24,6 +24,7 @@ from src.handlers.ads import ads_command
 from src.handlers.alert import alert_command
 from src.handlers.db import db_command
 from src.handlers.help import help_command
+from src.handlers.liq import liq_callback, liq_command
 from src.handlers.logs import log_command
 from src.handlers.ms import ms_command
 from src.handlers.msapp import msapp_command
@@ -112,6 +113,8 @@ COMANDOS: tuple[Cmd, ...] = (
     Cmd("mapa", _lazy("src.handlers.mapa", "mapa_command"), "Mapa de calor: cripto, forex, acciones e índices"),
     Cmd("explorar", explorar_command, "Explorador de direcciones, hashes y usuarios de Hive",
         callback=explorer_callback, namespaces=("explorer",), menu=("mercado", "\U0001f50e Explorador")),
+    Cmd("liq", liq_command, "Liquidaciones de futuros: longs y shorts", callback=liq_callback,
+        menu=("mercado", "\U0001f4a5 Liquidaciones")),
     Cmd("spl", spl_command, "Spotlight del mercado"),
     Cmd("tspl", tspl_command, "TASALO Spotlight completo"),
     Cmd("news", news_command, "Noticias cripto"),

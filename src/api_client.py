@@ -561,6 +561,18 @@ class TasaloApiClient:
             logger.warning("⚠️ Error en get_health (%.0fms): %s", duration_ms, e)
             return None
 
+    # -- Liquidaciones de futuros (M3) --
+
+    async def get_liquidations(self, window: str = "1h", by: str = "symbol") -> Optional[Dict[str, Any]]:
+        """Liquidaciones de futuros agrupadas por moneda o exchange (None si falla)."""
+        url = f"{self.api_url}/api/v1/liquidaciones"
+        try:
+            data = await self._get_with_retry(url, params={"window": window, "by": by})
+            return data if data and data.get("ok") else None
+        except Exception as e:
+            logger.error("Error en get_liquidations: %s", e)
+            return None
+
     # ── Year API methods ───────────────────────────────────────────────────────
 
     async def get_year_state(self) -> Optional[Dict[str, Any]]:
