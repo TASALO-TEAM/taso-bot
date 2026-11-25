@@ -22,8 +22,8 @@ NOMBRES = {"groq": "Groq", "nvidia": "NVIDIA"}
 MODELOS_NVIDIA = (
     ("nvidia/nemotron-3-ultra-550b-a55b", "Nemotron 3 Ultra", "rapido, recomendado"),
     ("minimaxai/minimax-m3.1-flash", "MiniMax M3.1 Flash", "correcto, mas lento"),
-    ("google/gemma-4-31b-it", "Gemma 4 31B", "sin razonamiento, mas lento"),
 )
+# google/gemma-4-31b-it se quito el 2026-11-25: NVIDIA ya no lo sirve (410 Gone).
 
 _PATH = Path(__file__).resolve().parents[2] / "data" / "ai_config.json"
 _lock = threading.Lock()
