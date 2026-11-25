@@ -1,5 +1,5 @@
 # tests/test_p_handler.py
-"""Tests de los callbacks y el teclado de /p (refresh, TA, Panorama IA, alerta)."""
+"""Tests de los callbacks y el teclado de /p (refresh, TA, TASALO IA, alerta)."""
 
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch

@@ -18,6 +18,7 @@ from src.services.ads_manager import get_ad_block, safe_append
 from src.utils.chart_generator import generate_ohlcv_chart
 from src.core.btc_advanced_analysis import BTCAdvancedAnalyzer
 from src.core.ai_logic import get_groq_crypto_analysis
+from src.core.level_probability import HORIZON_BARS, format_pct, levels_probabilities
 
 from src.handlers.ta import get_tradingview_analysis_enhanced
 from src.handlers.alert import cache_alert_levels
@@ -213,6 +214,20 @@ async def graf_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     await _do_graf(update, context, base=base, quote=quote, timeframe=timeframe, is_callback=False)
 
+def _graf_levels_lines(pivot, r1, s1, probs: dict) -> str:
+    """Lineas Pivot/R1/S1 del pie de /graf; con probabilidad de toque si hay."""
+    def pct(k):
+        return f" \u00b7 {format_pct(probs[k])}" if k in probs else ""
+
+    txt = (
+        f"\U0001f3af *Pivot:* `${_fmt_price(pivot)}`{pct('Pivot')}\n"
+        f"\U0001f534 *R1:* `${_fmt_price(r1)}`{pct('R1')}  |  \U0001f7e2 *S1:* `${_fmt_price(s1)}`{pct('S1')}"
+    )
+    if probs:
+        txt += f"\n\U0001f3b2 _prob. de toque en {HORIZON_BARS} velas_"
+    return txt
+
+
 async def _do_graf(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
@@ -296,6 +311,12 @@ async def _do_graf(
     buy_score = tv_data.get('BUY_SCORE', 0) if tv_data else 0
     sell_score = tv_data.get('SELL_SCORE', 0) if tv_data else 0
 
+    # Probabilidad de toque: determinista (volatilidad de cierres + distancia), sin IA.
+    sigma = df["close"].diff().tail(100).std()
+    probs = levels_probabilities(
+        last_price, {"Pivot": pivot, "R1": r1, "S1": s1}, sigma,
+    )
+
     exch_label = f" · _{exchange_name}_" if exchange_name else ""
     caption = (
         f"📊 *{symbol}* · `{timeframe.upper()}`{exch_label}\n"
@@ -304,8 +325,7 @@ async def _do_graf(
         f"{sig_emoji} *Señal:* `{signal}`\n"
         f"⚖️ *Score:* {buy_score} 🐂 · {sell_score} 🐻\n"
         f"——————————————————\n"
-        f"🎯 *Pivot:* `${_fmt_price(pivot)}`\n"
-        f"🔴 *R1:* `${_fmt_price(r1)}`  |  🟢 *S1:* `${_fmt_price(s1)}`\n"
+        f"{_graf_levels_lines(pivot, r1, s1, probs)}\n"
         f"——————————————————\n"
         f"📌 _EMA20 · EMA50 · EMA200 · RSI · Vol_"
     )

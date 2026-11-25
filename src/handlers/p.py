@@ -6,7 +6,7 @@ Funcionalidad:
 - Muestra precio, high/low 24h, cambios %, precio en ETH/BTC y, si hay
   datos de CoinGecko, el bloque extendido (ATH/ATL, supply, categoría)
   siempre visible en el mismo mensaje (sin botón "Ver más")
-- Botones de refresh, análisis técnico y panorama de IA
+- Botones de refresh, análisis técnico y análisis de TASALO IA
 """
 
 import asyncio
@@ -21,6 +21,7 @@ from src.crypto_client import CryptoApiClient
 from src.formatters import build_crypto_message, SEPARATOR_THICK
 from src.stats_tracker import track_command_usage
 from src.core.ai_logic import get_groq_price_spotlight
+from src.core.ia_identidad import NOMBRE_IA
 from src.services.ads_manager import get_ad_block, safe_append
 
 logger = logging.getLogger(__name__)
@@ -64,7 +65,7 @@ async def p_refresh_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 
 async def p_ai_panorama_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Callback para botón 🌍 Panorama IA — genera comentario tipo Spotlight.
+    """Callback para botón 🤖 Análisis TASALO IA — genera comentario tipo Spotlight.
 
     callback_data formato: "ai_panorama|{SYMBOL}"
 
@@ -82,7 +83,7 @@ async def p_ai_panorama_callback(update: Update, context: ContextTypes.DEFAULT_T
         await query.answer("❌ Símbolo inválido", show_alert=True)
         return
 
-    logger.info("🌍 /p panorama IA callback: símbolo '%s' por usuario %d", symbol, user_id)
+    logger.info("🌍 /p TASALO IA callback: símbolo '%s' por usuario %d", symbol, user_id)
 
     await query.answer("🧠 Analizando el mercado...")
     await query.message.reply_chat_action("typing")
@@ -91,7 +92,7 @@ async def p_ai_panorama_callback(update: Update, context: ContextTypes.DEFAULT_T
     try:
         datos = await client.get_crypto_data(symbol)
     except Exception as e:
-        logger.error("❌ Error obteniendo datos para panorama IA de %s: %s", symbol, e, exc_info=True)
+        logger.error("❌ Error obteniendo datos para TASALO IA de %s: %s", symbol, e, exc_info=True)
         await query.message.reply_text(
             "⚠️ No se pudieron obtener datos actualizados para el análisis. Intenta de nuevo.",
             parse_mode=ParseMode.MARKDOWN,
@@ -100,7 +101,7 @@ async def p_ai_panorama_callback(update: Update, context: ContextTypes.DEFAULT_T
 
     if not datos or datos.get("not_found"):
         await query.message.reply_text(
-            f"⚠️ No hay datos suficientes de *{symbol}* para generar el panorama.",
+            f"⚠️ No hay datos suficientes de *{symbol}* para generar el análisis.",
             parse_mode=ParseMode.MARKDOWN,
         )
         return
@@ -119,14 +120,14 @@ async def p_ai_panorama_callback(update: Update, context: ContextTypes.DEFAULT_T
     try:
         spotlight = await get_groq_price_spotlight(datos)
     except Exception as e:
-        logger.exception("❌ Error inesperado generando panorama IA para %s: %s", symbol, e)
+        logger.exception("❌ Error inesperado generando TASALO IA para %s: %s", symbol, e)
         await query.message.reply_text(
-            "❌ Error inesperado al generar el panorama IA. Intenta de nuevo en unos minutos.",
+            "❌ Error inesperado al generar el análisis de TASALO IA. Intenta de nuevo en unos minutos.",
             parse_mode=ParseMode.MARKDOWN,
         )
         return
 
-    header = f"🌍 *Panorama IA — {symbol}*\n{SEPARATOR_THICK}\n\n"
+    header = f"🤖 *{NOMBRE_IA} — {symbol}*\n{SEPARATOR_THICK}\n\n"
 
     try:
         await query.message.reply_text(
@@ -134,18 +135,18 @@ async def p_ai_panorama_callback(update: Update, context: ContextTypes.DEFAULT_T
             parse_mode=ParseMode.MARKDOWN,
             reply_to_message_id=query.message.message_id,
         )
-        logger.info("✅ Panorama IA entregado a usuario %d para %s", user_id, symbol)
+        logger.info("✅ TASALO IA entregado a usuario %d para %s", user_id, symbol)
     except Exception as e:
         # Fallback sin Markdown si el contenido generado por la IA rompe el parseo
-        logger.warning("⚠️ Fallo enviando panorama IA con Markdown para %s: %s", symbol, e)
+        logger.warning("⚠️ Fallo enviando TASALO IA con Markdown para %s: %s", symbol, e)
         try:
             await query.message.reply_text(
                 header.replace("*", "") + spotlight,
                 reply_to_message_id=query.message.message_id,
             )
         except Exception as e2:
-            logger.error("❌ Error enviando panorama IA (fallback) para %s: %s", symbol, e2, exc_info=True)
-            await query.message.reply_text("❌ Error mostrando el panorama IA. Intenta de nuevo.")
+            logger.error("❌ Error enviando TASALO IA (fallback) para %s: %s", symbol, e2, exc_info=True)
+            await query.message.reply_text("❌ Error mostrando el análisis de TASALO IA. Intenta de nuevo.")
 
 
 def _build_keyboard(symbol: str) -> InlineKeyboardMarkup:
@@ -155,7 +156,7 @@ def _build_keyboard(symbol: str) -> InlineKeyboardMarkup:
         symbol: Símbolo de la moneda (ej: BTC)
 
     Returns:
-        InlineKeyboardMarkup con botones Refresh + TA + Panorama IA
+        InlineKeyboardMarkup con botones Refresh + TA + TASALO IA
     """
     btn_refresh = InlineKeyboardButton(
         f"🔄 Actualizar /p {symbol}",
@@ -166,7 +167,7 @@ def _build_keyboard(symbol: str) -> InlineKeyboardMarkup:
         callback_data=f"ta_quick|{symbol}|4h"  # Enruta a ta.ta_quick_callback
     )
     btn_ai_panorama = InlineKeyboardButton(
-        "🌍 Panorama IA",
+        "🤖 Análisis TASALO IA",
         callback_data=f"ai_panorama|{symbol}"
     )
     btn_alert = InlineKeyboardButton(
@@ -297,13 +298,13 @@ async def p_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     # Inyectar bloque de anuncio (si hay alguno activo y cabe en el límite).
-    # Solo en la respuesta principal, no en el panorama IA (texto largo generado).
+    # Solo en la respuesta principal, no en el análisis de TASALO IA (texto largo generado).
     api_client_for_ad = context.bot_data.get("api_client")
     if api_client_for_ad:
         ad_block = await get_ad_block(api_client_for_ad)
         mensaje = safe_append(mensaje, ad_block)
 
-    # 5. Construir teclado inline (Refresh + TA + Panorama IA)
+    # 5. Construir teclado inline (Refresh + TA + TASALO IA)
     keyboard = _build_keyboard(symbol)
 
     # 6. Enviar/editar mensaje

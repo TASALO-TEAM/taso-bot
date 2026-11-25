@@ -137,7 +137,7 @@ Información mostrada:
 • Bloque extendido (ATH/ATL, supply) si hay datos de CoinGecko
 
 Botones:
-🔄 Actualizar · 📊 Análisis técnico (4H) · 🌍 Panorama IA · 🔔 Crear alerta""",
+🔄 Actualizar · 📊 Análisis técnico (4H) · 🤖 Análisis TASALO IA · 🔔 Crear alerta""",
 
     "ta": """📊 */ta — Análisis técnico*
 

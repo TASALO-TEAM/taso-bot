@@ -719,7 +719,7 @@ class CryptoApiClient:
     async def get_cmc_ai_price_insight(self, symbol: str) -> Optional[Dict[str, Any]]:
         """Insight de `price_up`/`price_down` para una moneda
         (`/v5/cmc-ai/coins/latest`), usado como grounding del botón
-        "Panorama IA" de /p.
+        "Análisis TASALO IA" de /p.
 
         Chequea primero el mapa de cobertura cacheado — si el símbolo no
         aparece ahí, o no tiene ninguno de los dos question_keys
