@@ -191,3 +191,77 @@ async def obtener_acciones(http_post: Callable = http_post_json) -> Snapshot:
         tuple(Celda(s, cap, var) for s, cap, var in filas), "Fuente: TradingView", ACCIONES_TOPE,
         obsoleto_min=None if edad is None else int(edad // 60),
     )
+
+
+# --- M2: mapas por indice (componentes) y mapas de indices (cotizacion), mismo escaner ---
+# Verificado con red el 2026-11-25: cada (region, indice) devuelve sus componentes en una sola moneda.
+TV_BASE = "https://scanner.tradingview.com"
+MERCADOS_COMPONENTES = {
+    "nasdaq": (("america", "NASDAQ:NDX"),),
+    "dow": (("america", "DJ:DJI"),),
+    "europa": (("germany", "XETR:DAX"), ("france", "EURONEXT:PX1")),  # ambos en EUR: capitalizaciones comparables
+    "nikkei": (("japan", "TVC:NI225"),),
+    "hsi": (("hongkong", "HSI:HSI"),),
+}
+INDICES_MUNDIALES = {
+    "SP:SPX": "S&P 500", "NASDAQ:NDX": "Nasdaq", "DJ:DJI": "Dow", "TVC:SX5E": "Euro 50",
+    "XETR:DAX": "DAX", "EURONEXT:PX1": "CAC 40", "FTSE:UKX": "FTSE 100", "TVC:NI225": "Nikkei",
+    "HSI:HSI": "Hang Seng", "SSE:000001": "Shanghai", "TVC:KOSPI": "KOSPI", "BSE:SENSEX": "Sensex",
+}
+INDICES_ASIA = ("TVC:NI225", "HSI:HSI", "SSE:000001", "TVC:KOSPI", "BSE:SENSEX")
+MERCADOS_INDICES = {"indices": tuple(INDICES_MUNDIALES), "asia": INDICES_ASIA}
+MERCADOS = frozenset(MERCADOS_COMPONENTES) | frozenset(MERCADOS_INDICES)
+INDICES_TOPE = 2.0  # % diario a partir del cual el color satura (un indice se mueve menos que una accion)
+
+
+def _componentes(raw) -> list:
+    filas = []
+    for f in (raw or {}).get("data") or []:
+        d = f.get("d") or []
+        if len(d) < 3 or not isinstance(d[0], str) or d[0] in ACCIONES_DUPLICADAS:
+            continue
+        cap = _numero(d[1])
+        if cap and cap > 0:
+            filas.append((d[0], cap, _numero(d[2])))
+    return filas
+
+
+async def obtener_mercado(clave: str, http_post: Callable = http_post_json) -> Snapshot:
+    """Mapa de un indice (sus mayores empresas) o de varios indices (peso igual, variacion del dia)."""
+    if clave not in MERCADOS:
+        raise ValueError(f"mercado invalido: {clave}")
+
+    async def cargar():
+        if clave in MERCADOS_INDICES:
+            raw = await http_post(f"{TV_BASE}/global/scan", {
+                "symbols": {"tickers": list(MERCADOS_INDICES[clave])},
+                "columns": ["name", "close", "change", "description"],
+            })
+            filas = [(INDICES_MUNDIALES[f["s"]], 1.0, _numero((f.get("d") or [None] * 3)[2]))
+                     for f in (raw or {}).get("data") or [] if f.get("s") in INDICES_MUNDIALES]
+        else:
+            vistos, filas = set(), []
+            for region, indice in MERCADOS_COMPONENTES[clave]:
+                raw = await http_post(f"{TV_BASE}/{region}/scan", {
+                    "symbols": {"query": {"types": []}, "tickers": [],
+                                "groups": [{"type": "index", "values": [indice]}]},
+                    "columns": ["name", "market_cap_basic", "change", "currency"],
+                    "sort": {"sortBy": "market_cap_basic", "sortOrder": "desc"},
+                    "range": [0, ACCIONES_FILAS],
+                })
+                for fila in _componentes(raw):
+                    if fila[0] not in vistos:  # una empresa en dos indices (p. ej. Airbus) se dibuja una vez
+                        vistos.add(fila[0])
+                        filas.append(fila)
+            filas = sorted(filas, key=lambda f: -f[1])[:ACCIONES_FILAS]
+        filas = [f for f in filas if f[2] is not None]
+        if not filas:
+            raise HeatmapError(f"TradingView sin datos de {clave}")
+        return filas
+
+    filas, edad = await _cacheado(f"mercado_{clave}", TTL_ACCIONES, cargar)
+    return Snapshot(
+        tuple(Celda(s, p, v) for s, p, v in filas), "Fuente: TradingView",
+        INDICES_TOPE if clave in MERCADOS_INDICES else ACCIONES_TOPE,
+        obsoleto_min=None if edad is None else int(edad // 60),
+    )

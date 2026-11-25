@@ -20,7 +20,9 @@ from telegram.ext import ContextTypes
 
 from src.core import ai_logic
 from src.handlers.p import get_crypto_client
-from src.heatmap.data import HeatmapError, obtener_acciones, obtener_cripto, obtener_forex
+from src.heatmap.data import (
+    MERCADOS, HeatmapError, obtener_acciones, obtener_cripto, obtener_forex, obtener_mercado,
+)
 from src.heatmap.logos import cargar_logos
 from src.heatmap.render import render_mapa
 from src.stats_tracker import track_command_usage
@@ -29,7 +31,17 @@ logger = logging.getLogger(__name__)
 
 CUBA = ZoneInfo("America/Havana")
 VISTAS = {"cripto_24h": ("cripto", "24h"), "cripto_7d": ("cripto", "7d"), "forex": ("forex", None),
-          "acciones": ("acciones", None)}
+          "acciones": ("acciones", None), **{m: ("mercado", m) for m in sorted(MERCADOS)}}
+# clave de mercado -> (nombre para titulos, como se pondera); el color siempre es la variacion del dia
+MERCADO_TEXTOS = {
+    "nasdaq": ("Nasdaq 100", "Ponderado por capitalización"),
+    "dow": ("Dow Jones", "Ponderado por capitalización"),
+    "europa": ("Europa · DAX y CAC 40", "Ponderado por capitalización (EUR)"),
+    "nikkei": ("Nikkei 225", "Ponderado por capitalización (JPY)"),
+    "hsi": ("Hang Seng", "Ponderado por capitalización (HKD)"),
+    "indices": ("índices mundiales", "Media simple de los índices"),
+    "asia": ("índices de Asia", "Media simple de los índices"),
+}
 MESES = ("ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic")
 PRINCIPALES = ("BTC", "ETH", "BNB", "XRP", "SOL")
 LOGOS_MAX = 40  # solo las celdas mayores llevan logo; las pequenas no tienen sitio para dibujarlo
@@ -39,7 +51,8 @@ PERIODO = {"24h": "las últimas 24 horas", "7d": "los últimos 7 días"}
 MSG_ERROR = "⚠️ No pude obtener datos de mercado ahora mismo. Intenta de nuevo en unos minutos."
 MSG_IA_NO = "⚠️ El análisis con IA no está disponible ahora mismo."
 MSG_USO = ("Uso: /mapa [cripto|forex|acciones] [24h|7d]\n"
-           "Ejemplos: /mapa, /mapa cripto 7d, /mapa forex, /mapa acciones")
+           "Mercados: /mapa nasdaq|dow|europa|nikkei|hsi|asia|indices\n"
+           "Ejemplos: /mapa, /mapa cripto 7d, /mapa forex, /mapa nasdaq, /mapa indices")
 
 _png: dict = {}  # vista -> (snapshot, bytes): evita re-dibujar mientras el dato no cambie
 
@@ -61,13 +74,15 @@ def parse_vista(data: str):
 
 
 def _clave(vista) -> str:
+    if vista[0] == "mercado":
+        return vista[1]
     return vista[0] if vista[0] in ("forex", "acciones") else f"cripto_{vista[1]}"
 
 
 def _vista_desde_args(args):
     if not args:
         return VISTAS["cripto_24h"]
-    if args[0] in ("forex", "acciones") and len(args) == 1:
+    if len(args) == 1 and (args[0] in ("forex", "acciones") or args[0] in MERCADOS):
         return VISTAS[args[0]]
     if args[0] == "cripto" and len(args) <= 2 and (len(args) == 1 or args[1] in ("24h", "7d")):
         return VISTAS[f"cripto_{args[1] if len(args) == 2 else '24h'}"]
@@ -84,6 +99,9 @@ def armar_teclado(vista) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [boton("cripto_24h", "₿", "24 h"), boton("cripto_7d", "₿", "7 d"), boton("forex", "💱", "Forex")],
         [boton("acciones", "📈", "Acciones S&P 500")],
+        [boton("nasdaq", "🇺🇸", "Nasdaq"), boton("dow", "🇺🇸", "Dow"), boton("europa", "🇪🇺", "Europa")],
+        [boton("nikkei", "🇯🇵", "Nikkei"), boton("hsi", "🇭🇰", "HSI"), boton("asia", "🌏", "Asia")],
+        [boton("indices", "🌍", "Índices mundiales")],
         [InlineKeyboardButton("🔄 Actualizar", callback_data=f"mapa_{activa}")],
         [InlineKeyboardButton("🧠 Análisis TASALO IA", callback_data=f"mapa_ia_{activa}")],
     ])
@@ -171,6 +189,16 @@ def armar_caption(vista, snap, ahora) -> str:
             "<i>Ponderado por capitalizaci\u00f3n \u00b7 sesi\u00f3n m\u00e1s reciente</i>",
         ]
         lineas += _bloque("Mayores subas", "\U0001F7E2", suben) + _bloque("Mayores bajas", "\U0001F534", bajan)
+    elif vista[0] == "mercado":
+        nombre, peso_txt = MERCADO_TEXTOS[vista[1]]
+        total = sum(c.peso for c in con)
+        pond = sum(c.peso * c.variacion for c in con) / total if total else 0.0
+        lineas += [
+            f"\U0001F30D <b>Mapa de calor {html.escape(nombre)}</b>",
+            f"Mercado <b>{pond:+.2f}%</b> \u00b7 {len(suben)} suben \u00b7 {len(bajan)} bajan",
+            f"<i>{html.escape(peso_txt)} \u00b7 sesi\u00f3n m\u00e1s reciente</i>",
+        ]
+        lineas += _bloque("Mayores subas", "\U0001F7E2", suben) + _bloque("Mayores bajas", "\U0001F534", bajan)
     else:
         nota = "" if snap.fecha_dato == ahora.date().isoformat() else " <i>(último día hábil publicado)</i>"
         lineas += [
@@ -190,6 +218,11 @@ def _textos_imagen(vista, ahora):
     if vista[0] == "acciones":
         return ("Mapa de calor S&P 500 \u00b7 mayores empresas",
                 "Tama\u00f1o = capitalizaci\u00f3n \u00b7 color = variaci\u00f3n del d\u00eda", gen)
+    if vista[0] == "mercado":
+        igual = vista[1] in ("indices", "asia")
+        return (f"Mapa de calor {MERCADO_TEXTOS[vista[1]][0]}",
+                "Tama\u00f1o igual \u00b7 color = variaci\u00f3n del d\u00eda" if igual
+                else "Tama\u00f1o = capitalizaci\u00f3n \u00b7 color = variaci\u00f3n del d\u00eda", gen)
     return ("Mapa de calor forex · monedas frente al USD",
             "Tamaño igual · color = variación diaria (referencia BCE)", gen)
 
@@ -200,6 +233,8 @@ async def _snapshot(vista):
         return await obtener_cripto(get_crypto_client()._cmc_get, vista[1])
     if vista[0] == "acciones":
         return await obtener_acciones()
+    if vista[0] == "mercado":
+        return await obtener_mercado(vista[1])
     return await obtener_forex()
 
 
@@ -251,6 +286,8 @@ def contexto_ia(vista, snap) -> str:
         titulo = f"Cripto, top 100 por capitalización, variación en {vista[1]}"
     elif vista[0] == "acciones":
         titulo = "Acciones del S&P 500, mayores empresas, variación de la sesión"
+    elif vista[0] == "mercado":
+        titulo = f"Bolsa, {MERCADO_TEXTOS[vista[1]][0]}, variación de la sesión"
     else:
         titulo = "Forex, monedas frente al USD, variación diaria (referencia BCE)"
     lineas = [titulo, f"Variación ponderada del mercado: {pond:+.2f}%",
