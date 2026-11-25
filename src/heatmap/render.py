@@ -33,6 +33,7 @@ class Celda:
     simbolo: str
     peso: float
     variacion: Optional[float]
+    ref: Optional[int] = None  # id del proveedor (CMC): clave del logo de la celda
 
 
 def color_variacion(variacion, tope):
@@ -84,8 +85,51 @@ def _texto_celda(draw, rect, celda):
         )
 
 
-def render_mapa(celdas, titulo, subtitulo, fuente, generado, tope):
-    """Dibuja el treemap y devuelve los bytes del PNG."""
+LOGO_MIN = 30  # lado minimo (px) de la celda para dibujar logo
+LOGO_MAX = 128  # lado maximo (px) del logo: es el tamano nativo del que se descarga
+
+
+def _decodificar_logos(logos):
+    """bytes -> imagenes RGBA. Son datos de un proveedor externo: si alguno no se
+    puede abrir, esa celda se queda con su simbolo (nunca falla el mapa)."""
+    listos = {}
+    for ref, datos in (logos or {}).items():
+        try:
+            with Image.open(io.BytesIO(datos)) as im:
+                listos[ref] = im.convert("RGBA")
+        except Exception:
+            continue
+    return listos
+
+
+def _logo_celda(img, draw, rect, celda, logo):
+    """Logo centrado y, si cabe, simbolo (y variacion) debajo. False = no dibujo nada."""
+    if logo is None:
+        return False
+    x, y, w, h = rect
+    lado = min(w, h)
+    if lado < LOGO_MIN:
+        return False
+    s = int(max(16, min(lado * 0.4, LOGO_MAX)))
+    tam = max(10, min(32, int(lado / 4)))
+    texto = h >= s + tam * 1.9 + 6 and w >= tam * 3.2
+    doble = texto and h >= s + tam * 3.2 + 10
+    total = s + (tam * 1.4 if texto else 0) + (tam * 1.0 if doble else 0)
+    cx, top = x + w / 2, y + (h - total) / 2
+    pegado = logo.resize((s, s), Image.Resampling.LANCZOS)
+    img.paste(pegado, (round(cx - s / 2), round(top)), pegado)
+    if texto:
+        draw.text((cx, top + s + tam * 0.8), celda.simbolo, font=_fuente(tam), fill=COLOR_TEXTO, anchor="mm")
+    if doble:
+        draw.text(
+            (cx, top + s + tam * 1.75), etiqueta_variacion(celda.variacion),
+            font=_fuente(max(9, int(tam * 0.7))), fill=COLOR_TEXTO, anchor="mm",
+        )
+    return True
+
+
+def render_mapa(celdas, titulo, subtitulo, fuente, generado, tope, logos=None):
+    """Dibuja el treemap y devuelve los bytes del PNG. `logos`: {ref: bytes PNG} opcional."""
     validas = sorted(
         (c for c in celdas if isfinite(c.peso) and c.peso > 0),
         key=lambda c: c.peso,
@@ -97,6 +141,7 @@ def render_mapa(celdas, titulo, subtitulo, fuente, generado, tope):
     img = Image.new("RGB", (ANCHO, ALTO), COLOR_FONDO)
     draw = ImageDraw.Draw(img)
 
+    imagenes = _decodificar_logos(logos)
     area_alto = ALTO - CABECERA - PIE
     rects = squarify([c.peso for c in validas], 0.0, float(CABECERA), float(ANCHO), float(area_alto))
     for celda, (x, y, w, h) in zip(validas, rects):
@@ -104,7 +149,9 @@ def render_mapa(celdas, titulo, subtitulo, fuente, generado, tope):
         if caja[2] < caja[0] or caja[3] < caja[1]:
             continue
         draw.rectangle(caja, fill=color_variacion(celda.variacion, tope))
-        _texto_celda(draw, (caja[0], caja[1], caja[2] - caja[0], caja[3] - caja[1]), celda)
+        rect = (caja[0], caja[1], caja[2] - caja[0], caja[3] - caja[1])
+        if not _logo_celda(img, draw, rect, celda, imagenes.get(celda.ref)):
+            _texto_celda(draw, rect, celda)
 
     draw.text((16, 10), titulo, font=_fuente(26), fill=COLOR_TEXTO)
     draw.text((16, 40), subtitulo, font=_fuente(17), fill=COLOR_TENUE)

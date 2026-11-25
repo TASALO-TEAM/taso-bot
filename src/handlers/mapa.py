@@ -21,6 +21,7 @@ from telegram.ext import ContextTypes
 from src.core import ai_logic
 from src.handlers.p import get_crypto_client
 from src.heatmap.data import HeatmapError, obtener_acciones, obtener_cripto, obtener_forex
+from src.heatmap.logos import cargar_logos
 from src.heatmap.render import render_mapa
 from src.stats_tracker import track_command_usage
 
@@ -31,6 +32,7 @@ VISTAS = {"cripto_24h": ("cripto", "24h"), "cripto_7d": ("cripto", "7d"), "forex
           "acciones": ("acciones", None)}
 MESES = ("ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic")
 PRINCIPALES = ("BTC", "ETH", "BNB", "XRP", "SOL")
+LOGOS_MAX = 40  # solo las celdas mayores llevan logo; las pequenas no tienen sitio para dibujarlo
 # |variacion ponderada| minima para abrir el caption con el titular "ULTIMA HORA"
 UMBRAL_ULTIMA_HORA = {"24h": 5.0, "7d": 10.0}
 PERIODO = {"24h": "las últimas 24 horas", "7d": "los últimos 7 días"}
@@ -201,6 +203,18 @@ async def _snapshot(vista):
     return await obtener_forex()
 
 
+async def _logos(vista, snap):
+    """Logos de las celdas cripto mayores. Cualquier fallo = mapa sin logos, nunca sin mapa."""
+    if vista[0] != "cripto":
+        return None
+    mayores = sorted(snap.celdas, key=lambda c: c.peso, reverse=True)[:LOGOS_MAX]
+    try:
+        return await cargar_logos([c.ref for c in mayores if c.ref is not None])
+    except Exception as e:
+        logger.warning("/mapa: sin logos (%s)", type(e).__name__)
+        return None
+
+
 async def _preparar(vista):
     """Devuelve (png, caption). Lanza HeatmapError si no hay datos."""
     snap = await _snapshot(vista)
@@ -211,9 +225,11 @@ async def _preparar(vista):
         png = previo[1]
     else:
         titulo, subtitulo, generado = _textos_imagen(vista, ahora)
+        logos = await _logos(vista, snap)
         png = await asyncio.to_thread(
             render_mapa, list(snap.celdas),
             titulo=titulo, subtitulo=subtitulo, fuente=snap.fuente, generado=generado, tope=snap.tope,
+            logos=logos,
         )
         _png[clave] = (snap, png)
     return png, armar_caption(vista, snap, ahora)

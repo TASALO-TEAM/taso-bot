@@ -327,3 +327,54 @@ def test_caption_acciones_avisa_dato_viejo():
 def test_textos_imagen_acciones():
     titulo, sub, gen = mapa._textos_imagen(("acciones", None), AHORA)
     assert "S&P 500" in titulo and "capitalizaci" in sub and "Cuba" in gen
+
+
+# ---------------- M1: logos en el mapa cripto ----------------
+
+
+def _cripto_con_ref(n=2):
+    celdas = tuple(Celda(f"C{i}", 1e12 / (i + 1), (i % 7 - 3) * 1.0, i + 1) for i in range(n))
+    return Snapshot(celdas, "Fuente: CoinMarketCap", 5.0)
+
+
+def test_cripto_pide_logos_de_las_celdas_y_los_pasa_al_render(parches):
+    oc, of, rm = parches
+    oc.return_value = _cripto_con_ref(2)
+    with patch.object(mapa, "cargar_logos", new=AsyncMock(return_value={1: b"L1"})) as cl:
+        asyncio.run(mapa.mapa_command(_update_mensaje(), _ctx([])))
+    assert sorted(cl.await_args.args[0]) == [1, 2]
+    assert rm.call_args.kwargs["logos"] == {1: b"L1"}
+
+
+def test_solo_se_piden_logos_de_las_celdas_mayores(parches):
+    oc, of, rm = parches
+    oc.return_value = _cripto_con_ref(100)
+    with patch.object(mapa, "cargar_logos", new=AsyncMock(return_value={})) as cl:
+        asyncio.run(mapa.mapa_command(_update_mensaje(), _ctx([])))
+    pedidos = cl.await_args.args[0]
+    assert len(pedidos) == mapa.LOGOS_MAX
+    assert set(pedidos) == set(range(1, mapa.LOGOS_MAX + 1))  # las de mayor capitalizacion
+
+
+def test_si_los_logos_fallan_el_mapa_sale_igual_sin_logos(parches):
+    oc, of, rm = parches
+    oc.return_value = _cripto_con_ref(2)
+    u = _update_mensaje()
+    with patch.object(mapa, "cargar_logos", new=AsyncMock(side_effect=RuntimeError("red caida"))):
+        asyncio.run(mapa.mapa_command(u, _ctx([])))
+    u.message.reply_photo.assert_awaited_once()
+    assert not rm.call_args.kwargs["logos"]
+
+
+def test_forex_no_pide_logos(parches):
+    oc, of, rm = parches
+    with patch.object(mapa, "cargar_logos", new=AsyncMock()) as cl:
+        asyncio.run(mapa.mapa_command(_update_mensaje(), _ctx(["forex"])))
+    cl.assert_not_awaited()
+
+
+def test_celdas_sin_ref_no_llaman_a_la_red(parches):
+    oc, of, rm = parches  # el snapshot de siempre (_cripto) no trae ref
+    with patch.object(mapa, "cargar_logos", new=AsyncMock(return_value={})) as cl:
+        asyncio.run(mapa.mapa_command(_update_mensaje(), _ctx([])))
+    assert list(cl.await_args.args[0]) == []
