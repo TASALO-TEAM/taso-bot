@@ -16,6 +16,7 @@ from datetime import timedelta, datetime
 
 from src.services.ads_manager import get_ad_block, safe_append
 from src.utils.chart_generator import generate_ohlcv_chart
+from src.utils.memoria import liberar_memoria
 from src.core.btc_advanced_analysis import BTCAdvancedAnalyzer
 from src.core.ai_logic import get_groq_crypto_analysis
 from src.core.level_probability import HORIZON_BARS, format_pct, levels_probabilities
@@ -295,6 +296,7 @@ async def _do_graf(
         candles_display,
         signal, sig_emoji, pivot, r1, s1,
     )
+    liberar_memoria()
     if chart_bytes is None:
         err_msg = "❌ Error interno al generar el gráfico. Intenta de nuevo."
         if msg_wait:
