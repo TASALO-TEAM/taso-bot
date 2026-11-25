@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Awaitable, Callable, Optional
 
+from src.heatmap.logos import id_valido
 from src.heatmap.render import Celda
 
 logger = logging.getLogger(__name__)
@@ -97,13 +98,13 @@ async def obtener_cripto(cmc_get, ventana: str = "24h") -> Snapshot:
             cap = _numero(usd.get("market_cap"))
             if m.get("symbol") and cap and cap > 0:
                 filas.append((m["symbol"], cap, {k: _numero(usd.get(k)) for k in
-                                                 (v[0] for v in VENTANAS.values())}))
+                                                 (v[0] for v in VENTANAS.values())}, id_valido(m.get("id"))))
         if not filas:
             raise HeatmapError("CMC sin capitalizaciones")
         return filas
 
     filas, edad = await _cacheado("cripto", TTL_CRIPTO, cargar)
-    celdas = tuple(Celda(s, cap, vars_[campo]) for s, cap, vars_ in filas)
+    celdas = tuple(Celda(s, cap, vars_[campo], ref) for s, cap, vars_, ref in filas)
     return Snapshot(
         celdas, "Fuente: CoinMarketCap", tope,
         obsoleto_min=None if edad is None else int(edad // 60),

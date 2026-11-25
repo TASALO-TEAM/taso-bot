@@ -212,3 +212,23 @@ def test_acciones_sin_datos_levanta_error():
     data.reset_cache()
     with pytest.raises(HeatmapError):
         asyncio.run(obtener_acciones(HttpPostFalso([RuntimeError("x")])))
+
+
+# ---------------- M1: el id de CMC viaja hasta la celda (ref) ----------------
+
+
+def test_cripto_propaga_el_id_de_cmc_como_ref():
+    filas = [
+        {**_listing("BTC", 2e12, 1.5), "id": 1},
+        {**_listing("ETH", 5e11, -2.0), "id": 1027},
+        _listing("SIN", 1e9, 0.5),  # sin id: ref None, la celda sigue existiendo
+    ]
+    snap = asyncio.run(obtener_cripto(CmcFalso([filas]), "24h"))
+    assert {c.simbolo: c.ref for c in snap.celdas} == {"BTC": 1, "ETH": 1027, "SIN": None}
+
+
+@pytest.mark.parametrize("malo", [True, False, 0, -3, "1", 2.5, None, 10**12])
+def test_cripto_ignora_ids_invalidos(malo):
+    filas = [{**_listing("BTC", 2e12, 1.5), "id": malo}]
+    snap = asyncio.run(obtener_cripto(CmcFalso([filas]), "24h"))
+    assert snap.celdas[0].ref is None
