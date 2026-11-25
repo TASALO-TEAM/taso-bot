@@ -455,3 +455,16 @@ def test_comando_mapa_nasdaq_usa_obtener_mercado_sin_logos():
 
 def test_mapa_uso_menciona_los_mercados():
     assert "nasdaq" in mapa.MSG_USO and "indices" in mapa.MSG_USO
+
+
+def test_tras_renderizar_se_libera_memoria(parches):
+    with patch.object(mapa, "liberar_memoria") as lib:
+        asyncio.run(mapa.mapa_command(_update_mensaje(), _ctx([])))
+    lib.assert_called_once_with()
+
+
+def test_si_el_png_viene_de_cache_no_se_libera_memoria(parches):
+    asyncio.run(mapa.mapa_command(_update_mensaje(), _ctx([])))  # llena la cache de PNG
+    with patch.object(mapa, "liberar_memoria") as lib:
+        asyncio.run(mapa.mapa_command(_update_mensaje(), _ctx([])))
+    lib.assert_not_called()

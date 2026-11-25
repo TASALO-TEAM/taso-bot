@@ -25,6 +25,7 @@ from src.heatmap.data import (
 )
 from src.heatmap.logos import cargar_logos
 from src.heatmap.render import render_mapa
+from src.utils.memoria import liberar_memoria
 from src.stats_tracker import track_command_usage
 
 logger = logging.getLogger(__name__)
@@ -266,6 +267,7 @@ async def _preparar(vista):
             titulo=titulo, subtitulo=subtitulo, fuente=snap.fuente, generado=generado, tope=snap.tope,
             logos=logos,
         )
+        liberar_memoria()
         _png[clave] = (snap, png)
     return png, armar_caption(vista, snap, ahora)
 
