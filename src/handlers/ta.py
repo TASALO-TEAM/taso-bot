@@ -27,6 +27,31 @@ logger = logging.getLogger(__name__)
 
 # === NUEVO COMANDO /ta MEJORADO ===
 
+from src.core.ia_identidad import NOMBRE_IA
+from src.core.level_probability import (
+    HORIZON_BARS, format_pct, levels_probabilities, sigma_from_atr,
+)
+
+_NIVELES_TA = ("R3", "R2", "R1", "Pivot", "S1", "S2", "S3")
+
+
+def _levels_block(final_data: dict, probs: dict) -> str:
+    """Bloque 'Niveles (Pivotes)' con la probabilidad de toque de cada nivel (si hay)."""
+    def val(k):
+        return final_data.get(k, 0) or 0
+
+    def pct(k):
+        return f" \u00b7 {format_pct(probs[k])}" if k in probs else ""
+
+    lines = [f"\n\U0001f6e1 *Niveles (Pivotes)* \u00b7 prob. de toque en {HORIZON_BARS} velas"]
+    for k in _NIVELES_TA:
+        if k == "Pivot":
+            lines.append(f"\U0001f3af *Pivot: ${val(k):,.4f}*{pct(k)}")
+        else:
+            lines.append(f"{k}: `${val(k):,.4f}`{pct(k)}")
+    return "\n".join(lines) + "\n"
+
+
 def get_binance_klines(symbol, interval, limit=500):
     endpoints = [
         "https://api.binance.com/api/v3/klines",
@@ -330,17 +355,13 @@ async def ta_command(update: Update, context: ContextTypes.DEFAULT_TYPE, overrid
     )
     if reasons_list: msg += f"💡 *Nota:* _{reasons_list[0]}_\n"
 
-    msg += (
-        f"\n🛡 *Niveles (Pivotes)*\n"
-        f"R3: `${final_data.get('R3', 0):,.4f}`\n"
-        f"R2: `${final_data.get('R2', 0):,.4f}`\n"
-        f"R1: `${final_data.get('R1', 0):,.4f}`\n"
-        f"🎯 *Pivot: ${final_data.get('Pivot', 0):,.4f}*\n"
-        f"S1: `${final_data.get('S1', 0):,.4f}`\n"
-        f"S2: `${final_data.get('S2', 0):,.4f}`\n"
-        f"S3: `${final_data.get('S3', 0):,.4f}`\n"
-    )
-    msg += "\n_v2.1 Experimental_"
+    # Probabilidad de toque: determinista (volatilidad + distancia); la IA solo la interpreta.
+    if df_result is not None:
+        sigma = df_result["close"].diff().tail(100).std()
+    else:
+        sigma = sigma_from_atr(final_data.get("ATR"))
+    probs = levels_probabilities(price, {k: final_data.get(k) for k in _NIVELES_TA}, sigma)
+    msg += _levels_block(final_data, probs)
 
     # Inyectar bloque de anuncio (safe_append omite el ad si el mensaje ya
     # viene largo, así que /ta nunca se corta por esto).
@@ -364,7 +385,7 @@ async def ta_command(update: Update, context: ContextTypes.DEFAULT_TYPE, overrid
     ])
 
     kb.append([
-        InlineKeyboardButton("🤖 Análisis IA Profesional", callback_data=f"ai_analyze|{current_source}|{symbol_base}|{pair}|{timeframe}")
+        InlineKeyboardButton("🤖 Análisis TASALO IA", callback_data=f"ai_analyze|{current_source}|{symbol_base}|{pair}|{timeframe}")
     ])
 
     levels_for_alert = {
@@ -390,7 +411,7 @@ async def ta_command(update: Update, context: ContextTypes.DEFAULT_TYPE, overrid
 
 
 async def ai_analysis_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle '🤖 Análisis IA Profesional' button from /ta command."""
+    """Handle '🤖 Análisis TASALO IA' button from /ta command."""
     user_id = update.effective_user.id
     query = update.callback_query
     await query.answer("🧠 Analizando datos con IA...")
@@ -434,7 +455,7 @@ async def ai_analysis_callback(update: Update, context: ContextTypes.DEFAULT_TYP
 
         # Send AI analysis as a reply
         header = (
-            f"🤖 *Panorama IA* (_Experimental_)\n"
+            f"🤖 *{NOMBRE_IA}*\n"
             f"{'📡' if source == 'TV' else '📊'} *{source}* | Moneda: *{full_symbol}* ({timeframe})\n"
             f"—————————————————\n"
         )

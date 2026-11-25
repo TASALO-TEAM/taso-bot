@@ -171,7 +171,7 @@ async def test_crypto_analysis_payload_uses_low_reasoning_and_max_completion_tok
     patcher, fake_client = _patch_client(responses)
     with patch("src.core.ai_logic.settings", _mock_settings(keys=["gsk_aaa"])), patcher:
         await ai_logic.get_groq_crypto_analysis("BTCUSDT", "4h", "reporte de prueba")
-        _assert_gpt_oss_payload_shape(fake_client.post_json[0], expected_max_completion_tokens=1024)
+        _assert_gpt_oss_payload_shape(fake_client.post_json[0], expected_max_completion_tokens=1536)
 
 
 @pytest.mark.asyncio
