@@ -693,7 +693,7 @@ async def get_groq_price_spotlight(price_data: dict) -> str:
 
     except httpx.HTTPStatusError as e:
         status = e.response.status_code if e.response else "??"
-        logger.error("Groq HTTP error %s (spotlight) for %s: %s", status, symbol, e)
+        logger.error("IA HTTP error %s (spotlight) for %s: %s", status, symbol, e)
         if status == 401:
             return "⚠️ Error de autenticación con la IA (API key inválida)."
         elif status == 429:
@@ -945,7 +945,7 @@ async def get_groq_market_spotlight(snapshot: dict) -> str:
 
     except httpx.HTTPStatusError as e:
         status = e.response.status_code if e.response else "??"
-        logger.error("Groq HTTP error %s (market spotlight): %s", status, e)
+        logger.error("IA HTTP error %s (market spotlight): %s", status, e)
         if status == 401:
             return "⚠️ Error de autenticación con la IA (API key inválida)."
         elif status == 429:
@@ -1277,7 +1277,7 @@ async def get_groq_tspl_digest(articles: list[dict], market_data: Optional[dict]
 
         except httpx.HTTPStatusError as e:
             status = e.response.status_code if e.response else "??"
-            logger.error("Groq HTTP error %s (tspl digest, intento %d): %s", status, attempt + 1, e)
+            logger.error("IA HTTP error %s (tspl digest, intento %d): %s", status, attempt + 1, e)
         except httpx.TimeoutException:
             logger.error("Groq timeout (tspl digest, intento %d)", attempt + 1)
         except httpx.NetworkError:
