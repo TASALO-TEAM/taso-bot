@@ -432,7 +432,7 @@ async def get_groq_crypto_analysis(
 
     except httpx.HTTPStatusError as e:
         status = e.response.status_code if e.response else "??"
-        logger.error("Groq HTTP error %s for %s %s: %s", status, symbol, timeframe, e)
+        logger.error("IA HTTP error %s for %s %s: %s", status, symbol, timeframe, e)
         if status == 401:
             return "⚠️ Error de autenticación con la IA (API key inválida)."
         elif status == 429:

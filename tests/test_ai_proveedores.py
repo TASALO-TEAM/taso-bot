@@ -39,11 +39,11 @@ def test_defaults_groq_principal_nvidia_respaldo_modelo_recomendado():
 
 def test_cambios_persisten_en_disco(tmp_path):
     assert ai_config.set_primary("nvidia")
-    assert ai_config.set_model(2)
+    assert ai_config.set_model(1)
     ai_config._cache = None  # simula reinicio
     cfg = ai_config.get()
     assert cfg["primary"] == "nvidia"
-    assert cfg["nvidia_model"] == "google/gemma-4-31b-it"
+    assert cfg["nvidia_model"] == "minimaxai/minimax-m3.1-flash"
     assert json.loads((tmp_path / "ai_config.json").read_text())["primary"] == "nvidia"
 
 
@@ -217,7 +217,8 @@ async def test_comando_ia_admin_muestra_estado_y_botones():
     markup = u.message.reply_text.call_args.kwargs["reply_markup"]
     assert "Principal" in texto and "Respaldo" in texto and "Nemotron 3 Ultra" in texto
     datas = _datas(markup)
-    assert {"ia:p:groq", "ia:p:nvidia", "ia:b:groq", "ia:b:nvidia", "ia:b:none", "ia:m:0", "ia:m:1", "ia:m:2"} <= set(datas)
+    assert {"ia:p:groq", "ia:p:nvidia", "ia:b:groq", "ia:b:nvidia", "ia:b:none", "ia:m:0", "ia:m:1"} <= set(datas)
+    assert "ia:m:2" not in datas
     assert all(len(d.encode()) <= 64 for d in datas)
 
 
@@ -225,7 +226,7 @@ async def test_comando_ia_admin_muestra_estado_y_botones():
 @pytest.mark.parametrize("data,esperado", [
     ("ia:p:nvidia", lambda c: c["primary"] == "nvidia"),
     ("ia:b:none", lambda c: c["backup"] == "none"),
-    ("ia:m:2", lambda c: c["nvidia_model"] == "google/gemma-4-31b-it"),
+    ("ia:m:1", lambda c: c["nvidia_model"] == "minimaxai/minimax-m3.1-flash"),
 ])
 async def test_callback_cambia_la_config(data, esperado):
     from src.ia_admin import ia_callback
@@ -260,3 +261,11 @@ def test_ia_registrado_como_comando_admin_con_su_namespace():
 
     c = next(c for c in COMANDOS if c.name == "ia")
     assert c.admin and c.callback is not None and c.rutas() == ("ia",)
+
+
+def test_gemma_ya_no_es_elegible_y_una_config_vieja_vuelve_al_predeterminado(tmp_path):
+    """google/gemma-4-31b-it salio del catalogo de NVIDIA (410 Gone, 2026-11-25)."""
+    assert "google/gemma-4-31b-it" not in [m[0] for m in ai_config.MODELOS_NVIDIA]
+    (tmp_path / "ai_config.json").write_text(json.dumps({"nvidia_model": "google/gemma-4-31b-it"}))
+    ai_config._cache = None
+    assert ai_config.get()["nvidia_model"] == ai_config.MODELOS_NVIDIA[0][0]
