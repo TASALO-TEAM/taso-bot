@@ -9,6 +9,9 @@ import os
 import pytest
 
 os.environ.setdefault("TELEGRAM_BOT_TOKEN", "123456:TOKEN-FALSO-SOLO-TESTS")
+# Clave de admin vacia: con un .env real, el empuje del digest de /tspl haria un PUT contra la
+# API de verdad y pisaria el digest de produccion con datos de prueba.
+os.environ.setdefault("TASALO_ADMIN_KEY", "")
 
 
 @pytest.fixture(autouse=True)

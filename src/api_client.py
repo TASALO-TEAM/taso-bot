@@ -660,6 +660,34 @@ class TasaloApiClient:
             logger.error("❌ Error en admin_set_year_subscription: %s", e)
             return None
 
+    async def admin_put_tspl_digest(
+        self, telegram_text: str, blog_markdown: Optional[str], generated_at: str
+    ) -> bool:
+        """Empuja el ultimo digest de /tspl a taso-api (admin, requiere X-API-Key).
+
+        taso-gcg lo lee de ahi para publicarlo en el canal y en Hive. Un solo intento (sin
+        reintentos): el digest se vuelve a empujar en la siguiente generacion. Devuelve True si
+        se guardo; nunca lanza."""
+        url = f"{self.api_url}/api/v1/tspl/digest/latest"
+        try:
+            response = await self._get_client().put(
+                url,
+                headers=self._admin_headers,
+                json={
+                    "telegram_text": telegram_text,
+                    "blog_markdown": blog_markdown,
+                    "generated_at": generated_at,
+                },
+            )
+            response.raise_for_status()
+            return True
+        except httpx.HTTPStatusError as e:
+            logger.error("❌ HTTP %d en admin_put_tspl_digest", e.response.status_code)
+            return False
+        except Exception as e:
+            logger.error("❌ Error en admin_put_tspl_digest: %s", e)
+            return False
+
     async def admin_delete_year_subscription(self, user_id: int) -> Optional[Dict[str, Any]]:
         """Eliminar suscripción (admin, requiere X-API-Key)."""
         try:

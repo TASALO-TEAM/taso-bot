@@ -11,7 +11,7 @@ para que /tspl lo lea sin tener que llamar a Groq en cada invocacion.
 
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -20,6 +20,7 @@ from src.newsdata_client import get_newsdata_client
 from src.core.ai_logic import get_groq_tspl_digest
 from src.handlers.p import get_crypto_client
 from src.cache import cache
+from src.config import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -144,6 +145,39 @@ def _cmc_ai_insights_to_articles(cmc_ai_feed: dict | None) -> list[dict]:
     return articles
 
 
+async def _push_digest_to_api(digest: dict) -> None:
+    """Empuja a taso-api el digest ya armado (texto de Telegram + markdown del blog) para
+    que taso-gcg lo publique en @tasalospl y en Hive. Usa los mismos constructores que
+    /tspl y /tspl blog, asi que lo publicado es lo que el bot muestra.
+
+    No hace nada si no hay clave de admin (el PUT daria 401, y asi los tests y los
+    entornos sin .env nunca escriben en la API real). Si no hay datos de mercado tampoco
+    empuja: un post sin mercado no se publica solo, taso-gcg avisa de que no hay digest
+    fresco. Nunca lanza: un fallo aqui no debe afectar a /tspl ni al cron.
+    """
+    if not get_settings().tasalo_admin_key:
+        return
+    try:
+        # Import perezoso: src.handlers.tspl importa este modulo (ciclo si fuera arriba).
+        from src.handlers import tspl as tspl_handler
+
+        snapshot = await tspl_handler._get_or_build_market_snapshot()
+        if not snapshot:
+            logger.warning("⚠️ Digest /tspl: sin datos de mercado, no se empuja a taso-api")
+            return
+        ok = await tspl_handler._tspl_api.admin_put_tspl_digest(
+            telegram_text=tspl_handler._build_message(digest, snapshot),
+            blog_markdown=tspl_handler._build_blog_content(digest, snapshot),
+            generated_at=datetime.now(timezone.utc).isoformat(),
+        )
+        if ok:
+            logger.info("📤 Digest /tspl empujado a taso-api")
+        else:
+            logger.warning("⚠️ Digest /tspl: taso-api no lo guardo (ver error anterior)")
+    except Exception:
+        logger.exception("❌ Error empujando el digest de /tspl a taso-api")
+
+
 async def generate_and_cache_tspl_digest() -> dict | None:
     """Obtiene noticias frescas de NewsData.io y genera el digest curado
     con Groq, guardandolo en cache para que /tspl lo lea directo.
@@ -199,6 +233,7 @@ async def generate_and_cache_tspl_digest() -> dict | None:
 
         cache.set(TSPL_DIGEST_CACHE_KEY, digest)
         logger.info("✅ Digest /tspl generado y cacheado (%d items)", len(digest.get("items", [])))
+        await _push_digest_to_api(digest)
         return digest
 
     except Exception:
